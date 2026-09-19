@@ -141,7 +141,15 @@ export const tasks = sqliteTable(
     order: integer('sort_order').notNull().default(0),
     categoryId: text('category_id').references(() => categories.id, { onDelete: 'set null' }),
     markId: text('mark_id').references(() => marks.id, { onDelete: 'set null' }),
+    /** Gesetzt nur beim ausdrücklich archivierten Eintrag. */
     archivedAt: text('archived_at'),
+    /**
+     * ID des archivierten Vorfahren (Task oder Milestone), wenn dieser Task nur
+     * mitgegangen ist. Abgeleitet, aber gespeichert: so ist „was ist aktiv?“ ein
+     * indizierter Filter statt einer rekursiven Abfrage bei jedem Laden.
+     * Gepflegt beim Archivieren, Wiederherstellen und Verschieben.
+     */
+    hiddenBy: text('hidden_by'),
     ...tracked,
   },
   (t) => [
@@ -150,6 +158,7 @@ export const tasks = sqliteTable(
     index('task_milestone_idx').on(t.milestoneId),
     index('task_group_idx').on(t.groupId),
     index('task_status_idx').on(t.status),
+    index('task_active_idx').on(t.hiddenBy, t.archivedAt),
   ],
 );
 

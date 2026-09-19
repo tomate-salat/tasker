@@ -84,7 +84,8 @@ Ableitung aus dem Prototyp-State. Gemeinsam für alle Tabellen: `id` als Text-Pr
 `status`, `start_date`, `end_date`, `end_auto`, `archived_at`
 **group** – `project_id`, `title`, `order`, `collapsed`
 **task** – `project_id`, `parent_id`, `milestone_id`, `group_id`, `doc` (Flag statt Pseudo-Container),
-`title`, `desc`, `prio`, `status`, `done`, `done_at`, `order`, `collapsed`, `cat_id`, `mark_id`, `archived_at`
+`title`, `desc`, `prio`, `status`, `done_at`, `order`, `cat_id`, `mark_id`, `archived_at`,
+`hidden_by` (archivierter Vorfahre, siehe Abschnitt 4)
 **task_tag** – `task_id`, `tag` (im Prototyp ein Array, hier eine Zuordnungstabelle)
 **dependency** – `from_id`, `to_id`, `kind` (`task` oder `milestone`); deckt beide Objekttypen ab
 **drawing** – `task_id`, `name`, `order`, `shapes` (JSON – hier ist JSON angemessen, die Formen werden nie einzeln abgefragt)
@@ -117,8 +118,10 @@ Klappzustände, zuletzt gewähltes Projekt) gehen nach `setting`.
 REST über `/api`, JSON, Zod-validiert. Keine GraphQL-Schicht – der Datenbestand ist klein und die
 Zugriffsmuster sind bekannt.
 
-- `GET /api/bootstrap` – der komplette Datenbestand in einem Rutsch. Der Client hält ihn im Speicher,
-  genau wie der Prototyp `S`.
+- `GET /api/bootstrap` – der **aktive** Datenbestand in einem Rutsch. Der Client hält ihn im
+  Speicher, genau wie der Prototyp `S`. Das Archiv ist ausdrücklich nicht dabei (siehe unten).
+- `GET /api/archive` – das Archiv, seitenweise, mit Suche und Projektfilter. Wird erst geladen,
+  wenn die Archivansicht geöffnet wird.
 - `POST /api/:kind` – anlegen
 - `PATCH /api/:kind/:id` – ändern, mit `version` des Standes, auf dem die Änderung basiert
 - `DELETE /api/:kind/:id` – in den Papierkorb
@@ -130,6 +133,53 @@ Zugriffsmuster sind bekannt.
 
 Jede schreibende Route läuft in einer SQLite-Transaktion und schickt danach das geänderte Objekt in den
 SSE-Stream.
+
+### Das Archiv bleibt draußen
+
+Archiviert wird ständig, gelöscht wird nie – das Archiv wächst also monoton. Käme es bei jedem
+Laden mit, würde die Startzeit mit den Jahren immer schlechter, ohne dass sich an der täglichen
+Arbeit etwas ändert (grob 400 Byte je Aufgabe, bei 10.000 archivierten also mehrere Megabyte pro
+Seitenaufruf, die auch noch geparst und indexiert werden müssen). Es ist ohnehin eine eigene
+Ansicht und kein Teil des Arbeitsflusses.
+
+Zwei Dinge sind dabei zu beachten, weil der Prototyp das Archiv nur als Ansicht trennt, nicht als
+Daten:
+
+1. **Der Archiv-Status wird nach unten vererbt.** `archive()` setzt das Datum im Prototyp nur am
+   angeklickten Eintrag; Unteraufgaben behalten `archived_at = NULL` und verschwinden nur, weil die
+   Anzeige die Elternkette prüft. Dasselbe gilt für die Wurzelaufgaben eines archivierten
+   Milestones. Ein einfaches `WHERE archived_at IS NULL` würde sie also fälschlich ausliefern.
+
+   **Lösung: eine zweite, gepflegte Spalte `hidden_by`** (die ID des archivierten Vorfahren),
+   gesetzt auf dem ganzen Teilbaum. Damit ist die Abfrage im heißen Pfad ein indizierter Filter
+   statt einer rekursiven Abfrage:
+
+   ```sql
+   SELECT * FROM task WHERE hidden_by IS NULL AND archived_at IS NULL
+   ```
+
+   `archived_at` bleibt dem explizit archivierten Eintrag vorbehalten – sonst würde ein archivierter
+   Milestone mit 40 Aufgaben im Archiv als 41 gleichrangige Einträge erscheinen statt als einer mit
+   aufklappbarem Baum, und die Unterscheidung „einzeln archiviert“ gegenüber „mitgegangen“ ginge
+   verloren.
+
+   Regeln für `hidden_by`:
+   - **Archivieren:** auf dem Teilbaum setzen, aber nur dort, wo es noch leer ist – ein zuvor für
+     sich archiviertes Kind behält seinen eigenen Bezug.
+   - **Wiederherstellen:** `UPDATE task SET hidden_by = NULL WHERE hidden_by = :id`. Kinder mit
+     eigenem `archived_at` bleiben korrekt versteckt.
+   - **Verschieben:** beim Ziehen in einen archivierten Ast hinein oder heraus muss `hidden_by` für
+     den Teilbaum nachgezogen werden. Das ist die einzige Stelle, an der der abgeleitete Wert kippen
+     kann, deshalb gehört sie in genau eine Funktion und wird getestet.
+
+   Rekursiv gerechnet wird damit weiterhin, aber einmal beim Archivieren statt bei jedem Laden.
+2. **Abhängigkeiten dürfen ins Archiv zeigen.** Fürs Blockieren ist das folgenlos, weil archivierte
+   Aufgaben nicht blockieren. Damit der Inspektor den Titel trotzdem anzeigen kann, schickt
+   `bootstrap` zu solchen Verweisen einen Platzhalter mit (ID, Titel, archiviert ja/nein), statt das
+   Archiv nachzuladen.
+
+Nicht betroffen: der Burnup zieht seine Zahlen aus `milestone_log`, und Zähler wie Filter rechnen
+ohnehin nur mit Aktivem. Die Suche im Archiv läuft serverseitig als indizierte Abfrage.
 
 ---
 
@@ -204,9 +254,10 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 4. ~~Reine Logik aus dem Prototyp nach `src/shared` übernehmen, mit Tests – das ist der Teil, der
    unverändert bleibt und sich gut prüfen lässt.~~ **Erledigt** (`src/shared/`, 122 Tests, davon 70
    im direkten Abgleich mit den Werten, die der Prototyp für seine Beispieldaten selbst ausrechnet).
-5. API mit `bootstrap`, Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.
+5. API mit `bootstrap` (ohne Archiv), Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.
 6. Client-Grundgerüst: Store, Bootstrap-Laden, Tabellenansicht mit Baum, Auswahl, Inspektor.
-7. Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Archiv, Papierkorb.
+7. Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Papierkorb sowie das Archiv,
+   das seine Daten erst beim Öffnen nachlädt.
 8. Drag & Drop, Tastaturbedienung, Schnell-Erfassung, Zeichen-Editor.
 9. SSE-Push und Konfliktbehandlung.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.

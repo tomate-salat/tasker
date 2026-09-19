@@ -8,6 +8,13 @@
       "when": 1789825015611,
       "tag": "0000_clear_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789827757774,
+      "tag": "0001_lucky_stick",
+      "breakpoints": true
     }
   ]
 }
