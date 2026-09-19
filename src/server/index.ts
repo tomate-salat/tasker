@@ -5,7 +5,8 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { DATABASE_PATH, HOST, PORT, PRODUCTION, warnIfNotPersistent } from './env.js';
-import { recordBoot } from './db.js';
+import { appDb, recordBoot } from './db.js';
+import { dataRoutes } from './routes.js';
 import { runMigrations } from './migrate.js';
 import {
   SESSION_COOKIE,
@@ -105,6 +106,8 @@ app.get('/api/status', (c) =>
     firstBootAt: boot.firstBootAt,
   }),
 );
+
+app.route('/api', dataRoutes(appDb));
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 

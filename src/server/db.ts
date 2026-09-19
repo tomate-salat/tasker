@@ -1,23 +1,35 @@
 import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { DATABASE_PATH, ensureDataDir } from './env.js';
 
-ensureDataDir();
-
-export const sqlite = new Database(DATABASE_PATH);
-
-// WAL: Lesen wird durch Schreiben nicht blockiert – wichtig, sobald mehrere Tabs
-// gleichzeitig offen sind. foreign_keys ist in SQLite per Verbindung abzuschalten/einzuschalten.
-sqlite.pragma('journal_mode = WAL');
-sqlite.pragma('foreign_keys = ON');
-sqlite.pragma('busy_timeout = 5000');
-
-export const db = drizzle(sqlite);
+export type DbCtx = {
+  sqlite: Database.Database;
+  db: BetterSQLite3Database;
+};
 
 /**
- * Minimale Tabelle, um zu beweisen, dass das Volume den Deploy überlebt.
- * Das richtige Schema kommt mit den Drizzle-Migrationen; diese Tabelle bleibt
- * danach als Startprotokoll bestehen.
+ * Öffnet eine Datenbank. Die Anwendung benutzt genau eine (siehe `appDb`),
+ * Tests legen sich eigene an.
+ */
+export function createDbCtx(path: string): DbCtx {
+  const sqlite = new Database(path);
+  // WAL: Lesen wird durch Schreiben nicht blockiert – wichtig, sobald mehrere
+  // Tabs gleichzeitig offen sind. Fremdschlüssel gelten je Verbindung.
+  sqlite.pragma('journal_mode = WAL');
+  sqlite.pragma('foreign_keys = ON');
+  sqlite.pragma('busy_timeout = 5000');
+  return { sqlite, db: drizzle(sqlite) };
+}
+
+ensureDataDir();
+export const appDb = createDbCtx(DATABASE_PATH);
+export const sqlite = appDb.sqlite;
+export const db = appDb.db;
+
+/**
+ * Kleine Schlüssel-Wert-Tabelle außerhalb der Migrationen: hier steht, wann der
+ * Server zum ersten Mal lief und wie oft. Daran erkennt man auf Railway, ob das
+ * Volume wirklich greift.
  */
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS meta (

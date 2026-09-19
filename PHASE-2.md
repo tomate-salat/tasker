@@ -254,7 +254,9 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 4. ~~Reine Logik aus dem Prototyp nach `src/shared` übernehmen, mit Tests – das ist der Teil, der
    unverändert bleibt und sich gut prüfen lässt.~~ **Erledigt** (`src/shared/`, 122 Tests, davon 70
    im direkten Abgleich mit den Werten, die der Prototyp für seine Beispieldaten selbst ausrechnet).
-5. API mit `bootstrap` (ohne Archiv), Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.
+5. ~~API mit `bootstrap` (ohne Archiv), Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.~~
+   **Erledigt** (`src/server/repo.ts`, `src/server/routes.ts`, `src/shared/api.ts`). Noch offen aus
+   der API-Liste: `/api/bulk` und `/api/events` (kommen mit Schritt 9), Import und Export.
 6. Client-Grundgerüst: Store, Bootstrap-Laden, Tabellenansicht mit Baum, Auswahl, Inspektor.
 7. Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Papierkorb sowie das Archiv,
    das seine Daten erst beim Öffnen nachlädt.
