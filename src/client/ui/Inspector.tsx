@@ -197,11 +197,15 @@ function TitleField({ kind, item }: { kind: 'task' | 'milestone'; item: Task | M
 }
 
 function Actions({ kind, id }: { kind: 'task' | 'milestone'; id: string }) {
-  const archive = useStore((s) => s.archive);
+  const archiveItem = useStore((s) => s.archiveItem);
+  const remove = useStore((s) => s.remove);
   return (
     <div className="d-actions">
-      <button className="btn ghost" onClick={() => void archive(kind, id)}>
+      <button className="btn ghost" onClick={() => void archiveItem(kind, id)}>
         Archivieren
+      </button>
+      <button className="btn ghost" onClick={() => void remove(kind, id)}>
+        Löschen
       </button>
     </div>
   );

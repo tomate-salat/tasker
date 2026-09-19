@@ -261,8 +261,11 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
    **Erledigt** (`src/client/store.ts`, `src/client/ui/`). Geschrieben wird vorerst ohne Vorgriff:
    erst die Antwort des Servers, dann der neue Zustand. Optimistische Änderungen kommen mit
    Schritt 9, zusammen mit dem Änderungs-Push.
-7. Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Papierkorb sowie das Archiv,
-   das seine Daten erst beim Öffnen nachlädt.
+7. ~~Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Papierkorb sowie das Archiv,
+   das seine Daten erst beim Öffnen nachlädt.~~ **Erledigt** (`src/client/ui/views.tsx`).
+   Dazu kamen serverseitig `/api/trash` (auflisten, wiederherstellen, endgültig löschen) und
+   `/api/settings` (Tempo, Theme). Noch offen in diesen Ansichten: Markierungs-Sammelgruppen im
+   Backlog, der Burnup im Milestone und der eigene Inspektor für Dokumente.
 8. Drag & Drop, Tastaturbedienung, Schnell-Erfassung, Zeichen-Editor.
 9. SSE-Push und Konfliktbehandlung.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.

@@ -515,6 +515,97 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
   })();
 }
 
+export type TrashEntry = {
+  id: string;
+  kind: string;
+  title: string;
+  projectId: string | null;
+  deletedAt: string;
+  /** Wie viele Aufgaben mit im Eintrag stecken. */
+  taskCount: number;
+};
+
+/** Nach dieser Frist räumt sich der Papierkorb selbst auf. */
+export const TRASH_DAYS = 30;
+
+export function loadTrash(ctx: DbCtx): TrashEntry[] {
+  const rows = ctx.sqlite
+    .prepare('SELECT * FROM trash ORDER BY deleted_at DESC')
+    .all() as { id: string; kind: string; title: string; project_id: string | null; deleted_at: string; payload: string }[];
+
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    title: r.title,
+    projectId: r.project_id,
+    deletedAt: r.deleted_at,
+    taskCount: (JSON.parse(r.payload) as { tasks: unknown[] }).tasks.length,
+  }));
+}
+
+type TrashPayload = {
+  kind: Kind;
+  row: Record<string, unknown>;
+  tasks: Record<string, unknown>[];
+  tags: Record<string, unknown>[];
+  drawings: Record<string, unknown>[];
+  deps: Record<string, unknown>[];
+};
+
+/** Schreibt einen Papierkorb-Eintrag samt allem, was daran hing, zurück. */
+export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } {
+  return ctx.sqlite.transaction(() => {
+    const entry = ctx.sqlite.prepare('SELECT * FROM trash WHERE id = ?').get(trashId) as
+      | { payload: string }
+      | undefined;
+    if (!entry) throw new NotFound();
+
+    const p = JSON.parse(entry.payload) as TrashPayload;
+    insertRows(ctx, TABLE[p.kind], [p.row]);
+    insertRows(ctx, 'task', p.tasks);
+    insertRows(ctx, 'task_tag', p.tags);
+    insertRows(ctx, 'drawing', p.drawings);
+    insertRows(ctx, 'dependency', p.deps);
+
+    // Verweise, deren Gegenstück inzwischen fehlt, fallen wieder raus.
+    pruneDependencies(ctx);
+    // Die Zugehörigkeit kann sich geändert haben, während der Eintrag im Papierkorb lag.
+    for (const t of p.tasks) {
+      if (!t['parent_id']) refreshHidden(ctx, t['id'] as string);
+    }
+
+    ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
+    return { restored: p.tasks.length || 1 };
+  })();
+}
+
+export function purgeTrash(ctx: DbCtx, trashId: string): void {
+  ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
+}
+
+/** Läuft beim Start: alles, was die Frist überschritten hat, ist endgültig weg. */
+export function expireTrash(ctx: DbCtx, days = TRASH_DAYS): number {
+  const limit = new Date(Date.now() - days * 864e5).toISOString();
+  return ctx.sqlite.prepare('DELETE FROM trash WHERE deleted_at < ?').run(limit).changes;
+}
+
+/**
+ * Schreibt gespeicherte Rohzeilen zurück. Die Spaltennamen stehen in den Daten
+ * selbst, deshalb geht das ohne Wissen über die einzelne Tabelle.
+ */
+function insertRows(ctx: DbCtx, table: string, rows: Record<string, unknown>[]): void {
+  for (const row of rows) {
+    const fields = Object.keys(row);
+    if (!fields.length) continue;
+    ctx.sqlite
+      .prepare(
+        `INSERT OR IGNORE INTO ${table} (${fields.map((f) => `"${f}"`).join(',')})
+         VALUES (${fields.map(() => '?').join(',')})`,
+      )
+      .run(...fields.map((f) => toSql(row[f])));
+  }
+}
+
 /** Entfernt Abhängigkeiten, deren Ziel oder Quelle es nicht mehr gibt. */
 export function pruneDependencies(ctx: DbCtx): void {
   ctx.sqlite.exec(`

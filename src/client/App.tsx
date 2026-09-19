@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useState } from 'react';
 import { api, type Account } from './api.js';
 import { Login } from './Login.js';
-import { useStore } from './store.js';
+import { useStore, VIEWS, VIEW_LABEL } from './store.js';
 import { Inspector } from './ui/Inspector.js';
-import { List } from './ui/List.js';
 import { Sidebar } from './ui/Sidebar.js';
+import { ArchiveView, BacklogView, DocsView, PlanView, TrashView } from './ui/views.js';
 
 export function App() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -20,11 +21,25 @@ export function App() {
 
   if (!ready) return <main className="boot" />;
   if (!account) return <Login onDone={setAccount} />;
-  return <Workspace account={account} onLogout={() => setAccount(null)} />;
+  return <Shell account={account} onLogout={() => setAccount(null)} />;
 }
 
-function Workspace({ account, onLogout }: { account: Account; onLogout: () => void }) {
-  const { ws, projectId, selected, loading, error, toast, load, say, addTask } = useStore();
+function Shell({ account, onLogout }: { account: Account; onLogout: () => void }) {
+  const {
+    ws,
+    projectId,
+    view,
+    setView,
+    selected,
+    loading,
+    error,
+    toast,
+    load,
+    say,
+    addTask,
+    settings,
+    setVelocity,
+  } = useStore();
 
   useEffect(() => {
     void load();
@@ -57,7 +72,7 @@ function Workspace({ account, onLogout }: { account: Account; onLogout: () => vo
     return (
       <main className="boot">
         <p>Noch kein Projekt vorhanden.</p>
-        <p className="muted">Die Anlage von Projekten kommt mit dem nächsten Schritt.</p>
+        <p className="muted">Projekte anlegen kommt mit dem nächsten Schritt.</p>
       </main>
     );
   }
@@ -71,14 +86,53 @@ function Workspace({ account, onLogout }: { account: Account; onLogout: () => vo
       <main id="main">
         <header id="head">
           <h1>{project?.name ?? 'Projekt'}</h1>
-          <button
-            className="btn"
-            onClick={() => void addTask({ projectId, title: 'Neue Aufgabe' })}
-          >
-            + Aufgabe
-          </button>
+
+          <nav className="tabs">
+            {VIEWS.map((v) => (
+              <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
+                {VIEW_LABEL[v]}
+              </button>
+            ))}
+          </nav>
+
+          {view === 'plan' && (
+            <label className="vel" title="Aufgaben pro Woche – Grundlage der Prognose">
+              Tempo
+              <input
+                type="number"
+                min={1}
+                max={200}
+                defaultValue={settings.velocity}
+                key={settings.velocity}
+                onBlur={(e) => void setVelocity(Number(e.target.value))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+              />
+            </label>
+          )}
+
+          {(view === 'plan' || view === 'backlog' || view === 'docs') && (
+            <button
+              className="btn"
+              onClick={() =>
+                void addTask({
+                  projectId,
+                  title: 'Neue Aufgabe',
+                  ...(view === 'docs' ? { doc: true } : {}),
+                })
+              }
+            >
+              + {view === 'docs' ? 'Dokument' : 'Aufgabe'}
+            </button>
+          )}
         </header>
-        <List ws={ws} projectId={projectId} />
+
+        {view === 'plan' && <PlanView ws={ws} projectId={projectId} />}
+        {view === 'backlog' && <BacklogView ws={ws} projectId={projectId} />}
+        {view === 'docs' && <DocsView ws={ws} projectId={projectId} />}
+        {view === 'archive' && <ArchiveView projectId={projectId} />}
+        {view === 'trash' && <TrashView />}
       </main>
 
       {selected && <Inspector ws={ws} id={selected} />}

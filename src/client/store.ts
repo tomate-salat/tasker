@@ -2,7 +2,25 @@ import { create } from 'zustand';
 import type { Kind } from '@shared/api.js';
 import type { Milestone, Task } from '@shared/model.js';
 import { Workspace } from '@shared/workspace.js';
-import { ApiError, api, type Bootstrap } from './api.js';
+import {
+  ApiError,
+  api,
+  type ArchivePage,
+  type Bootstrap,
+  type Settings,
+  type TrashList,
+} from './api.js';
+
+export const VIEWS = ['plan', 'backlog', 'docs', 'archive', 'trash'] as const;
+export type View = (typeof VIEWS)[number];
+
+export const VIEW_LABEL: Record<View, string> = {
+  plan: 'Plan',
+  backlog: 'Backlog',
+  docs: 'Dokumente',
+  archive: 'Archiv',
+  trash: 'Papierkorb',
+};
 
 /**
  * Der gesamte aktive Datenbestand liegt im Speicher – wie `S` im Prototyp.
@@ -22,19 +40,37 @@ type State = {
   toast: string | null;
 
   projectId: string | null;
+  view: View;
   selected: string | null;
   /** Zugeklappte Zeilen – bleibt pro Gerät, nicht auf dem Server. */
   collapsed: Record<string, boolean>;
+  settings: Settings;
+
+  /** Archiv und Papierkorb werden erst beim Öffnen geholt. */
+  archive: ArchivePage | null;
+  archiveQuery: string;
+  trash: TrashList['entries'] | null;
+  trashDays: number;
 
   load: () => Promise<void>;
   setProject: (id: string) => void;
+  setView: (view: View) => void;
   select: (id: string | null) => void;
   toggle: (id: string) => void;
   say: (message: string | null) => void;
+  setVelocity: (velocity: number) => Promise<void>;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
   addTask: (input: Record<string, unknown>) => Promise<void>;
-  archive: (kind: 'task' | 'milestone', id: string) => Promise<void>;
+  archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
+  remove: (kind: Kind, id: string) => Promise<void>;
+
+  loadArchive: (projectId: string) => Promise<void>;
+  setArchiveQuery: (q: string) => void;
+  unarchive: (kind: 'task' | 'milestone', id: string) => Promise<void>;
+  loadTrash: () => Promise<void>;
+  restoreTrash: (id: string) => Promise<void>;
+  purgeTrash: (id: string) => Promise<void>;
 };
 
 const COLLAPSED_KEY = 'tasker.collapsed';
@@ -64,18 +100,24 @@ export const useStore = create<State>((set, get) => ({
   error: null,
   toast: null,
   projectId: readLocal<string | null>(PROJECT_KEY, null),
+  view: 'plan',
   selected: null,
   collapsed: readLocal<Record<string, boolean>>(COLLAPSED_KEY, {}),
+  settings: { velocity: 8, theme: 'system' },
+  archive: null,
+  archiveQuery: '',
+  trash: null,
+  trashDays: 30,
 
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const boot = await api.bootstrap();
+      const [boot, settings] = await Promise.all([api.bootstrap(), api.settings()]);
       const projectId =
         get().projectId && boot.projects.some((p) => p.id === get().projectId)
           ? get().projectId
           : (boot.projects[0]?.id ?? null);
-      set({ boot, ws: new Workspace(boot), projectId, loading: false });
+      set({ boot, ws: new Workspace(boot), settings, projectId, loading: false });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Laden fehlgeschlagen', loading: false });
     }
@@ -83,7 +125,18 @@ export const useStore = create<State>((set, get) => ({
 
   setProject: (id) => {
     writeLocal(PROJECT_KEY, id);
-    set({ projectId: id, selected: null });
+    // Archiv und Papierkorb gehören zum alten Projekt und werden neu geholt.
+    set({ projectId: id, selected: null, archive: null });
+  },
+
+  setView: (view) => set({ view, selected: null }),
+
+  setVelocity: async (velocity) => {
+    try {
+      set({ settings: await api.putSettings({ velocity }) });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Tempo konnte nicht gesetzt werden' });
+    }
   },
 
   // Den Inspektor zu schließen hebt auch die Auswahl auf (so wie im Prototyp).
@@ -126,14 +179,80 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  archive: async (kind, id) => {
+  archiveItem: async (kind, id) => {
     try {
       await api.archive(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      set({ toast: 'Archiviert' });
+      set({ toast: 'Archiviert', archive: null });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen' });
+    }
+  },
+
+  remove: async (kind, id) => {
+    try {
+      await api.remove(kind, id);
+      if (get().selected === id) set({ selected: null });
+      await get().load();
+      set({ toast: 'In den Papierkorb gelegt', trash: null });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  /* -------------------------------------------------- Archiv & Papierkorb */
+
+  loadArchive: async (projectId) => {
+    try {
+      const q = get().archiveQuery.trim();
+      set({ archive: await api.archivePage({ projectId, ...(q ? { q } : {}) }) });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Archiv konnte nicht geladen werden' });
+    }
+  },
+
+  setArchiveQuery: (archiveQuery) => set({ archiveQuery }),
+
+  unarchive: async (kind, id) => {
+    try {
+      await api.restore(kind, id);
+      await get().load();
+      const projectId = get().projectId;
+      if (projectId) await get().loadArchive(projectId);
+      set({ toast: 'Wiederhergestellt' });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen' });
+    }
+  },
+
+  loadTrash: async () => {
+    try {
+      const t = await api.trash();
+      set({ trash: t.entries, trashDays: t.days });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Papierkorb konnte nicht geladen werden' });
+    }
+  },
+
+  restoreTrash: async (id) => {
+    try {
+      await api.restoreTrash(id);
+      await get().load();
+      await get().loadTrash();
+      set({ toast: 'Wiederhergestellt' });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen' });
+    }
+  },
+
+  purgeTrash: async (id) => {
+    try {
+      await api.purgeTrash(id);
+      await get().loadTrash();
+      set({ toast: 'Endgültig gelöscht' });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
   },
 }));

@@ -4,6 +4,7 @@ import {
   createSchemas,
   kindSchema,
   moveBody,
+  settingsBody,
   patchBody,
   patchSchemas,
   type Kind,
@@ -20,9 +21,21 @@ import {
   patch,
   remove,
   restore,
+  restoreTrash,
+  loadTrash,
+  purgeTrash,
+  TRASH_DAYS,
 } from './repo.js';
+import { getSettings, putSettings } from './settings.js';
 
-/** Alle Datenrouten. Die Anmeldung liegt davor, siehe index.ts. */
+/**
+ * Alle Datenrouten. Die Anmeldung liegt davor, siehe index.ts.
+ *
+ * Die Objektrouten liegen unter `/kind/<typ>`, damit sie sich mit festen Pfaden
+ * wie `/move` oder `/trash` nicht überschneiden können. Sonst hinge die
+ * Korrektheit an der Registrierungsreihenfolge und kippte beim nächsten
+ * eingefügten Endpunkt.
+ */
 export function dataRoutes(ctx: DbCtx): Hono {
   const app = new Hono();
 
@@ -34,7 +47,31 @@ export function dataRoutes(ctx: DbCtx): Hono {
     return c.json(loadArchive(ctx, q.data));
   });
 
-  app.post('/:kind', async (c) => {
+  app.get('/trash', (c) => c.json({ entries: loadTrash(ctx), days: TRASH_DAYS }));
+
+  app.post('/trash/:id/restore', (c) => run(c, () => restoreTrash(ctx, c.req.param('id'))));
+
+  app.delete('/trash/:id', (c) => {
+    purgeTrash(ctx, c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  app.get('/settings', (c) => c.json(getSettings(ctx)));
+
+  app.patch('/settings', async (c) => {
+    const body = settingsBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return c.json(putSettings(ctx, body.data));
+  });
+
+  app.post('/move', async (c) => {
+    const body = moveBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    const { id, version, ...target } = body.data;
+    return run(c, () => move(ctx, id, version, target));
+  });
+
+  app.post('/kind/:kind', async (c) => {
     const kind = parseKind(c.req.param('kind'));
     if (!kind) return c.json({ error: 'Unbekannter Typ.' }, 404);
 
@@ -43,7 +80,7 @@ export function dataRoutes(ctx: DbCtx): Hono {
     return c.json(create(ctx, kind, body.data as Record<string, unknown>), 201);
   });
 
-  app.patch('/:kind/:id', async (c) => {
+  app.patch('/kind/:kind/:id', async (c) => {
     const kind = parseKind(c.req.param('kind'));
     if (!kind) return c.json({ error: 'Unbekannter Typ.' }, 404);
 
@@ -58,29 +95,22 @@ export function dataRoutes(ctx: DbCtx): Hono {
     );
   });
 
-  app.delete('/:kind/:id', (c) => {
+  app.delete('/kind/:kind/:id', (c) => {
     const kind = parseKind(c.req.param('kind'));
     if (!kind) return c.json({ error: 'Unbekannter Typ.' }, 404);
     return run(c, () => remove(ctx, kind, c.req.param('id')));
   });
 
-  app.post('/:kind/:id/archive', (c) => {
+  app.post('/kind/:kind/:id/archive', (c) => {
     const kind = archivable(c.req.param('kind'));
     if (!kind) return c.json({ error: 'Nur Aufgaben und Milestones.' }, 400);
     return run(c, () => archive(ctx, kind, c.req.param('id')));
   });
 
-  app.post('/:kind/:id/restore', (c) => {
+  app.post('/kind/:kind/:id/restore', (c) => {
     const kind = archivable(c.req.param('kind'));
     if (!kind) return c.json({ error: 'Nur Aufgaben und Milestones.' }, 400);
     return run(c, () => restore(ctx, kind, c.req.param('id')));
-  });
-
-  app.post('/move', async (c) => {
-    const body = moveBody.safeParse(await json(c));
-    if (!body.success) return fail(c, body.error);
-    const { id, version, ...target } = body.data;
-    return run(c, () => move(ctx, id, version, target));
   });
 
   return app;

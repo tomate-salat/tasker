@@ -3,7 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { eq, lt } from 'drizzle-orm';
 import { sessions } from '../../db/schema.js';
 import { db } from './db.js';
-import { ACCOUNT, getSetting, setSetting } from './settings.js';
+import { ACCOUNT, accountSetting as getSetting, setAccountSetting as setSetting } from './settings.js';
 
 export const SESSION_COOKIE = 'tasker_session';
 const KEEP_DAYS = 90;

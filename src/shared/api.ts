@@ -88,6 +88,13 @@ export const moveBody = z.object({
   order: z.number().optional(),
 });
 
+export const settingsBody = z
+  .object({
+    velocity: z.number().int().min(1).max(200),
+    theme: z.enum(['system', 'light', 'dark']),
+  })
+  .partial();
+
 export const archiveQuery = z.object({
   q: z.string().max(200).optional(),
   projectId: id.optional(),
