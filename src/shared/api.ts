@@ -93,6 +93,13 @@ export const moveBody = z.object({
   parentId: id.nullable().optional(),
   milestoneId: id.nullable().optional(),
   groupId: id.nullable().optional(),
+  /**
+   * Nur für lose Wurzeln im Backlog: die Markierung bestimmt die smarte Gruppe.
+   * Fehlt das Feld, bleibt die Markierung, wie sie war.
+   */
+  markId: id.nullable().optional(),
+  /** Nur nötig, wenn das Ziel kein eigenes Projekt mitbringt (Unsortiert, smarte Gruppe). */
+  projectId: id.optional(),
   order: z.number().optional(),
   /** Platz unter den künftigen Geschwistern; der Server nummeriert danach neu. */
   index: z.number().int().min(0).optional(),

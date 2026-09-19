@@ -359,6 +359,10 @@ export type MoveTarget = {
   parentId?: string | null | undefined;
   milestoneId?: string | null | undefined;
   groupId?: string | null | undefined;
+  /** Nur für lose Wurzeln: entscheidet über die smarte Gruppe. Fehlt es, bleibt die Markierung. */
+  markId?: string | null | undefined;
+  /** Fällt ein, wenn das Ziel kein eigenes Projekt hat (Unsortiert, smarte Gruppe). */
+  projectId?: string | undefined;
   order?: number | undefined;
   /** Platz unter den künftigen Geschwistern; danach wird lückenlos neu nummeriert. */
   index?: number | undefined;
@@ -379,18 +383,23 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
     }
 
     // Das Projekt des Ziels gilt für den ganzen Teilbaum.
-    const projectId = targetProject(ctx, { parentId, milestoneId, groupId }) ?? current['project_id'];
+    const projectId =
+      targetProject(ctx, { parentId, milestoneId, groupId, projectId: target.projectId }) ??
+      current['project_id'];
+    // Die Markierung wird nur angefasst, wenn sie ausdrücklich mitgeschickt wurde.
+    const markId = target.markId === undefined ? current['mark_id'] : target.markId;
 
     ctx.sqlite
       .prepare(
         `UPDATE task SET parent_id = ?, milestone_id = ?, group_id = ?, project_id = ?,
-           sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+           mark_id = ?, sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
       )
       .run(
         parentId,
         milestoneId,
         groupId,
         projectId,
+        markId,
         target.order ?? current['sort_order'],
         nowIso(),
         id,
@@ -406,7 +415,19 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
     }
 
     if (target.index !== undefined) {
-      reorder(ctx, { parentId, milestoneId, groupId, projectId: String(projectId) }, id, target.index);
+      reorder(
+        ctx,
+        {
+          parentId,
+          milestoneId,
+          groupId,
+          projectId: String(projectId),
+          markId: (markId as string | null) ?? null,
+          doc: Number(current['doc']) ? 1 : 0,
+        },
+        id,
+        target.index,
+      );
     }
     refreshHidden(ctx, id);
     return read(ctx, 'task', id);
@@ -420,25 +441,41 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
  */
 function reorder(
   ctx: DbCtx,
-  where: { parentId: string | null; milestoneId: string | null; groupId: string | null; projectId: string },
+  where: {
+    parentId: string | null;
+    milestoneId: string | null;
+    groupId: string | null;
+    projectId: string;
+    /** Nur für lose Wurzeln: Unsortiert und jede smarte Gruppe zählen getrennt. */
+    markId: string | null;
+    doc: number;
+  },
   movedId: string,
   index: number,
 ): void {
-  const [clause, param] = where.parentId
-    ? ['parent_id = ?', where.parentId]
+  const [clause, params] = where.parentId
+    ? ['parent_id = ?', [where.parentId]]
     : where.milestoneId
-      ? ['parent_id IS NULL AND milestone_id = ?', where.milestoneId]
+      ? ['parent_id IS NULL AND milestone_id = ?', [where.milestoneId]]
       : where.groupId
-        ? ['parent_id IS NULL AND group_id = ?', where.groupId]
-        : [
-            'parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL AND project_id = ?',
-            where.projectId,
-          ];
+        ? ['parent_id IS NULL AND group_id = ?', [where.groupId]]
+        : where.doc
+          ? [
+              `parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL
+                 AND project_id = ? AND doc = 1`,
+              [where.projectId],
+            ]
+          : [
+              // Unsortiert und jede smarte Gruppe sind eigene Behälter.
+              `parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL
+                 AND project_id = ? AND doc = 0 AND mark_id IS ?`,
+              [where.projectId, where.markId],
+            ];
 
   const siblings = (
     ctx.sqlite
       .prepare(`SELECT id FROM task WHERE ${clause} ORDER BY sort_order, id`)
-      .all(param) as { id: string }[]
+      .all(...(params as unknown[])) as { id: string }[]
   )
     .map((r) => r.id)
     .filter((x) => x !== movedId);
@@ -524,16 +561,24 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
     const row = readRow(ctx, kind, id);
     if (!row) throw new NotFound();
 
+    /**
+     * Wie im Prototyp nehmen Milestone und Gruppe ihre Aufgaben nicht mit in den
+     * Papierkorb: sie sind eine Ablage, kein Besitzer. Die Wurzelaufgaben lösen
+     * sich und liegen danach unter „Unsortiert“.
+     */
+    const detached =
+      kind === 'milestone'
+        ? detachRoots(ctx, 'milestone_id', id)
+        : kind === 'group'
+          ? detachRoots(ctx, 'group_id', id)
+          : [];
+
     const taskIds =
       kind === 'task'
         ? [id, ...descendantIds(ctx, id)]
-        : kind === 'milestone'
-          ? milestoneTaskIds(ctx, id)
-          : kind === 'group'
-            ? groupTaskIds(ctx, id)
-            : kind === 'project'
-              ? projectTaskIds(ctx, id)
-              : [];
+        : kind === 'project'
+          ? projectTaskIds(ctx, id)
+          : [];
 
     const payload = {
       kind,
@@ -567,6 +612,8 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
     ctx.sqlite.prepare(`DELETE FROM ${TABLE[kind]} WHERE id = ?`).run(id);
     // Abhängigkeiten haben keinen Fremdschlüssel (sie zeigen auf zwei Tabellen).
     pruneDependencies(ctx);
+    // Hing der gelöschte Milestone im Archiv, sind seine Aufgaben jetzt wieder sichtbar.
+    for (const t of detached) refreshHidden(ctx, t);
 
     return { trashId };
   })();
@@ -724,19 +771,21 @@ function descendantIds(ctx: DbCtx, id: string): string[] {
   return rows.map((r) => r.id);
 }
 
-const milestoneTaskIds = (ctx: DbCtx, id: string): string[] => {
+/**
+ * Löst die Wurzelaufgaben von ihrer Ablage: sie bleiben bestehen und liegen
+ * danach unter „Unsortiert“. Gibt die gelösten IDs zurück.
+ */
+function detachRoots(ctx: DbCtx, column: 'milestone_id' | 'group_id', id: string): string[] {
   const roots = (
-    ctx.sqlite.prepare('SELECT id FROM task WHERE milestone_id = ?').all(id) as { id: string }[]
+    ctx.sqlite.prepare(`SELECT id FROM task WHERE ${column} = ?`).all(id) as { id: string }[]
   ).map((r) => r.id);
-  return [...new Set(roots.flatMap((r) => [r, ...descendantIds(ctx, r)]))];
-};
-
-const groupTaskIds = (ctx: DbCtx, id: string): string[] => {
-  const roots = (
-    ctx.sqlite.prepare('SELECT id FROM task WHERE group_id = ?').all(id) as { id: string }[]
-  ).map((r) => r.id);
-  return [...new Set(roots.flatMap((r) => [r, ...descendantIds(ctx, r)]))];
-};
+  if (roots.length) {
+    ctx.sqlite
+      .prepare(`UPDATE task SET ${column} = NULL, updated_at = ?, version = version + 1 WHERE ${column} = ?`)
+      .run(nowIso(), id);
+  }
+  return roots;
+}
 
 const projectTaskIds = (ctx: DbCtx, id: string): string[] =>
   (ctx.sqlite.prepare('SELECT id FROM task WHERE project_id = ?').all(id) as { id: string }[]).map(
@@ -776,7 +825,8 @@ function targetProject(ctx: DbCtx, t: MoveTarget): string | null {
   if (t.parentId) return q('SELECT project_id FROM task WHERE id = ?', t.parentId);
   if (t.milestoneId) return q('SELECT project_id FROM milestone WHERE id = ?', t.milestoneId);
   if (t.groupId) return q('SELECT project_id FROM "group" WHERE id = ?', t.groupId);
-  return null;
+  // Unsortiert und smarte Gruppen gehören zu keinem Behälter – dann zählt das mitgeschickte Projekt.
+  return t.projectId ?? null;
 }
 
 /** Dieselben Farben wie im Prototyp, der Reihe nach vergeben. */

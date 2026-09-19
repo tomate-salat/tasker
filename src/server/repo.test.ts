@@ -310,6 +310,70 @@ describe('Reihenfolge beim Verschieben', () => {
 
     assert.deepEqual(order(m.id), ['B', 'C', 'A']);
   });
+
+  /**
+   * Im Backlog sind „Unsortiert“ und jede smarte Gruppe eigene Behälter,
+   * obwohl alle Aufgaben darin lose an keinem Milestone und keiner Gruppe
+   * hängen. Unterschieden werden sie an der Markierung.
+   */
+  it('nummeriert Unsortiert und smarte Gruppe getrennt', () => {
+    const p = mkProject();
+    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    for (const title of ['A', 'B']) mkTask({ projectId: p.id, title });
+    for (const title of ['X', 'Y']) mkTask({ projectId: p.id, title, markId: k.id });
+    const y = loadBootstrap(ctx).tasks.find((t) => t.title === 'Y')!;
+
+    move(ctx, y.id, y.version, { projectId: p.id, markId: k.id, index: 0 });
+
+    const loose = (markId: string | null) =>
+      (
+        ctx.sqlite
+          .prepare(
+            `SELECT title FROM task WHERE parent_id IS NULL AND milestone_id IS NULL
+               AND group_id IS NULL AND mark_id IS ? ORDER BY sort_order`,
+          )
+          .all(markId) as { title: string }[]
+      ).map((r) => r.title);
+
+    assert.deepEqual(loose(k.id), ['Y', 'X']);
+    // Die unmarkierten daneben bleiben unberührt.
+    assert.deepEqual(loose(null), ['A', 'B']);
+  });
+
+  it('setzt beim Verschieben in eine smarte Gruppe die Markierung, im Backlog wieder weg', () => {
+    const p = mkProject();
+    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const t = mkTask({ projectId: p.id, title: 'A' });
+
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, markId: k.id, index: 0 });
+    assert.equal(one(t.id).markId, k.id);
+
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, markId: null, index: 0 });
+    assert.equal(one(t.id).markId, null);
+  });
+
+  it('lässt die Markierung stehen, wenn keine mitgeschickt wird', () => {
+    const p = mkProject();
+    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const t = mkTask({ projectId: p.id, title: 'A', markId: k.id });
+
+    move(ctx, t.id, one(t.id).version, { milestoneId: m.id, index: 0 });
+
+    assert.equal(one(t.id).markId, k.id);
+  });
+
+  it('nimmt das Projekt aus dem Ziel, wenn der Behälter keines mitbringt', () => {
+    const p1 = mkProject();
+    const p2 = create(ctx, 'project', { name: 'Website' }) as { id: string };
+    const t = mkTask({ projectId: p1.id, title: 'Wandert' });
+    const kind = mkTask({ projectId: p1.id, title: 'Kind', parentId: t.id });
+
+    move(ctx, t.id, one(t.id).version, { projectId: p2.id, index: 0 });
+
+    assert.equal(one(t.id).projectId, p2.id);
+    assert.equal(one(kind.id).projectId, p2.id);
+  });
 });
 
 describe('Bootstrap', () => {
@@ -361,13 +425,47 @@ describe('Löschen', () => {
     assert.equal(payload.tags.length, 1);
   });
 
-  it('ein gelöschter Milestone nimmt seine Aufgaben mit', () => {
+  /**
+   * Milestone und Gruppe sind eine Ablage, kein Besitzer: wird die Ablage
+   * gelöscht, bleiben die Aufgaben und liegen unter „Unsortiert“ – wie im
+   * Prototyp.
+   */
+  it('ein gelöschter Milestone lässt seine Aufgaben stehen', () => {
     const p = mkProject();
     const m = mkMilestone({ projectId: p.id, title: 'M' });
-    mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    const kind = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
+
     remove(ctx, 'milestone', m.id);
-    assert.deepEqual(active(), []);
+
+    assert.deepEqual(active().sort(), [a.id, kind.id].sort());
+    assert.equal(one(a.id).milestoneId, null);
     assert.deepEqual(loadBootstrap(ctx).milestones, []);
+    assert.deepEqual(hiddenMismatches(ctx), []);
+  });
+
+  it('eine gelöschte Gruppe lässt ihre Aufgaben stehen', () => {
+    const p = mkProject();
+    const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
+    const a = mkTask({ projectId: p.id, title: 'A', groupId: g.id });
+
+    remove(ctx, 'group', g.id);
+
+    assert.deepEqual(active(), [a.id]);
+    assert.equal(one(a.id).groupId, null);
+  });
+
+  it('die Aufgaben eines archivierten Milestones werden wieder sichtbar, wenn er gelöscht wird', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    archive(ctx, 'milestone', m.id);
+    assert.deepEqual(active(), []);
+
+    remove(ctx, 'milestone', m.id);
+
+    assert.deepEqual(active(), [a.id]);
+    assert.deepEqual(hiddenMismatches(ctx), []);
   });
 
   it('räumt verwaiste Abhängigkeiten ab', () => {

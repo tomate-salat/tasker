@@ -167,14 +167,7 @@ function Shell({
                 <NewThing
                   label="+ Milestone"
                   placeholder="Titel des Milestones"
-                  onCreate={(t) => useStore.getState().addMilestone(t)}
-                />
-              )}
-              {view === 'backlog' && (
-                <NewThing
-                  label="+ Gruppe"
-                  placeholder="Name der Gruppe"
-                  onCreate={(t) => useStore.getState().addGroup(t)}
+                  onCreate={async (t) => void (await useStore.getState().addMilestone(t))}
                 />
               )}
               {(view === 'plan' || view === 'backlog' || view === 'docs') && (
@@ -203,7 +196,7 @@ function Shell({
         {(view === 'plan' || view === 'backlog' || view === 'docs') && (
           <>
             <QuickAdd ws={ws} projectId={projectId} />
-            <Outline ws={ws} view={view} />
+            <Outline ws={ws} view={view} onManageMarks={() => setDialog('marks')} />
           </>
         )}
         {view === 'archive' && <ArchiveView />}

@@ -84,8 +84,12 @@ type State = {
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
   addTask: (input: Record<string, unknown>) => Promise<string | null>;
   addProject: (name: string) => Promise<void>;
-  addMilestone: (title: string) => Promise<void>;
-  addGroup: (title: string) => Promise<void>;
+  /** Ohne Angabe ein eingeplanter Milestone im aktuellen Projekt. Gibt die ID zurück. */
+  addMilestone: (
+    title: string,
+    o?: { planned?: boolean; projectId?: string },
+  ) => Promise<string | null>;
+  addGroup: (title: string, projectId?: string) => Promise<void>;
   moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   remove: (kind: Kind, id: string) => Promise<void>;
@@ -274,20 +278,26 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  addMilestone: async (title) => {
-    const projectId = currentProjectId(get());
-    if (!projectId) return;
+  addMilestone: async (title, o) => {
+    const projectId = o?.projectId ?? currentProjectId(get());
+    if (!projectId) return null;
     try {
-      // Aus der Planansicht heraus ist ein Milestone immer ein eingeplanter.
-      await api.create('milestone', { projectId, title, planned: true });
+      // Aus der Planansicht heraus ist ein Milestone eingeplant, aus dem Backlog vorbereitet.
+      const created = await api.create<{ id: string }>('milestone', {
+        projectId,
+        title,
+        planned: o?.planned ?? true,
+      });
       await get().load();
+      return created.id;
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+      return null;
     }
   },
 
-  addGroup: async (title) => {
-    const projectId = currentProjectId(get());
+  addGroup: async (title, projectIdArg) => {
+    const projectId = projectIdArg ?? currentProjectId(get());
     if (!projectId) return;
     try {
       await api.create('group', { projectId, title });
@@ -330,7 +340,7 @@ export const useStore = create<State>((set, get) => ({
       await api.remove(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      set({ toast: 'In den Papierkorb gelegt', trash: null });
+      set({ toast: REMOVED[kind] ?? 'In den Papierkorb gelegt', trash: null });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
@@ -424,6 +434,15 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 }));
+
+/**
+ * Milestone und Gruppe sind nur eine Ablage: gelöscht bleiben ihre Aufgaben
+ * bestehen. Das sagt die Meldung ausdrücklich, sonst sucht man sie.
+ */
+const REMOVED: Partial<Record<Kind, string>> = {
+  milestone: 'Milestone im Papierkorb – seine Tasks liegen unter „Unsortiert“',
+  group: 'Gruppe gelöscht – ihre Tasks liegen unter „Unsortiert“',
+};
 
 /* ---------------------------------------------------------- Abgeleitetes */
 

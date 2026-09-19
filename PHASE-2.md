@@ -364,9 +364,27 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Änderung; deshalb ein eigener Punkt.
 - **Zeichnungen an Milestones.** Im Prototyp kann auch ein Milestone Zeichnungen haben; hier hängen
   sie bisher nur an Aufgaben.
-- **Backlog.** Abschnitte „Vorbereitete Milestones“ (mit „In den Plan“), „Ideen & Tasks“ und
-  „Smarte Gruppen“ je Markierung.
+- ~~**Backlog.**~~ **Erledigt.** Die drei Abschnitte des Prototyps: „Vorbereitete Milestones“ (die
+  nicht eingeplanten, mit „In den Plan →“ und eigenem „+ Milestone“), „Ideen & Tasks“ (Unsortiert
+  plus die eigenen Gruppen, mit „+ Gruppe“) und „Smarte Gruppen“ – eine je Markierung. Der Plan
+  zeigt jetzt nur noch eingeplante Milestones. Leere Behälter bekommen den gestrichelten
+  Platzhalter zum Hineinziehen, Gruppen lassen sich in der Zeile umbenennen und löschen, und
+  Milestone-Titel sind ebenfalls direkt in der Zeile änderbar.
+
+  Eine **smarte Gruppe** ist hier abgeleitet: sie besteht aus den losen Wurzelaufgaben mit genau
+  dieser Markierung, statt wie im Prototyp eine eigene Ablage zu sein. Die Regeln bleiben gleich –
+  hinein setzt die Markierung, heraus in den Backlog nimmt sie weg, heraus in einen Milestone lässt
+  sie stehen. Unterschied nur im Randfall: eine markierte Aufgabe, die aus einem Milestone nach
+  „Unsortiert“ gezogen wird, landet hier in ihrer smarten Gruppe statt unter „Unsortiert“.
+
+  Dazu am Server: `POST /api/move` kennt jetzt `markId` (nur für lose Wurzeln) und `projectId`
+  (weil Unsortiert und smarte Gruppen keinen Behälter mit eigenem Projekt haben), und die
+  Neunummerierung zählt Unsortiert, Dokumentation und jede smarte Gruppe getrennt. Außerdem nehmen
+  **Milestone und Gruppe ihre Aufgaben nicht mehr mit in den Papierkorb** – wie im Prototyp sind sie
+  eine Ablage, kein Besitzer; die Aufgaben liegen danach unter „Unsortiert“.
 - **Zeitplan.** Die Ansicht fehlt bislang ganz.
+- **Erledigte archivieren.** Der Prototyp hat in Plan und Backlog den Knopf „Erledigte archivieren
+  (n)“ neben den Reitern. Er gehört zur Mehrfachauswahl und fehlt hier noch.
 
 ---
 

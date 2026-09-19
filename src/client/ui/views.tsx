@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
-import { outline, type OutlineView } from '@shared/outline.js';
+import { outline, type OutlineRow, type OutlineView, type Placement } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { useDnd } from './dnd.js';
 import { useKeys } from './keys.js';
-import { GroupRow, MilestoneRow, TaskRow } from './rows.js';
+import { NewThing } from './NewThing.js';
+import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
 
@@ -15,16 +16,24 @@ import { GroupRow, MilestoneRow, TaskRow } from './rows.js';
  * Die drei Arbeitsansichten teilen sich eine Zeilenfolge (`outline`), damit
  * Anzeige, Tastatur und Drag & Drop dieselbe Reihenfolge sehen.
  */
-export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
+export function Outline({
+  ws,
+  view,
+  onManageMarks,
+}: {
+  ws: Workspace;
+  view: OutlineView;
+  onManageMarks: () => void;
+}) {
   const state = useStore();
-  const { collapsed, select, settings, filter } = state;
+  const { collapsed, settings, filter } = state;
   const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
   const dnd = useDnd(ws);
   useKeys(ws, rows);
 
   const plan = view === 'plan' ? schedule(ws, { velocity: settings.velocity }) : null;
 
-  if (!rows.length) return <Empty>{EMPTY[view]}</Empty>;
+  if (!rows.length) return <Empty>{view === 'plan' ? <PlanEmpty /> : EMPTY[view]}</Empty>;
 
   return (
     <div className="list" onDragEnd={() => dnd.end()}>
@@ -45,14 +54,38 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
           return (
             <GroupRow
               key={row.id}
-              id={row.id}
-              title={row.title}
-              unsorted={!row.group}
+              row={row}
               count={openIn(ws, row.tasks)}
-              onAdd={() => void addIn(row.group ? { groupId: row.group.id } : {}, row.projectId)}
+              onAdd={() => void addIn(row.projectId, row.place)}
+              onManageMarks={onManageMarks}
               dnd={dnd}
-              droppable={!!row.group}
             />
+          );
+        }
+        if (row.type === 'empty') {
+          return (
+            <EmptyDrop
+              key={row.id}
+              row={row}
+              onAdd={() => void addIn(row.projectId, row.place)}
+              dnd={dnd}
+            />
+          );
+        }
+        if (row.type === 'section') {
+          return (
+            <SectionRow
+              key={row.id}
+              title={row.title}
+              action={<SectionAction row={row} onManageMarks={onManageMarks} />}
+            />
+          );
+        }
+        if (row.type === 'hint') {
+          return (
+            <div key={row.id} className="hint-row">
+              {row.text}
+            </div>
           );
         }
         if (row.type === 'project') {
@@ -82,10 +115,57 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   );
 }
 
-/** Legt eine Aufgabe an der genannten Stelle an und öffnet gleich den Titel. */
-async function addIn(target: Record<string, unknown>, projectId: string): Promise<void> {
+/** Die Handlung rechts in einer Abschnittsüberschrift. */
+function SectionAction({
+  row,
+  onManageMarks,
+}: {
+  row: Extract<OutlineRow, { type: 'section' }>;
+  onManageMarks: () => void;
+}) {
+  if (row.action === 'manage-marks') {
+    return (
+      <button className="linkish" onClick={onManageMarks}>
+        Markierungen verwalten
+      </button>
+    );
+  }
+  if (row.action === 'add-group') {
+    return (
+      <NewThing
+        className="linkish"
+        label="+ Gruppe"
+        placeholder="Name der Gruppe"
+        onCreate={(t) => useStore.getState().addGroup(t, row.projectId)}
+      />
+    );
+  }
+  return (
+    <NewThing
+      className="linkish"
+      label="+ Milestone"
+      placeholder="Titel des Milestones"
+      // Aus dem Backlog heraus ist ein Milestone ein vorbereiteter.
+      onCreate={async (t) =>
+        void (await useStore.getState().addMilestone(t, { planned: false, projectId: row.projectId }))
+      }
+    />
+  );
+}
+
+/**
+ * Legt eine Aufgabe an der genannten Stelle an und öffnet gleich den Titel.
+ * Die Markierung gehört dazu: sie entscheidet über die smarte Gruppe.
+ */
+async function addIn(projectId: string, place: Placement): Promise<void> {
   const store = useStore.getState();
-  const id = await store.addTask({ projectId, title: '', ...target });
+  const id = await store.addTask({
+    projectId,
+    title: '',
+    milestoneId: place.milestoneId ?? null,
+    groupId: place.groupId ?? null,
+    markId: place.markId ?? null,
+  });
   if (id) store.edit(id);
 }
 
@@ -179,10 +259,31 @@ function MilestoneRight({
 }
 
 const EMPTY: Record<OutlineView, string> = {
-  plan: 'Noch keine Milestones in diesem Projekt.',
+  plan: 'Nichts im Plan.',
   backlog: 'Der Backlog ist leer.',
   docs: 'Noch keine Dokumente in diesem Projekt.',
 };
+
+/** Wie im Prototyp: der leere Plan zeigt beide Wege, dorthin etwas zu bekommen. */
+function PlanEmpty() {
+  const { setView, addMilestone } = useStore();
+  return (
+    <>
+      Nichts im Plan. Bereite Milestones im{' '}
+      <button className="linkish" onClick={() => setView('backlog')}>
+        Backlog
+      </button>{' '}
+      vor oder{' '}
+      <button
+        className="linkish"
+        onClick={() => void addMilestone('').then((id) => id && useStore.getState().edit(id))}
+      >
+        leg direkt einen an
+      </button>
+      .
+    </>
+  );
+}
 
 const formatDay = (d: Date): string =>
   d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });

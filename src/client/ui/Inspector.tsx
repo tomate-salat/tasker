@@ -3,6 +3,7 @@ import { dependsOn, inheritedBlock } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
+import { placeLabel } from '@shared/outline.js';
 import { allDone, doneCount, milestoneStats, statusSegments, total } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
@@ -130,9 +131,8 @@ function Crumbs({
         </span>,
       );
     else {
-      const group = ws.group(root.groupId);
       middle.push(<span key="bl">Backlog</span>);
-      middle.push(<span key="grp">{group ? group.title : 'Unsortiert'}</span>);
+      middle.push(<span key="grp">{placeLabel(ws, root)}</span>);
     }
     for (const a of ws.ancestors(task)) middle.push(link(a, a.title || 'Ohne Titel'));
   }
@@ -932,7 +932,7 @@ function whereLabel(ws: Workspace, x: Task | Milestone): string {
   const ms = ws.milestone(x.milestoneId);
   if (ms) return `in ◆ ${ms.title}${ms.planned ? '' : ' (Backlog)'}`;
   if (x.doc) return 'in Dokumentation';
-  return `im Backlog › ${ws.group(x.groupId)?.title ?? 'Unsortiert'}`;
+  return `im Backlog › ${placeLabel(ws, x)}`;
 }
 
 /* ---------------------------------------------------------------- Teile */

@@ -3,6 +3,7 @@ import { inheritedBlock, ownBlockers } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
+import type { OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
@@ -64,7 +65,7 @@ export function TaskRow({
       draggable={!editing}
       onDragStart={() => dnd?.start(task.id)}
       onDragEnd={() => dnd?.end()}
-      onDragOver={(e) => dnd?.over(e, task.id, 'task')}
+      onDragOver={(e) => dnd?.overTask(e, task.id)}
       onDrop={(e) => dnd?.release(e)}
     >
       {doc ? (
@@ -96,7 +97,7 @@ export function TaskRow({
       )}
 
       {editing === task.id ? (
-        <TitleEdit task={task} />
+        <TitleEdit kind="task" id={task.id} title={task.title} />
       ) : (
         <span className="title" onDoubleClick={() => useStore.getState().edit(task.id)}>
           {task.title || <em>{doc ? 'Neue Seite' : 'Ohne Titel'}</em>}
@@ -153,7 +154,7 @@ export function MilestoneRow({
   stats: { done: number; total: number };
   pct: number;
 }) {
-  const { selected, select, collapsed, toggle } = useStore();
+  const { selected, select, collapsed, toggle, editing } = useStore();
   const open = !collapsed[milestone.id];
   const waiting = milestone.deps
     .map((id) => ws.milestone(id))
@@ -165,14 +166,26 @@ export function MilestoneRow({
       data-row={milestone.id}
       className={`row ms-row ${selected === milestone.id ? 'sel' : ''} ${active ? 'dz-into' : ''}`}
       onClick={() => select(milestone.id)}
-      onDragOver={(e) => dnd?.over(e, milestone.id, 'container')}
+      onDragOver={(e) =>
+        dnd?.overContainer(e, {
+          id: milestone.id,
+          projectId: milestone.projectId,
+          place: { milestoneId: milestone.id },
+        })
+      }
       onDrop={(e) => dnd?.release(e)}
     >
       <Caret open={open} hasKids onToggle={() => toggle(milestone.id)} />
       <span className="ico ms" title="Milestone">
         ◆
       </span>
-      <span className="title">{milestone.title || <em>Neuer Milestone</em>}</span>
+      {editing === milestone.id ? (
+        <TitleEdit kind="milestone" id={milestone.id} title={milestone.title} />
+      ) : (
+        <span className="title" onDoubleClick={() => useStore.getState().edit(milestone.id)}>
+          {milestone.title || <em>Neuer Milestone</em>}
+        </span>
+      )}
       <ChecklistBadge desc={milestone.desc} />
       <span className="ms-spacer" />
 
@@ -196,51 +209,124 @@ export function MilestoneRow({
   );
 }
 
-/** Überschriftzeile für Gruppen und Sammelbereiche. */
+/**
+ * Überschriftzeile für Gruppen, den Sammelbereich „Unsortiert“ und die smarten
+ * Gruppen. Eine smarte Gruppe ist keine Ablage, sondern die Markierung selbst:
+ * was hier landet, bekommt sie automatisch.
+ */
 export function GroupRow({
-  id,
-  title,
+  row,
   count,
-  unsorted = false,
   onAdd,
+  onManageMarks,
   dnd,
-  droppable = false,
 }: {
-  id: string;
-  title: string;
+  row: Extract<OutlineRow, { type: 'group' }>;
   /** Offene Aufgaben in dieser Gruppe. */
   count: number;
-  unsorted?: boolean;
-  onAdd?: () => void;
+  onAdd: () => void;
+  onManageMarks: () => void;
   dnd?: Dnd;
-  droppable?: boolean;
 }) {
-  const { collapsed, toggle } = useStore();
+  const { collapsed, toggle, editing, edit, remove } = useStore();
+  const { id, group, mark } = row;
   const open = !collapsed[id];
-  const active = droppable && dnd?.drop?.id === id;
+  const active = dnd?.drop?.id === id;
 
   return (
     <div
       data-row={id}
-      className={`row grp-row ${unsorted ? 'unsorted' : ''} ${active ? 'dz-into' : ''}`}
-      {...(droppable && dnd
-        ? {
-            onDragOver: (e: React.DragEvent) => dnd.over(e, id, 'container'),
-            onDrop: (e: React.DragEvent) => dnd.release(e),
-          }
-        : {})}
+      className={[
+        'row grp-row',
+        !group && !mark ? 'unsorted' : '',
+        mark ? 'smart' : '',
+        active ? 'dz-into' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      {...(mark ? { title: `Smarte Gruppe: Tasks hier bekommen automatisch ${mark.emoji} ${mark.name}` } : {})}
+      onDragOver={(e) =>
+        dnd?.overContainer(e, { id, projectId: row.projectId, place: row.place })
+      }
+      onDrop={(e) => dnd?.release(e)}
     >
       <Caret open={open} hasKids onToggle={() => toggle(id)} />
-      <span className="title">{title}</span>
-      <span className="ms-spacer" />
-      {onAdd && (
-        <span className="row-actions">
-          <button title="Aufgabe in dieser Gruppe anlegen" aria-label="Aufgabe anlegen" onClick={onAdd}>
-            +
-          </button>
-        </span>
+      {mark && <span className="mk-emoji">{mark.emoji}</span>}
+
+      {group && editing === group.id ? (
+        <TitleEdit kind="group" id={group.id} title={group.title} />
+      ) : (
+        <span className="title">{row.title}</span>
       )}
+
+      {mark && <span className="smart-badge">smart</span>}
+      <span className="ms-spacer" />
+
+      <span className="row-actions">
+        <button
+          title={mark ? `Task mit ${mark.name} anlegen` : 'Task in dieser Gruppe anlegen'}
+          aria-label="Task anlegen"
+          onClick={onAdd}
+        >
+          +
+        </button>
+        {mark && (
+          <button title="Markierungen verwalten" aria-label="Markierungen verwalten" onClick={onManageMarks}>
+            ✎
+          </button>
+        )}
+        {group && (
+          <>
+            <button title="Umbenennen" aria-label="Umbenennen" onClick={() => edit(group.id)}>
+              ✎
+            </button>
+            <button
+              title="Gruppe löschen"
+              aria-label="Gruppe löschen"
+              onClick={() => void remove('group', group.id)}
+            >
+              ✕
+            </button>
+          </>
+        )}
+      </span>
+
       <span className="grp-count">{count} offen</span>
+    </div>
+  );
+}
+
+/** Abschnittsüberschrift im Backlog, rechts daneben die passende Handlung. */
+export function SectionRow({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="sec">
+      {title}
+      {action}
+    </div>
+  );
+}
+
+/** Leerer Behälter: gestrichelter Kasten, in den man ziehen kann. */
+export function EmptyDrop({
+  row,
+  onAdd,
+  dnd,
+}: {
+  row: Extract<OutlineRow, { type: 'empty' }>;
+  onAdd: () => void;
+  dnd?: Dnd;
+}) {
+  const active = dnd?.drop?.id === row.id;
+  return (
+    <div
+      className={`drop-empty ${active ? 'dz-on' : ''}`}
+      onDragOver={(e) => dnd?.overContainer(e, { id: row.id, projectId: row.projectId, place: row.place })}
+      onDrop={(e) => dnd?.release(e)}
+    >
+      Leer – Tasks hierher ziehen oder{' '}
+      <button className="linkish" onClick={onAdd}>
+        Task anlegen
+      </button>
     </div>
   );
 }
@@ -398,8 +484,17 @@ function TagCell({ ws, task }: { ws: Workspace; task: Task }) {
 
 /**
  * Titel direkt in der Zeile bearbeiten. Enter bestätigt, Escape verwirft.
+ * Gilt für Aufgaben wie für Gruppennamen.
  */
-function TitleEdit({ task }: { task: Task }) {
+function TitleEdit({
+  kind,
+  id,
+  title,
+}: {
+  kind: 'task' | 'group' | 'milestone';
+  id: string;
+  title: string;
+}) {
   const { patch, edit } = useStore();
   const ref = useRef<HTMLInputElement>(null);
 
@@ -411,14 +506,14 @@ function TitleEdit({ task }: { task: Task }) {
   const commit = (value: string): void => {
     const next = value.trim();
     edit(null);
-    if (next !== task.title) void patch('task', task.id, { title: next });
+    if (next !== title) void patch(kind, id, { title: next });
   };
 
   return (
     <input
       ref={ref}
       className="title-edit"
-      defaultValue={task.title}
+      defaultValue={title}
       onClick={(e) => e.stopPropagation()}
       onBlur={(e) => commit(e.target.value)}
       onKeyDown={(e) => {

@@ -25,6 +25,11 @@ export class Builder {
     return this;
   }
 
+  mark(id: string, emoji = '⭐', name = id): this {
+    this.data.marks.push({ id, version: 1, emoji, name, order: this.data.marks.length });
+    return this;
+  }
+
   group(id: string, projectId: string, title = id): this {
     this.data.groups.push({ id,
       version: 1, projectId, title, order: this.data.groups.length });

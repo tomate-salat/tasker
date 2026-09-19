@@ -1062,6 +1062,77 @@ button.caret:hover {
   color: var(--muted);
 }
 
+/* Smarte Gruppen: die Markierung steht vorn, ein blasses Schild sagt, dass sie abgeleitet sind. */
+.grp-row.smart .mk-emoji {
+  margin-right: 0;
+}
+
+.smart-badge {
+  flex: none;
+  font: 500 9px/1 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 5px;
+  border-radius: 4px;
+  border: 1px dashed var(--line);
+  color: var(--faint);
+}
+
+/* Abschnittsüberschrift im Backlog, mit einer Linie bis zur Handlung rechts. */
+.sec {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 12px 6px;
+  font: 600 11px/1 var(--body);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.sec::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  order: 1;
+}
+
+.sec .linkish,
+.sec .new-thing {
+  order: 2;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.list .sec {
+  padding-top: 18px;
+}
+
+.hint-row {
+  padding: 2px 12px 8px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+/* Leerer Behälter: sichtbares Ziel zum Hineinziehen. */
+.drop-empty {
+  margin: 2px 10px 6px 36px;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.drop-empty.dz-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .grp-count {
   min-width: 64px;
   text-align: right;
