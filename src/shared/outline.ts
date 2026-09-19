@@ -14,7 +14,16 @@ import type { Workspace } from './workspace.js';
 export type OutlineRow =
   | { type: 'project'; id: string; project: Project }
   | { type: 'milestone'; id: string; milestone: Milestone }
-  | { type: 'group'; id: string; title: string; group: Group | null; count: number }
+  | {
+      type: 'group';
+      id: string;
+      title: string;
+      /** Null beim Sammelbereich „Unsortiert“, der keine echte Gruppe ist. */
+      group: Group | null;
+      projectId: string;
+      /** Die Wurzelaufgaben der Gruppe – für Zähler und „+“. */
+      tasks: Task[];
+    }
   | { type: 'task'; id: string; task: Task; depth: number };
 
 export type OutlineView = 'plan' | 'backlog' | 'docs';
@@ -75,14 +84,14 @@ export function outline(
           .filter((t) => t.groupId === g.id && !t.parentId)
           .sort((a, b) => a.order - b.order);
         if (filtering && !tasks.some(show)) continue;
-        rows.push({ type: 'group', id: g.id, title: g.title, group: g, count: tasks.length });
+        rows.push({ type: 'group', id: g.id, title: g.title, group: g, projectId, tasks });
         if (open(g.id)) for (const t of tasks) walk(t, 0);
       }
 
       const loose = looseTasks(ws, projectId);
       if (loose.length && (!filtering || loose.some(show))) {
         const id = unsortedId(projectId);
-        rows.push({ type: 'group', id, title: 'Unsortiert', group: null, count: loose.length });
+        rows.push({ type: 'group', id, title: 'Unsortiert', group: null, projectId, tasks: loose });
         if (open(id)) for (const t of loose) walk(t, 0);
       }
     }

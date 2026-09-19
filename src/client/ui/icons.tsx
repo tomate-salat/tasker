@@ -129,5 +129,57 @@ const SEG_TITLE: Record<string, string> = {
 export const CHEVRON_DOWN = '▾';
 export const CHEVRON_RIGHT = '▸';
 
+/** Schloss für blockierte Aufgaben. */
+export const LOCK_ICON = (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <rect x="2" y="5.5" width="8" height="5.5" rx="1.2" fill="currentColor" />
+    <path d="M3.8 5.5V4a2.2 2.2 0 0 1 4.4 0v1.5" stroke="currentColor" strokeWidth="1.4" fill="none" />
+  </svg>
+);
+
+/** Kästchen für die Checkliste in der Beschreibung. */
+export const CHECK_ICON = (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <rect x="1" y="1" width="10" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path
+      d="M3.6 6.1l1.6 1.6 3.2-3.4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Hinweis auf eine Zeichnung an der Aufgabe. */
+export const DRAW_ICON = (
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="1.5" y="3" width="6" height="5" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="12" cy="11.5" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M8 6.5c2 0 3.5 1 3.8 2.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+/** Seitensymbol in der Doku-Ansicht. */
+export const DOC_ICON = (
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="M4 1.8h5.2L12.5 5v9.2H4z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 2v3.2h3.3M6 8.5h4.5M6 11h3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 /** Ohne eigene Markierung gilt die Standard-Markierung „Aufgabe“. */
 export const DEFAULT_MARK = { emoji: '📋', name: 'Aufgabe' };

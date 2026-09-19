@@ -34,7 +34,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
         </button>
       </div>
 
-      <div className="meta">
+      <div className="d-meta">
         <Row label="Status">
           <StatusGroups kind={kind} item={item} />
         </Row>

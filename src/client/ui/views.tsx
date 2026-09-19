@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
+import { isDone, type Milestone, type Task } from '@shared/model.js';
 import { outline, type OutlineView } from '@shared/outline.js';
-import { milestoneStats, statusSegments } from '@shared/progress.js';
-import { schedule } from '@shared/schedule.js';
+import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
+import { schedule, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { useDnd } from './dnd.js';
-import { SegBar } from './icons.js';
 import { useKeys } from './keys.js';
-import { GroupRow, TaskRow } from './rows.js';
+import { GroupRow, MilestoneRow, TaskRow } from './rows.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
 
@@ -30,11 +30,29 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
     <div className="list" onDragEnd={() => dnd.end()}>
       {rows.map((row) => {
         if (row.type === 'task') {
-          return <TaskRow key={row.id} ws={ws} task={row.task} depth={row.depth} dnd={dnd} />;
+          return (
+            <TaskRow
+              key={row.id}
+              ws={ws}
+              task={row.task}
+              depth={row.depth}
+              dnd={dnd}
+              doc={view === 'docs'}
+            />
+          );
         }
         if (row.type === 'group') {
           return (
-            <GroupRow key={row.id} id={row.id} title={row.title} count={row.count} dnd={dnd} droppable={!!row.group} />
+            <GroupRow
+              key={row.id}
+              id={row.id}
+              title={row.title}
+              unsorted={!row.group}
+              count={openIn(ws, row.tasks)}
+              onAdd={() => void addIn(row.group ? { groupId: row.group.id } : {}, row.projectId)}
+              dnd={dnd}
+              droppable={!!row.group}
+            />
           );
         }
         if (row.type === 'project') {
@@ -47,33 +65,116 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
         }
 
         const m = row.milestone;
-        const line = plan?.byId.get(m.id);
+        const stats = milestoneStats(ws, m);
         return (
-          <GroupRow
+          <MilestoneRow
             key={m.id}
-            id={m.id}
-            title={m.title || 'Ohne Titel'}
-            icon="◆"
-            count={milestoneStats(ws, m).total}
-            onSelect={() => select(m.id)}
+            ws={ws}
+            milestone={m}
             dnd={dnd}
-            droppable
-            right={
-              <>
-                <SegBar segments={statusSegments(ws, m)} />
-                {line ? (
-                  <span className={`eta ${line.late ? 'late' : ''}`} title={forecastTitle(line)}>
-                    {formatWeeks(line.end)}
-                  </span>
-                ) : (
-                  <span className="eta muted-eta">nicht eingeplant</span>
-                )}
-              </>
-            }
+            stats={stats}
+            pct={milestoneProgressPct(ws, m)}
+            right={<MilestoneRight ws={ws} milestone={m} line={plan?.byId.get(m.id) ?? null} />}
           />
         );
       })}
     </div>
+  );
+}
+
+/** Legt eine Aufgabe an der genannten Stelle an und öffnet gleich den Titel. */
+async function addIn(target: Record<string, unknown>, projectId: string): Promise<void> {
+  const store = useStore.getState();
+  const id = await store.addTask({ projectId, title: '', ...target });
+  if (id) store.edit(id);
+}
+
+const openIn = (ws: Workspace, tasks: Task[]): number =>
+  tasks.reduce((n, t) => n + (isDone(t) ? 0 : 1) + ws.desc(t).filter((d) => !isDone(d)).length, 0);
+
+/**
+ * Rechts in der Milestone-Zeile: Status, Zeitraum und die nächste sinnvolle
+ * Handlung – genau die Abfolge aus dem Prototyp.
+ */
+function MilestoneRight({
+  ws,
+  milestone,
+  line,
+}: {
+  ws: Workspace;
+  milestone: Milestone;
+  line: ScheduledMilestone | null;
+}) {
+  const { patch, archiveItem, settings } = useStore();
+  const stats = milestoneStats(ws, milestone);
+
+  if (stats.isDone) {
+    return (
+      <>
+        <span className="stpill st-done">Done</span>
+        {milestone.endDate && <span className="eta">{formatDay(new Date(milestone.endDate))}</span>}
+        <button
+          className="btn tiny"
+          onClick={(e) => {
+            e.stopPropagation();
+            void archiveItem('milestone', milestone.id);
+          }}
+        >
+          Archivieren
+        </button>
+      </>
+    );
+  }
+
+  const progress = milestone.status === 'progress';
+
+  return (
+    <>
+      {progress && <span className="stpill st-progress">In Progress</span>}
+      {progress && milestone.startDate && (
+        <span className="eta" title={`Gestartet am ${milestone.startDate}`}>
+          seit {formatDay(new Date(milestone.startDate))}
+        </span>
+      )}
+
+      {stats.tasksDone ? (
+        <button
+          className="btn tiny"
+          title="Alle Aufgaben sind erledigt"
+          onClick={(e) => {
+            e.stopPropagation();
+            void patch('milestone', milestone.id, { status: 'done' });
+          }}
+        >
+          Als Done markieren
+        </button>
+      ) : milestone.planned ? (
+        line &&
+        (stats.open > 0 || line.fixedEnd) && (
+          <span
+            className={`eta ${line.late ? 'late' : ''}`}
+            title={
+              line.late
+                ? `Prognose ${formatWeeks(line.forecastEnd)} liegt nach dem Enddatum`
+                : `Prognose bei ${settings.velocity} Aufgaben pro Woche`
+            }
+          >
+            bis {line.fixedEnd && milestone.endDate ? formatDay(new Date(milestone.endDate)) : formatWeeks(line.end)}
+            {line.late ? ' ⚠' : ''}
+          </span>
+        )
+      ) : (
+        <button
+          className="btn tiny"
+          onClick={(e) => {
+            e.stopPropagation();
+            void patch('milestone', milestone.id, { planned: true });
+          }}
+        >
+          In den Plan →
+        </button>
+      )}
+    </>
   );
 }
 
@@ -83,17 +184,14 @@ const EMPTY: Record<OutlineView, string> = {
   docs: 'Noch keine Dokumente in diesem Projekt.',
 };
 
-const formatWeeks = (weeks: number): string => {
-  const days = Math.round(weeks * 7);
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-};
+const formatDay = (d: Date): string =>
+  d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
-const forecastTitle = (line: { open: number; late: boolean; fixedEnd: boolean }): string =>
-  `${line.open} Aufgaben offen` +
-  (line.fixedEnd ? ' · Enddatum gesetzt' : ' · errechnet aus dem Tempo') +
-  (line.late ? ' · Prognose liegt dahinter' : '');
+const formatWeeks = (weeks: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + Math.round(weeks * 7));
+  return formatDay(d);
+};
 
 /* ----------------------------------------------------------------- Archiv */
 
@@ -183,5 +281,5 @@ export function TrashView() {
 }
 
 const Empty = ({ children }: { children: React.ReactNode }) => (
-  <div className="empty">{children}</div>
+  <div className="empty-state">{children}</div>
 );

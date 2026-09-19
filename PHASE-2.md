@@ -338,8 +338,13 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   „Profil & Einstellungen“ (mit Passwortwechsel) und die Kürzel-Hilfe. Der Bereich kann jetzt
   „alle Projekte“ sein; die Liste bekommt dann je Projekt eine Überschrift. Neu serverseitig:
   `PATCH /api/account` für Name und Avatar.
-- **Zeilen und Spalten.** Kategorie- und Label-Spalte, Fortschritt als `x/y`, Badges für Checkliste
-  und Zeichnung, Milestone-Kopfzeile mit Status und Zeitraum.
+- ~~**Zeilen und Spalten.**~~ **Erledigt.** Das Tabellen-Layout des Prototyps: Markierungs- und
+  Prioritätsspalte links, dann der eingerückte Baum, danach **Kategorie** und **Labels** an festen
+  Positionen (an der Listenbreite ausgerichtet, nicht an der Zeile), rechts **`x/y` plus
+  Fortschrittsbalken**. Dazu Statuspunkt mit „unter mir wird gearbeitet“, Checklisten- und
+  Zeichnungs-Abzeichen, Schloss für Blockierungen samt Begründung, und die Milestone-Zeile mit
+  Status, Zeitraum und der nächsten Handlung („In den Plan →“, „Als Done markieren“,
+  „Archivieren“). Gruppenzeilen zählen jetzt offene Aufgaben und haben ein „+“.
 - **Inspektor.** Breadcrumb, kompaktes Raster mit änderbaren Werten, Markdown-Beschreibung mit
   Checklisten und eingebetteten Zeichnungen, Unteraufgaben, Abhängigkeiten.
 - **Backlog.** Abschnitte „Vorbereitete Milestones“ (mit „In den Plan“), „Ideen & Tasks“ und
