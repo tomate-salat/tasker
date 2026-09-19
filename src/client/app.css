@@ -867,3 +867,25 @@
   color: var(--bad);
   font-size: 12px;
 }
+
+/* Der Knopf, der zum Eingabefeld wird (Projekt, Milestone, Gruppe). */
+.new-thing {
+  min-width: 160px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+}
+
+.side-new {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.side-new:hover {
+  color: var(--accent);
+}

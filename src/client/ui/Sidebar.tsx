@@ -1,6 +1,7 @@
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import type { Account } from '../api.js';
+import { NewThing } from './NewThing.js';
 
 export function Sidebar({
   ws,
@@ -11,7 +12,7 @@ export function Sidebar({
   account: Account;
   onLogout: () => void;
 }) {
-  const { projectId, setProject, boot } = useStore();
+  const { projectId, setProject, boot, addProject } = useStore();
   const counts = boot?.archiveCounts ?? {};
 
   return (
@@ -35,6 +36,13 @@ export function Sidebar({
           </button>
         );
       })}
+
+      <NewThing
+        label="+ Projekt"
+        placeholder="Name des Projekts"
+        className="side-item side-new"
+        onCreate={addProject}
+      />
 
       {projectId && counts[projectId] ? (
         <p className="side-hint">

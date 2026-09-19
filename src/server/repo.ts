@@ -219,8 +219,10 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
     const { tags, deps, ...rest } = input;
     const values: Record<string, unknown> = { id, ...rest };
 
-    if (kind === 'task' || kind === 'milestone' || kind === 'group' || kind === 'category') {
-      values['order'] = nextOrder(ctx, kind, input);
+    values['order'] = nextOrder(ctx, kind, input);
+    // Ohne eigene Wahl bekommt jedes Projekt reihum eine Farbe aus der Palette.
+    if (kind === 'project' && !values['color']) {
+      values['color'] = PROJECT_COLORS[(values['order'] as number) % PROJECT_COLORS.length];
     }
     if (kind === 'milestone') values['qorder'] = values['order'];
     if (kind === 'task' && values['parentId']) {
@@ -777,7 +779,19 @@ function targetProject(ctx: DbCtx, t: MoveTarget): string | null {
   return null;
 }
 
+/** Dieselben Farben wie im Prototyp, der Reihe nach vergeben. */
+const PROJECT_COLORS = ['#7A4FA0', '#B04A6A', '#3E8A8A', '#6B7A2A', '#4A5BB0'];
+
 function nextOrder(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): number {
+  if (kind === 'project' || kind === 'mark') {
+    const table = kind === 'project' ? 'project' : 'mark';
+    return (
+      (ctx.sqlite.prepare(`SELECT coalesce(max(sort_order), -1) AS m FROM ${table}`).get() as {
+        m: number;
+      }).m + 1
+    );
+  }
+
   const [table, where, param] =
     kind === 'task'
       ? input['parentId']

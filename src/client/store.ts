@@ -68,6 +68,9 @@ type State = {
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
   addTask: (input: Record<string, unknown>) => Promise<string | null>;
+  addProject: (name: string) => Promise<void>;
+  addMilestone: (title: string) => Promise<void>;
+  addGroup: (title: string) => Promise<void>;
   moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   remove: (kind: Kind, id: string) => Promise<void>;
@@ -204,6 +207,40 @@ export const useStore = create<State>((set, get) => ({
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
       return null;
+    }
+  },
+
+  addProject: async (name) => {
+    try {
+      const p = await api.create<{ id: string }>('project', { name });
+      await get().load();
+      get().setProject(p.id);
+      set({ view: 'backlog', toast: `Projekt „${name}“ angelegt` });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+    }
+  },
+
+  addMilestone: async (title) => {
+    const projectId = get().projectId;
+    if (!projectId) return;
+    try {
+      // Aus der Planansicht heraus ist ein Milestone immer ein eingeplanter.
+      await api.create('milestone', { projectId, title, planned: true });
+      await get().load();
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+    }
+  },
+
+  addGroup: async (title) => {
+    const projectId = get().projectId;
+    if (!projectId) return;
+    try {
+      await api.create('group', { projectId, title });
+      await get().load();
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
     }
   },
 
