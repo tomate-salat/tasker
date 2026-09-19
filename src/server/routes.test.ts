@@ -11,7 +11,10 @@ import { join } from 'node:path';
 import { after, beforeEach, describe, it } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { Hono } from 'hono';
+import type { Envelope } from '../shared/events.js';
+import { CLIENT_HEADER } from '../shared/events.js';
 import { createDbCtx, type DbCtx } from './db.js';
+import { EventBus } from './events.js';
 import { dataRoutes } from './routes.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tasker-routes-'));
@@ -22,21 +25,28 @@ after(() => {
 });
 
 let app: Hono;
+let bus: EventBus;
+let seen: Envelope[];
 let n = 0;
 
 beforeEach(() => {
   const ctx = createDbCtx(join(dir, `r${n++}.db`));
   opened.push(ctx);
   migrate(ctx.db, { migrationsFolder: 'db/migrations' });
-  app = dataRoutes(ctx);
+  bus = new EventBus();
+  seen = [];
+  bus.subscribe((e) => seen.push(e));
+  app = dataRoutes(ctx, bus);
 });
 
-const send = async (method: string, path: string, body?: unknown) => {
+const send = async (method: string, path: string, body?: unknown, client?: string) => {
   const res = await app.request(path, {
     method,
-    ...(body === undefined
-      ? {}
-      : { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    headers: {
+      'content-type': 'application/json',
+      ...(client ? { [CLIENT_HEADER]: client } : {}),
+    },
   });
   return { status: res.status, body: (await res.json().catch(() => null)) as never };
 };
@@ -157,6 +167,46 @@ describe('Routen', () => {
 
     assert.equal((await send('DELETE', `/drawings/${d.id}`)).status, 200);
     assert.equal((await send('DELETE', `/drawings/${d.id}`)).status, 404);
+  });
+
+  it('meldet jede Änderung im Strom und nennt den schreibenden Tab', async () => {
+    const p = await mk('project', { name: 'P' });
+    seen.length = 0;
+
+    const t = (await send('POST', '/kind/task', { projectId: p.id, title: 'A' }, 'tab-1')).body as {
+      id: string;
+      version: number;
+    };
+    await send('PATCH', `/kind/task/${t.id}`, { version: t.version, changes: { prio: 1 } }, 'tab-1');
+    await send('POST', '/move', { id: t.id, version: t.version + 1, index: 0 }, 'tab-2');
+    await send('PATCH', '/settings', { velocity: 11 });
+
+    assert.deepEqual(
+      seen.map((e) => [e.event.type, e.origin]),
+      [
+        ['upsert', 'tab-1'],
+        ['upsert', 'tab-1'],
+        // Verschieben rührt an Geschwistern: der andere Tab lädt neu.
+        ['reload', 'tab-2'],
+        ['settings', null],
+      ],
+    );
+
+    const first = seen[0]?.event;
+    assert.equal(first?.type === 'upsert' && (first.object as { title: string }).title, 'A');
+  });
+
+  it('gescheiterte Änderungen melden nichts', async () => {
+    const p = await mk('project', { name: 'P' });
+    const t = await mk('task', { projectId: p.id, title: 'A' });
+    seen.length = 0;
+
+    // Veraltete Version, unbekannte ID, ungültiger Wert – nichts davon ist passiert.
+    await send('PATCH', `/kind/task/${t.id}`, { version: 99, changes: { prio: 1 } });
+    await send('PATCH', '/kind/task/gibtsnicht', { version: 1, changes: { prio: 1 } });
+    await send('PATCH', `/kind/task/${t.id}`, { version: 1, changes: { prio: 9 } });
+
+    assert.deepEqual(seen, []);
   });
 
   it('Archiv wird gesondert geholt und ist durchsuchbar', async () => {

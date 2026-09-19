@@ -1,5 +1,13 @@
 import type { Kind, Stub } from '@shared/api.js';
+import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data } from '@shared/model.js';
+
+/**
+ * Jeder Tab bekommt eine eigene Kennung und schickt sie bei jeder Anfrage mit.
+ * Der Änderungs-Strom trägt sie zurück, sodass ein Tab seinen eigenen Hall
+ * erkennt und übergeht.
+ */
+export const CLIENT_ID = Math.random().toString(36).slice(2, 10);
 
 export type Account = { email: string; name: string; avatar: string };
 
@@ -37,7 +45,11 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
-    headers: { 'content-type': 'application/json', ...init?.headers },
+    headers: {
+      'content-type': 'application/json',
+      [CLIENT_HEADER]: CLIENT_ID,
+      ...init?.headers,
+    },
   });
   const body = (await res.json().catch(() => null)) as
     | { error?: string; current?: unknown }

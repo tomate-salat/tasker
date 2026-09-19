@@ -133,7 +133,7 @@ Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit fe
 `/move`, `/trash` oder `/settings` nicht überschneiden können. Sonst hinge die Korrektheit an der
 Reihenfolge, in der die Routen registriert werden, und kippte beim nächsten eingefügten Endpunkt.
 - `POST /api/bulk` – Mehrfachauswahl als eine Transaktion
-- `GET /api/events` – **SSE-Stream** mit jeder Änderung
+- `GET /api/events` – **SSE-Stream** mit jeder Änderung (siehe Abschnitt 7, Schritt 9)
 - `POST /api/import` – Prototyp-Export oder Codecks-Export einlesen
 - `GET /api/export` – der gesamte Bestand als JSON
 
@@ -295,7 +295,31 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 
    Noch offen aus diesem Schritt: die Einbettung `![[zeichnung:Name]]` in der Beschreibung – dafür
    fehlt im Inspektor bislang der Beschreibungs-Editor.
-9. SSE-Push und Konfliktbehandlung.
+9. ~~SSE-Push und Konfliktbehandlung.~~ **Erledigt.**
+   - **`GET /api/events`** ist ein SSE-Strom hinter derselben Sitzungsprüfung wie alles andere, mit
+     Lebenszeichen alle 25 Sekunden gegen zudrückende Proxys. Der Verteiler (`src/server/events.ts`)
+     ist eine Liste von Zuhörern im Speicher – ein Prozess, ein Nutzer, mehr braucht es nicht.
+   - **Kleine Änderungen tragen das Objekt bei sich** (`upsert`), der Empfänger tauscht es aus.
+     Alles, was viele Zeilen auf einmal betrifft – Verschieben, Archivieren, Löschen, Papierkorb –
+     meldet nur „neu laden“. Das ehrlich zu sagen ist billiger, als einen halben Teilbaum einzeln
+     nachzuführen und dabei etwas zu übersehen. Mehrere solche Meldungen kurz hintereinander
+     ergeben ein einziges Nachladen.
+   - **Jeder Tab nennt sich** im Header `x-tasker-client`; der Strom trägt die Kennung zurück, damit
+     ein Tab seinen eigenen Hall übergeht.
+   - **Nach einem Abbruch** verbindet sich der Browser von selbst neu, und der Client lädt einmal
+     komplett nach – verpasste Meldungen werden nicht nachgereicht. Bleibt der Strom länger als drei
+     Sekunden weg, steht „offline“ im Kopf.
+   - **Optimistische Änderungen:** ein `PATCH` wirkt sofort in der Anzeige, die Antwort des Servers
+     ersetzt sie. Bei `409` gilt der Stand des Servers und der Client sagt es; bei jedem anderen
+     Fehler wird zurückgerollt. Anlegen, Verschieben und Löschen warten weiterhin auf den Server,
+     weil erst er ID und Reihenfolge vergibt.
+
+   Der Strom ist damit eine Bequemlichkeit, keine Wahrheit: was vor stillem Datenverlust schützt,
+   bleibt die Versionsprüfung beim Schreiben.
+
+   Noch offen: `POST /api/bulk` und der Undo-Stack aus Abschnitt 5. Beide hängen an einer
+   Mehrfachauswahl, die es in der Oberfläche noch nicht gibt – vorher wäre der Endpunkt ein
+   Endpunkt ohne Benutzer.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.
 11. Gamification, dezent.
 

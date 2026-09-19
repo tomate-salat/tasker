@@ -100,6 +100,13 @@ export type Data = {
   tasks: Task[];
 };
 
+/** Dauerhafte Einstellungen – im Gegensatz zum reinen Anzeigezustand im Client. */
+export type Settings = {
+  /** Aufgaben pro Woche, Grundlage von Zeitplan und Prognose. */
+  velocity: number;
+  theme: 'system' | 'light' | 'dark';
+};
+
 /** Erledigt ist kein eigenes Feld – es ist genau dieser Status. */
 export const isDone = (x: { status: Status }): boolean => x.status === 'done';
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useState } from 'react';
 import { api, type Account } from './api.js';
+import { connectEvents } from './events.js';
 import { Login } from './Login.js';
 import { useStore, VIEWS, VIEW_LABEL } from './store.js';
 import { Inspector } from './ui/Inspector.js';
@@ -40,11 +41,26 @@ function Shell({ account, onLogout }: { account: Account; onLogout: () => void }
     addTask,
     settings,
     setVelocity,
+    live,
   } = useStore();
+
+  // Ein kurzer Aussetzer beim Verbinden ist normal und soll nichts melden.
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    if (live) {
+      setOffline(false);
+      return;
+    }
+    const t = setTimeout(() => setOffline(true), 3000);
+    return () => clearTimeout(t);
+  }, [live]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Änderungen aus anderen Tabs und Geräten kommen über den Strom herein.
+  useEffect(() => connectEvents(), []);
 
   // Kurzmeldungen verschwinden von selbst wieder.
   useEffect(() => {
@@ -87,6 +103,12 @@ function Shell({ account, onLogout }: { account: Account; onLogout: () => void }
       <main id="main">
         <header id="head">
           <h1>{project?.name ?? 'Projekt'}</h1>
+
+          {offline && (
+            <span className="offline" title="Änderungen von anderen Geräten kommen gerade nicht an.">
+              offline
+            </span>
+          )}
 
           <nav className="tabs">
             {VIEWS.map((v) => (

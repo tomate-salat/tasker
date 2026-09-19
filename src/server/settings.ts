@@ -1,6 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { settings } from '../../db/schema.js';
+import type { Settings } from '../shared/model.js';
 import { appDb, type DbCtx } from './db.js';
+
+export type { Settings };
 
 /**
  * Schlüssel-Wert-Tabelle für alles, wovon es genau eine Zeile gibt:
@@ -24,13 +27,6 @@ export function setSetting(ctx: DbCtx, key: string, value: string): void {
     })
     .run();
 }
-
-/** Dauerhafte Einstellungen – im Gegensatz zum reinen Anzeigezustand im Client. */
-export type Settings = {
-  /** Aufgaben pro Woche, Grundlage von Zeitplan und Prognose. */
-  velocity: number;
-  theme: 'system' | 'light' | 'dark';
-};
 
 const DEFAULTS: Settings = { velocity: 8, theme: 'system' };
 

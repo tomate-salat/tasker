@@ -131,10 +131,14 @@ export function patchDrawing(
   })();
 }
 
-export function removeDrawing(ctx: DbCtx, id: string): { ok: true } {
-  const result = ctx.sqlite.prepare('DELETE FROM drawing WHERE id = ?').run(id);
-  if (!result.changes) throw new NotFound();
-  return { ok: true };
+/** Gibt die Aufgabe mit zurück, damit der Änderungs-Strom sie nennen kann. */
+export function removeDrawing(ctx: DbCtx, id: string): { ok: true; taskId: string } {
+  const row = ctx.sqlite.prepare('SELECT task_id FROM drawing WHERE id = ?').get(id) as
+    | { task_id: string }
+    | undefined;
+  if (!row) throw new NotFound();
+  ctx.sqlite.prepare('DELETE FROM drawing WHERE id = ?').run(id);
+  return { ok: true, taskId: row.task_id };
 }
 
 function readDrawing(ctx: DbCtx, id: string): Drawing {

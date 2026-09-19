@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Kind } from '@shared/api.js';
+import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
 import { Workspace } from '@shared/workspace.js';
 import {
@@ -70,6 +71,12 @@ type State = {
   moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   remove: (kind: Kind, id: string) => Promise<void>;
+
+  /** Eine Änderung aus einem anderen Tab oder Gerät einspielen. */
+  applyEvent: (event: ChangeEvent) => void;
+  /** Steht die Verbindung zum Änderungs-Strom? */
+  live: boolean;
+  setLive: (live: boolean) => void;
 
   loadArchive: (projectId: string) => Promise<void>;
   setArchiveQuery: (q: string) => void;
@@ -161,22 +168,30 @@ export const useStore = create<State>((set, get) => ({
 
   say: (toast) => set({ toast }),
 
+  /**
+   * Ändern mit Vorgriff: die Zeile ändert sich sofort, die Antwort des Servers
+   * ersetzt sie gleich darauf. Geht etwas schief, gilt wieder der alte Stand –
+   * so bleibt Tippen flüssig, ohne dass etwas Erfundenes stehen bleibt.
+   */
   patch: async (kind, id, changes) => {
     const boot = get().boot;
     if (!boot) return;
     const current = find(boot, kind, id);
     if (!current) return;
 
+    set(replace(boot, kind, { ...current, ...changes } as Entity));
+
     try {
       const updated = await api.patch<Task | Milestone>(kind, id, current.version, changes);
-      set(replace(boot, kind, updated));
+      set(replace(get().boot ?? boot, kind, updated));
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.current) {
         // Woanders geändert: den neuen Stand übernehmen und sagen, was los war.
-        set(replace(boot, kind, e.current as Task | Milestone));
+        set(replace(get().boot ?? boot, kind, e.current as Task | Milestone));
         set({ toast: 'Inzwischen woanders geändert – neuer Stand übernommen.' });
         return;
       }
+      set(replace(get().boot ?? boot, kind, current));
       set({ toast: e instanceof Error ? e.message : 'Änderung fehlgeschlagen' });
     }
   },
@@ -228,6 +243,34 @@ export const useStore = create<State>((set, get) => ({
       set({ toast: 'In den Papierkorb gelegt', trash: null });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  /* ------------------------------------------------------ Änderungs-Strom */
+
+  live: false,
+  setLive: (live) => set({ live }),
+
+
+  applyEvent: (event) => {
+    const boot = get().boot;
+    if (!boot) return;
+
+    switch (event.type) {
+      case 'upsert':
+        set(upsert(boot, event.kind, event.object as Entity));
+        return;
+      case 'delete':
+        set(drop(boot, event.kind, event.id));
+        return;
+      case 'settings':
+        set({ settings: event.settings });
+        return;
+      case 'reload':
+      case 'drawings':
+        // Änderungen, die viele Zeilen betreffen: einmal sauber neu holen.
+        scheduleReload(() => void get().load());
+        return;
     }
   },
 
@@ -307,22 +350,50 @@ const listOf = (boot: Bootstrap, kind: Kind): Entity[] =>
 const find = (boot: Bootstrap, kind: Kind, id: string): Entity | undefined =>
   listOf(boot, kind).find((x) => x.id === id);
 
+const LIST_KEY = {
+  task: 'tasks',
+  milestone: 'milestones',
+  project: 'projects',
+  group: 'groups',
+  category: 'categories',
+  mark: 'marks',
+} as const;
+
 /** Ersetzt ein Objekt und baut den Index neu. */
 function replace(boot: Bootstrap, kind: Kind, updated: Entity): { boot: Bootstrap; ws: Workspace } {
-  const key = (
-    {
-      task: 'tasks',
-      milestone: 'milestones',
-      project: 'projects',
-      group: 'groups',
-      category: 'categories',
-      mark: 'marks',
-    } as const
-  )[kind];
-
+  const key = LIST_KEY[kind];
   const next: Bootstrap = {
     ...boot,
     [key]: (boot[key] as Entity[]).map((x) => (x.id === updated.id ? updated : x)),
   };
   return { boot: next, ws: new Workspace(next) };
+}
+
+/** Wie `replace`, hängt das Objekt aber an, wenn es noch fehlt (fremdes Anlegen). */
+function upsert(boot: Bootstrap, kind: Kind, object: Entity): { boot: Bootstrap; ws: Workspace } {
+  const list = boot[LIST_KEY[kind]] as Entity[];
+  if (list.some((x) => x.id === object.id)) return replace(boot, kind, object);
+  const next: Bootstrap = { ...boot, [LIST_KEY[kind]]: [...list, object] };
+  return { boot: next, ws: new Workspace(next) };
+}
+
+function drop(boot: Bootstrap, kind: Kind, id: string): { boot: Bootstrap; ws: Workspace } {
+  const next: Bootstrap = {
+    ...boot,
+    [LIST_KEY[kind]]: (boot[LIST_KEY[kind]] as Entity[]).filter((x) => x.id !== id),
+  };
+  return { boot: next, ws: new Workspace(next) };
+}
+
+/**
+ * Mehrere Meldungen kurz hintereinander (etwa beim Zeichnen im anderen Tab)
+ * ergeben ein einziges Nachladen statt eines Dauerfeuers.
+ */
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleReload(run: () => void): void {
+  if (reloadTimer) clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null;
+    run();
+  }, 400);
 }

@@ -858,3 +858,12 @@
   flex: 1;
   min-height: 0;
 }
+
+/* Nur sichtbar, wenn der Änderungs-Strom länger weg ist. */
+.offline {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sunk);
+  color: var(--bad);
+  font-size: 12px;
+}
