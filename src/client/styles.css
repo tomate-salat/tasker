@@ -1,0 +1,84 @@
+/* Nur für die Platzhalterseite. Das echte CSS kommt aus dem Prototyp. */
+:root {
+  --bg: #faf9f7;
+  --surface: #fff;
+  --ink: #23201d;
+  --muted: #6b645d;
+  --line: #e4e0da;
+  --accent: #2a6b5a;
+  --bad: #b3261e;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #17161a;
+    --surface: #201f24;
+    --ink: #eceaf0;
+    --muted: #9a94a0;
+    --line: #322f38;
+    --accent: #6fb8a2;
+    --bad: #f2837a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.boot {
+  max-width: 460px;
+  margin: 12vh auto;
+  padding: 26px 16px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.lead {
+  margin: 0 0 22px;
+  color: var(--muted);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.good {
+  color: var(--accent);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.muted {
+  color: var(--muted);
+}
