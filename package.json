@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.15.0",
+    "@node-rs/argon2": "^2.2.1",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.9.0",

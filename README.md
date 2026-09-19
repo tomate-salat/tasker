@@ -27,6 +27,24 @@ Weitere Befehle:
 | `npm run db:generate` | Migration aus dem Drizzle-Schema erzeugen |
 | `npm run db:migrate` | Migrationen anwenden (passiert auch beim Serverstart) |
 
+Für die Anmeldung braucht es lokal eine `.env`-Kopie mit `TASKER_EMAIL` und `TASKER_PASSWORD`
+(siehe `.env.example`) – oder die Variablen beim Start voranstellen. Beide gelten nur, solange es
+noch kein Konto gibt.
+
+## Anmeldung
+
+- Ein einziges Konto, angelegt beim ersten Start aus `TASKER_EMAIL` und `TASKER_PASSWORD`.
+  Danach werden beide Variablen ignoriert.
+- Passwort als Argon2id-Hash, Sitzung als HttpOnly-Cookie (`Secure` im Produktivbetrieb),
+  90 Tage bei „angemeldet bleiben“, sonst bis zum Schließen des Browsers.
+- In der Datenbank steht nur der SHA-256-Hash des Sitzungstokens, nie das Token selbst.
+- Nach 10 Fehlversuchen ist die Anmeldung 15 Minuten gesperrt.
+- Passwort vergessen: `TASKER_PASSWORD` neu setzen, `TASKER_PASSWORD_RESET=1` dazu, einmal
+  deployen, Variable danach wieder entfernen. Alle Sitzungen werden dabei beendet.
+
+Öffentlich erreichbar ist nur `/api/health` (für Railways Healthcheck); alles andere verlangt eine
+gültige Sitzung.
+
 ## Aufbau
 
 Ein einziger Node-Prozess liefert API und gebautes Frontend aus. Im Entwicklungsbetrieb übernimmt

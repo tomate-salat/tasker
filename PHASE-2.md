@@ -198,8 +198,9 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
    **Erledigt lokal**, siehe `README.md`. Offen ist nur noch das Anlegen des Railway-Projekts samt Volume.
 2. ~~Drizzle-Schema und erste Migration, Volume auf Railway einhängen.~~ **Erledigt**
    (`db/schema.ts`, `db/migrations/0000_*.sql`; die Migrationen laufen beim Serverstart mit).
-3. Anmeldung: Konto aus Umgebungsvariablen, Argon2id, Session-Cookie, Login-Screen des Prototyps
-   anschließen. Früh, weil die Instanz von Anfang an öffentlich erreichbar ist.
+3. ~~Anmeldung: Konto aus Umgebungsvariablen, Argon2id, Session-Cookie, Login-Screen des Prototyps
+   anschließen. Früh, weil die Instanz von Anfang an öffentlich erreichbar ist.~~ **Erledigt**
+   (`src/server/auth.ts`, `src/client/Login.tsx`).
 4. Reine Logik aus dem Prototyp nach `src/shared` übernehmen, mit Tests – das ist der Teil, der
    unverändert bleibt und sich gut prüfen lässt.
 5. API mit `bootstrap`, Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.

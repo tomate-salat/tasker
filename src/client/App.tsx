@@ -1,52 +1,76 @@
 import { useEffect, useState } from 'react';
+import { api, type Account } from './api.js';
+import { Login } from './Login.js';
 
-type Health = {
-  ok: boolean;
-  now: string;
-  database: string;
-  boots: number;
-  firstBootAt: string;
-};
+type Status = { database: string; boots: number; firstBootAt: string };
 
 /**
- * Platzhalter-Oberfläche. Sie zeigt nur, dass Client und Server im selben
- * Deploy zusammenspielen und die Datenbank den Neustart überlebt hat.
- * Die eigentliche App entsteht in den nächsten Schritten aus dem Prototyp.
+ * Bis die eigentliche Oberfläche aus dem Prototyp übernommen ist, zeigt die
+ * angemeldete Ansicht nur, dass Anmeldung, Server und Datenbank zusammenspielen.
  */
 export function App() {
-  const [health, setHealth] = useState<Health | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    api
+      .me()
+      .then((r) => setAccount(r.account))
+      .catch(() => setAccount(null))
+      .finally(() => setReady(true));
+  }, []);
+
+  if (!ready) return <main className="boot" />;
+  if (!account) return <Login onDone={setAccount} />;
+  return <SignedIn account={account} onLogout={() => setAccount(null)} />;
+}
+
+function SignedIn({ account, onLogout }: { account: Account; onLogout: () => void }) {
+  const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setHealth)
+    api
+      .status()
+      .then(setStatus)
       .catch((e: Error) => setError(e.message));
   }, []);
+
+  async function logout() {
+    await api.logout().catch(() => undefined);
+    onLogout();
+  }
 
   return (
     <main className="boot">
       <h1>Tasker</h1>
-      <p className="lead">Das Gerüst steht. Die Oberfläche kommt aus dem Prototyp.</p>
+      <p className="lead">
+        Angemeldet als {account.avatar} {account.name}. Die Oberfläche kommt aus dem Prototyp.
+      </p>
 
-      {error && <p className="bad">Server nicht erreichbar: {error}</p>}
-      {!health && !error && <p className="muted">Verbinde …</p>}
+      {error && <p className="bad">{error}</p>}
 
-      {health && (
+      {status && (
         <dl>
-          <dt>Server</dt>
-          <dd className="good">erreichbar</dd>
+          <dt>Konto</dt>
+          <dd>{account.email}</dd>
           <dt>Datenbank</dt>
-          <dd>{health.database}</dd>
+          <dd>{status.database}</dd>
           <dt>Starts</dt>
           <dd>
-            {health.boots}
-            {health.boots > 1 && ' – die Daten haben den Neustart überlebt'}
+            {status.boots}
+            {status.boots > 1 && ' – die Daten haben den Neustart überlebt'}
           </dd>
           <dt>Erster Start</dt>
-          <dd>{new Date(health.firstBootAt).toLocaleString('de-DE')}</dd>
+          <dd>{new Date(status.firstBootAt).toLocaleString('de-DE')}</dd>
         </dl>
       )}
+
+      <p className="actions">
+        <button className="btn" onClick={logout}>
+          Abmelden
+        </button>
+      </p>
     </main>
   );
 }
