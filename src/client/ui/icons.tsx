@@ -77,6 +77,48 @@ export function PrioIcon({ prio }: { prio: Prio }) {
   );
 }
 
+/** Nur diese drei Stufen kennt ein Milestone. */
+export const MS_STATUS: Record<'open' | 'progress' | 'done', string> = {
+  open: 'Offen',
+  progress: 'In Progress',
+  done: 'Done',
+};
+
+/** Statuszeichen im Inspektor: dieselbe Kreis-Familie für Tasks und Milestones. */
+export function StatusIcon({ status }: { status: Status }) {
+  return (
+    <svg className="st-ico" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      {status === 'progress' && <path d="M7 2.4a4.6 4.6 0 010 9.2z" fill="currentColor" />}
+      {status === 'unclear' && (
+        <>
+          <path
+            d="M5.5 5.4a1.6 1.6 0 112.1 1.5c-.4.2-.6.5-.6.9v.3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <circle cx="7" cy="10" r=".85" fill="currentColor" />
+        </>
+      )}
+      {status === 'blocked' && (
+        <path d="M4.6 7h4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      )}
+      {status === 'done' && (
+        <path
+          d="M4.5 7.1l1.8 1.8 3.2-3.7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  );
+}
+
 /** Statuszeichen in der Zeile: erledigt, blockiert, unklar – sonst leer. */
 export const statusMark = (status: Status): string =>
   status === 'done' ? '✓' : status === 'blocked' ? '!' : status === 'unclear' ? '?' : '';

@@ -345,8 +345,25 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Zeichnungs-Abzeichen, Schloss für Blockierungen samt Begründung, und die Milestone-Zeile mit
   Status, Zeitraum und der nächsten Handlung („In den Plan →“, „Als Done markieren“,
   „Archivieren“). Gruppenzeilen zählen jetzt offene Aufgaben und haben ein „+“.
-- **Inspektor.** Breadcrumb, kompaktes Raster mit änderbaren Werten, Markdown-Beschreibung mit
-  Checklisten und eingebetteten Zeichnungen, Unteraufgaben, Abhängigkeiten.
+- ~~**Inspektor.**~~ **Erledigt.** Pfadzeile mit anklickbaren Stationen (Projekt › Milestone bzw.
+  Backlog › Gruppe › Elternkette), Hinweisband für Archiviertes, das zweispaltige Werteraster aus
+  dem Prototyp (Status, Fortschritt, Priorität, Kategorie, Markierung, Labels; beim Milestone
+  Status, Fortschritt mit Prognose und Zeitraum). Titel und Beschreibung sind **ein** Feld – die
+  erste Zeile ist der Titel. Die Beschreibung wird als Markdown gezeigt, Checklisten lassen sich
+  direkt abhaken, und `![[zeichnung:Name]]` wird durch die Zeichnung selbst ersetzt (Vorschau von
+  Excalidraw, Klick öffnet den Editor). Dazu Unteraufgaben bzw. Tasks des Milestones und die
+  Abhängigkeiten in beiden Richtungen mit Suche, die Verknüpftes und Zirkuläres ausblendet.
+  Neu dafür: ein Aufklappmenü (`Menu.tsx`) mit Untermenüs, Häkchen und Trennern, sowie `marked`
+  und `dompurify` für das Markdown (das Startpaket wächst dadurch von rund 266 auf 390 kB).
+- **Kontextmenüs.** Das „⋯“ im Inspektor zeigt vorerst nur, was es schon gibt (Umbenennen, Status,
+  Kategorie, Markierung, In den Backlog, Archivieren, Papierkorb). Die vollständigen Menüs des
+  Prototyps – Rechtsklick auf Zeilen, Duplizieren, „In anderes Projekt“, „Erledigte archivieren“,
+  Mehrfachauswahl – fehlen noch.
+- **Burnup.** Der Milestone-Inspektor hat im Prototyp eine Burnup-Kurve. Sie braucht ein
+  Umfangs-Protokoll je Milestone (`m.log`), also eine eigene Tabelle und Fortschreibung bei jeder
+  Änderung; deshalb ein eigener Punkt.
+- **Zeichnungen an Milestones.** Im Prototyp kann auch ein Milestone Zeichnungen haben; hier hängen
+  sie bisher nur an Aufgaben.
 - **Backlog.** Abschnitte „Vorbereitete Milestones“ (mit „In den Plan“), „Ideen & Tasks“ und
   „Smarte Gruppen“ je Markierung.
 - **Zeitplan.** Die Ansicht fehlt bislang ganz.

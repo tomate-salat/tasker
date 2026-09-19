@@ -1,39 +1,64 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type Drawing } from '../api.js';
 import { useStore } from '../store.js';
 import { DrawingEditor } from './DrawingEditor.js';
 
 /**
- * Die Zeichnungen einer Aufgabe im Inspektor. Das Startpaket kennt nur ihre
- * Namen; die Szenen werden erst beim Öffnen der Aufgabe geholt und der Editor
- * erst beim Zeichnen geladen.
+ * Die Zeichnungen einer Aufgabe. Das Startpaket kennt nur ihre Namen; die
+ * Szenen werden geholt, sobald die Aufgabe im Inspektor steht, denn dort
+ * werden sie in der Beschreibung angezeigt.
  */
-export function Drawings({ taskId }: { taskId: string }) {
-  const { boot, say, load } = useStore();
-  const names = (boot?.drawings ?? []).filter((d) => d.taskId === taskId);
+export type DrawingsApi = {
+  list: Drawing[];
+  busy: boolean;
+  open: (d: Drawing) => void;
+  /** Legt eine Zeichnung an, bindet sie in die Beschreibung ein und öffnet sie. */
+  add: () => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  /** Der Editor – gehört an eine Stelle, die nicht mitscrollt. */
+  editor: React.ReactNode;
+};
+
+export function useDrawings(taskId: string | null, desc: string): DrawingsApi {
+  const { boot, say, load, patch } = useStore();
+  const metas = (boot?.drawings ?? []).filter((d) => d.taskId === taskId);
+  // Ändert sich eine Version, ist die Szene veraltet und wird neu geholt.
+  const stamp = metas.map((d) => `${d.id}:${d.version}`).join('|');
+
+  const [list, setList] = useState<Drawing[]>([]);
   const [open, setOpen] = useState<Drawing | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Wechselt die Aufgabe, gehört der offene Editor nicht mehr dazu.
-  useEffect(() => setOpen(null), [taskId]);
-
-  async function openDrawing(id: string): Promise<void> {
-    setBusy(true);
-    try {
-      const { drawings } = await api.drawings(taskId);
-      const found = drawings.find((d) => d.id === id);
-      if (found) setOpen(found);
-    } catch (e) {
-      say(e instanceof Error ? e.message : 'Zeichnung konnte nicht geladen werden');
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    setOpen(null);
+    if (!taskId || !stamp) {
+      setList([]);
+      return;
     }
-  }
+    let alive = true;
+    void (async () => {
+      try {
+        const { drawings } = await api.drawings(taskId);
+        if (alive) setList(drawings);
+      } catch (e) {
+        if (alive) say(e instanceof Error ? e.message : 'Zeichnungen konnten nicht geladen werden');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [taskId, stamp, say]);
 
   async function add(): Promise<void> {
+    if (!taskId) return;
     setBusy(true);
     try {
       const created = await api.addDrawing(taskId);
+      // Wie im Prototyp: die neue Zeichnung hängt gleich in der Beschreibung.
+      const token = `![[zeichnung:${created.name}]]`;
+      await patch('task', taskId, {
+        desc: desc.trim() ? `${desc.replace(/\s+$/, '')}\n\n${token}` : token,
+      });
       await load();
       setOpen(created);
     } catch (e) {
@@ -53,30 +78,73 @@ export function Drawings({ taskId }: { taskId: string }) {
     }
   }
 
-  return (
-    <>
-      <div className="draw-list">
-        {names.map((d) => (
-          <span key={d.id} className="draw-chip">
-            <button className="linkish" disabled={busy} onClick={() => void openDrawing(d.id)}>
-              ✎ {d.name}
-            </button>
-            <button
-              className="icon-btn tiny"
-              title={`„${d.name}“ löschen`}
-              aria-label={`Zeichnung ${d.name} löschen`}
-              onClick={() => void remove(d.id)}
-            >
-              ✕
-            </button>
-          </span>
-        ))}
-        <button className="linkish" disabled={busy} onClick={() => void add()}>
-          + Zeichnung
-        </button>
-      </div>
+  return {
+    list,
+    busy,
+    open: setOpen,
+    add,
+    remove,
+    editor: open ? <DrawingEditor drawing={open} onClose={() => setOpen(null)} /> : null,
+  };
+}
 
-      {open && <DrawingEditor drawing={open} onClose={() => setOpen(null)} />}
-    </>
+/**
+ * Eine Zeichnung im Text. Die Vorschau zeichnet Excalidraw selbst
+ * (`exportToSvg`), damit sie genau so aussieht wie im Editor; das Paket kommt
+ * dafür nachgeladen.
+ */
+export function DrawingEmbed({ drawing, onOpen }: { drawing: Drawing; onOpen: () => void }) {
+  const theme = useStore((s) => s.settings.theme);
+  const host = useRef<HTMLSpanElement>(null);
+  const elements = (drawing.scene.elements ?? []) as unknown[];
+  const empty = elements.length === 0;
+
+  useEffect(() => {
+    if (empty) return;
+    let alive = true;
+    void (async () => {
+      const { exportToSvg } = await import('./excalidraw-lazy.js');
+      const svg = await exportToSvg({
+        elements: elements as never,
+        appState: { exportBackground: false, exportWithDarkMode: isDark(theme) } as never,
+        files: (drawing.scene.files ?? null) as never,
+      });
+      if (!alive || !host.current) return;
+      // Die feste Größe aus dem Export würde die Spalte sprengen.
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.classList.add('draw-prev');
+      host.current.replaceChildren(svg);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [drawing.id, drawing.version, theme, empty]);
+
+  return (
+    <span
+      className="drawing-embed"
+      role="button"
+      tabIndex={0}
+      title={`Zeichnung „${drawing.name}“ bearbeiten`}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      {empty ? (
+        <span className="draw-empty">Leere Zeichnung – klicken zum Zeichnen</span>
+      ) : (
+        <span ref={host} className="draw-host" />
+      )}
+      <span className="draw-cap">✎ {drawing.name}</span>
+    </span>
   );
 }
+
+const isDark = (theme: string): boolean =>
+  theme === 'dark' ||
+  (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);

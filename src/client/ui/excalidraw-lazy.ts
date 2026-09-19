@@ -4,4 +4,4 @@
  */
 import '@excalidraw/excalidraw/index.css';
 
-export { Excalidraw } from '@excalidraw/excalidraw';
+export { Excalidraw, exportToSvg } from '@excalidraw/excalidraw';
