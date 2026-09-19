@@ -1,5 +1,44 @@
-import type { Prio, Status } from '@shared/model.js';
+import type { Prio, Settings, Status } from '@shared/model.js';
 import type { Segment } from '@shared/progress.js';
+
+/** Die Symbole der Seitenleiste, unverändert aus dem Prototyp. */
+export const SIDE_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M6 2.5v11" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+export const THEME_LABEL: Record<Settings['theme'], string> = {
+  system: 'System',
+  light: 'Hell',
+  dark: 'Dunkel',
+};
+
+export const THEME_ICON: Record<Settings['theme'], React.ReactNode> = {
+  system: (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" />
+    </svg>
+  ),
+  light: (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="3" fill="currentColor" />
+      <path
+        d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
+  dark: (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M13.5 10.2A5.8 5.8 0 0 1 5.8 2.5a5.8 5.8 0 1 0 7.7 7.7z" fill="currentColor" />
+    </svg>
+  ),
+};
 
 export const STATUS_LABEL: Record<Status, string> = {
   open: 'Offen',

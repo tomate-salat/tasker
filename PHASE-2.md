@@ -325,6 +325,27 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.
 11. Gamification, dezent.
 
+### Angleichen an den Prototyp
+
+Beim ersten eigenen Durchklicken stellte sich heraus: die Logik ist portiert, die Oberfläche war
+aber auf das Nötigste eingedampft. Entscheidung des Nutzers: **1:1 zum Prototyp, Optik und
+Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
+
+- ~~**Seitenleiste.**~~ **Erledigt.** Farben, Schriften und Grundformen kommen jetzt unverändert aus
+  dem Prototyp (`styles.css`), dazu die Seitenleiste mit „Alle Projekte“, Kategorien, Markierungen
+  und Labels als Filter samt Zählern, Theme-Umschalter, Ein-/Ausklappen (`[`), Konto und Fußzeile
+  mit Tastenkürzel-Hilfe (`?`) und Papierkorb. Dazu die Dialoge „Kategorien“, „Markierungen“,
+  „Profil & Einstellungen“ (mit Passwortwechsel) und die Kürzel-Hilfe. Der Bereich kann jetzt
+  „alle Projekte“ sein; die Liste bekommt dann je Projekt eine Überschrift. Neu serverseitig:
+  `PATCH /api/account` für Name und Avatar.
+- **Zeilen und Spalten.** Kategorie- und Label-Spalte, Fortschritt als `x/y`, Badges für Checkliste
+  und Zeichnung, Milestone-Kopfzeile mit Status und Zeitraum.
+- **Inspektor.** Breadcrumb, kompaktes Raster mit änderbaren Werten, Markdown-Beschreibung mit
+  Checklisten und eingebetteten Zeichnungen, Unteraufgaben, Abhängigkeiten.
+- **Backlog.** Abschnitte „Vorbereitete Milestones“ (mit „In den Plan“), „Ideen & Tasks“ und
+  „Smarte Gruppen“ je Markierung.
+- **Zeitplan.** Die Ansicht fehlt bislang ganz.
+
 ---
 
 ## 8. Verifikation

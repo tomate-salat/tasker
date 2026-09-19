@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Kind } from '@shared/api.js';
 import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
+import type { OutlineFilter } from '@shared/outline.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -18,10 +19,13 @@ export type View = (typeof VIEWS)[number];
 export const VIEW_LABEL: Record<View, string> = {
   plan: 'Plan',
   backlog: 'Backlog',
-  docs: 'Dokumente',
+  docs: 'Doku',
   archive: 'Archiv',
   trash: 'Papierkorb',
 };
+
+/** Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste. */
+export const TABS: View[] = ['plan', 'backlog', 'docs', 'archive'];
 
 /**
  * Der gesamte aktive Datenbestand liegt im Speicher – wie `S` im Prototyp.
@@ -40,7 +44,14 @@ type State = {
   /** Kurze Rückmeldung am unteren Rand. */
   toast: string | null;
 
-  projectId: string | null;
+  /** `'all'` für „Alle Projekte“, sonst eine Projekt-ID. */
+  scope: string;
+  /** Zuletzt gewähltes echtes Projekt – dorthin wird angelegt, wenn „alle“ gilt. */
+  lastProject: string | null;
+  /** Filter aus der Seitenleiste: Label, Kategorie, Markierung. */
+  filter: OutlineFilter;
+  /** Seitenleiste eingeklappt – pro Gerät. */
+  sideCollapsed: boolean;
   view: View;
   selected: string | null;
   /** Zeile, deren Titel gerade im Baum bearbeitet wird. */
@@ -56,7 +67,11 @@ type State = {
   trashDays: number;
 
   load: () => Promise<void>;
-  setProject: (id: string) => void;
+  setScope: (scope: string) => void;
+  setFilter: (patch: OutlineFilter) => void;
+  toggleSide: () => void;
+  cycleTheme: () => Promise<void>;
+  setTheme: (theme: Settings['theme']) => Promise<void>;
   setView: (view: View) => void;
   select: (id: string | null) => void;
   edit: (id: string | null) => void;
@@ -81,7 +96,7 @@ type State = {
   live: boolean;
   setLive: (live: boolean) => void;
 
-  loadArchive: (projectId: string) => Promise<void>;
+  loadArchive: () => Promise<void>;
   setArchiveQuery: (q: string) => void;
   unarchive: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   loadTrash: () => Promise<void>;
@@ -90,7 +105,8 @@ type State = {
 };
 
 const COLLAPSED_KEY = 'tasker.collapsed';
-const PROJECT_KEY = 'tasker.project';
+const SCOPE_KEY = 'tasker.scope';
+const SIDE_KEY = 'tasker.side';
 
 const readLocal = <T>(key: string, fallback: T): T => {
   try {
@@ -115,7 +131,10 @@ export const useStore = create<State>((set, get) => ({
   loading: true,
   error: null,
   toast: null,
-  projectId: readLocal<string | null>(PROJECT_KEY, null),
+  scope: readLocal<string>(SCOPE_KEY, 'all'),
+  lastProject: null,
+  filter: { tag: null, categoryId: null, markId: null },
+  sideCollapsed: readLocal<boolean>(SIDE_KEY, false),
   view: 'plan',
   selected: null,
   editing: null,
@@ -130,20 +149,54 @@ export const useStore = create<State>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const [boot, settings] = await Promise.all([api.bootstrap(), api.settings()]);
-      const projectId =
-        get().projectId && boot.projects.some((p) => p.id === get().projectId)
-          ? get().projectId
-          : (boot.projects[0]?.id ?? null);
-      set({ boot, ws: new Workspace(boot), settings, projectId, loading: false });
+      const known = (id: string): boolean => boot.projects.some((p) => p.id === id);
+      const scope = get().scope === 'all' || known(get().scope) ? get().scope : 'all';
+      const lastProject =
+        scope !== 'all' ? scope : (get().lastProject ?? boot.projects[0]?.id ?? null);
+
+      applyTheme(settings.theme);
+      set({ boot, ws: new Workspace(boot), settings, scope, lastProject, loading: false });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Laden fehlgeschlagen', loading: false });
     }
   },
 
-  setProject: (id) => {
-    writeLocal(PROJECT_KEY, id);
-    // Archiv und Papierkorb gehören zum alten Projekt und werden neu geholt.
-    set({ projectId: id, selected: null, editing: null, archive: null });
+  setScope: (scope) => {
+    writeLocal(SCOPE_KEY, scope);
+    set({
+      scope,
+      ...(scope === 'all' ? {} : { lastProject: scope }),
+      selected: null,
+      editing: null,
+      // Die Kategorie gehört zum Projekt und passt nach dem Wechsel nicht mehr.
+      filter: { ...get().filter, categoryId: null },
+      archive: null,
+    });
+  },
+
+  setFilter: (patch) => set({ filter: { ...get().filter, ...patch } }),
+
+  toggleSide: () => {
+    const sideCollapsed = !get().sideCollapsed;
+    writeLocal(SIDE_KEY, sideCollapsed);
+    set({ sideCollapsed });
+  },
+
+  cycleTheme: async () => {
+    const order: Settings['theme'][] = ['system', 'light', 'dark'];
+    const theme = order[(order.indexOf(get().settings.theme) + 1) % order.length] as Settings['theme'];
+    await get().setTheme(theme);
+  },
+
+  setTheme: async (theme) => {
+    // Erst umschalten, dann sichern: die Darstellung soll nicht auf das Netz warten.
+    applyTheme(theme);
+    set({ settings: { ...get().settings, theme } });
+    try {
+      set({ settings: await api.putSettings({ theme }) });
+    } catch {
+      // Beim nächsten Laden zählt wieder, was auf dem Server steht.
+    }
   },
 
   setView: (view) => set({ view, selected: null, editing: null }),
@@ -214,7 +267,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       const p = await api.create<{ id: string }>('project', { name });
       await get().load();
-      get().setProject(p.id);
+      get().setScope(p.id);
       set({ view: 'backlog', toast: `Projekt „${name}“ angelegt` });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
@@ -222,7 +275,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   addMilestone: async (title) => {
-    const projectId = get().projectId;
+    const projectId = currentProjectId(get());
     if (!projectId) return;
     try {
       // Aus der Planansicht heraus ist ein Milestone immer ein eingeplanter.
@@ -234,7 +287,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   addGroup: async (title) => {
-    const projectId = get().projectId;
+    const projectId = currentProjectId(get());
     if (!projectId) return;
     try {
       await api.create('group', { projectId, title });
@@ -313,10 +366,16 @@ export const useStore = create<State>((set, get) => ({
 
   /* -------------------------------------------------- Archiv & Papierkorb */
 
-  loadArchive: async (projectId) => {
+  loadArchive: async () => {
     try {
       const q = get().archiveQuery.trim();
-      set({ archive: await api.archivePage({ projectId, ...(q ? { q } : {}) }) });
+      const scope = get().scope;
+      set({
+        archive: await api.archivePage({
+          ...(scope === 'all' ? {} : { projectId: scope }),
+          ...(q ? { q } : {}),
+        }),
+      });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archiv konnte nicht geladen werden' });
     }
@@ -328,8 +387,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       await api.restore(kind, id);
       await get().load();
-      const projectId = get().projectId;
-      if (projectId) await get().loadArchive(projectId);
+      await get().loadArchive();
       set({ toast: 'Wiederhergestellt' });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen' });
@@ -366,6 +424,23 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 }));
+
+/* ---------------------------------------------------------- Abgeleitetes */
+
+/** Die Projekte, die die aktuelle Ansicht zeigt – eines oder alle, in Reihenfolge. */
+export const scopeProjectIds = (s: State): string[] =>
+  s.scope === 'all' ? (s.boot?.projects.map((p) => p.id) ?? []) : [s.scope];
+
+/** Wohin Neues gehört: bei „Alle Projekte“ das zuletzt gewählte. */
+export const currentProjectId = (s: State): string | null =>
+  s.scope === 'all' ? (s.lastProject ?? s.boot?.projects[0]?.id ?? null) : s.scope;
+
+/** Setzt die Darstellung am Dokument; `system` überlässt sie dem Betriebssystem. */
+export function applyTheme(theme: Settings['theme']): void {
+  const root = document.documentElement;
+  if (theme === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+}
 
 /* ------------------------------------------------------------------ Intern */
 

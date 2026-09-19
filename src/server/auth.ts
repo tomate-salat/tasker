@@ -22,6 +22,13 @@ export function getAccount(): Account | null {
   };
 }
 
+/** Name und Avatar gehören dem Nutzer; die E-Mail ist die Anmeldung und bleibt. */
+export function updateAccount(patch: { name?: string; avatar?: string }): Account | null {
+  if (patch.name !== undefined) setSetting(ACCOUNT.name, patch.name.trim() || 'Konto');
+  if (patch.avatar !== undefined) setSetting(ACCOUNT.avatar, patch.avatar.trim() || '🙂');
+  return getAccount();
+}
+
 async function storePassword(password: string): Promise<void> {
   setSetting(ACCOUNT.passwordHash, await hash(password));
 }

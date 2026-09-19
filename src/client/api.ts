@@ -71,7 +71,8 @@ export type TrashList = {
   entries: { id: string; kind: string; title: string; projectId: string | null; deletedAt: string; taskCount: number }[];
 };
 
-export type Settings = { velocity: number; theme: 'system' | 'light' | 'dark' };
+export type { Settings } from '@shared/model.js';
+import type { Settings } from '@shared/model.js';
 
 export const api = {
   me: () => request<{ account: Account | null }>('/api/me'),
@@ -80,6 +81,15 @@ export const api = {
     post<{ account: Account }>('/api/login', { email, password, keepSignedIn }),
 
   logout: () => post<{ ok: true }>('/api/logout'),
+
+  updateAccount: (patch: { name?: string; avatar?: string }) =>
+    request<{ account: Account }>('/api/account', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  changePassword: (current: string, next: string) =>
+    post<{ ok: true }>('/api/password', { current, next }),
 
   status: () => request<{ database: string; boots: number; firstBootAt: string }>('/api/status'),
 

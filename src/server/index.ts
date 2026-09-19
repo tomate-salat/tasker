@@ -19,6 +19,7 @@ import {
   loginLocked,
   purgeExpiredSessions,
   sessionValid,
+  updateAccount,
 } from './auth.js';
 
 warnIfNotPersistent();
@@ -80,6 +81,17 @@ app.post('/api/logout', (c) => {
   destroySession(getCookie(c, SESSION_COOKIE));
   deleteCookie(c, SESSION_COOKIE, { path: '/' });
   return c.json({ ok: true });
+});
+
+const accountBody = z.object({
+  name: z.string().max(80).optional(),
+  avatar: z.string().max(8).optional(),
+});
+
+app.patch('/api/account', async (c) => {
+  const parsed = accountBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'Ungültige Anfrage.' }, 400);
+  return c.json({ account: updateAccount(parsed.data) });
 });
 
 const passwordBody = z.object({

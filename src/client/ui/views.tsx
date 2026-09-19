@@ -3,7 +3,7 @@ import { outline, type OutlineView } from '@shared/outline.js';
 import { milestoneStats, statusSegments } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore } from '../store.js';
+import { scopeProjectIds, useStore } from '../store.js';
 import { useDnd } from './dnd.js';
 import { SegBar } from './icons.js';
 import { useKeys } from './keys.js';
@@ -15,17 +15,10 @@ import { GroupRow, TaskRow } from './rows.js';
  * Die drei Arbeitsansichten teilen sich eine Zeilenfolge (`outline`), damit
  * Anzeige, Tastatur und Drag & Drop dieselbe Reihenfolge sehen.
  */
-export function Outline({
-  ws,
-  projectId,
-  view,
-}: {
-  ws: Workspace;
-  projectId: string;
-  view: OutlineView;
-}) {
-  const { collapsed, select, settings } = useStore();
-  const rows = outline(ws, { view, projectId, collapsed });
+export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
+  const state = useStore();
+  const { collapsed, select, settings, filter } = state;
+  const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
   const dnd = useDnd(ws);
   useKeys(ws, rows);
 
@@ -42,6 +35,14 @@ export function Outline({
         if (row.type === 'group') {
           return (
             <GroupRow key={row.id} id={row.id} title={row.title} count={row.count} dnd={dnd} droppable={!!row.group} />
+          );
+        }
+        if (row.type === 'project') {
+          return (
+            <div key={row.id} className="phead">
+              <span className="dot" style={{ background: row.project.color }} aria-hidden="true" />
+              {row.project.name}
+            </div>
           );
         }
 
@@ -97,12 +98,12 @@ const forecastTitle = (line: { open: number; late: boolean; fixedEnd: boolean })
 /* ----------------------------------------------------------------- Archiv */
 
 /** Wird erst beim Öffnen geholt – siehe PHASE-2.md, Abschnitt 4. */
-export function ArchiveView({ projectId }: { projectId: string }) {
-  const { archive, loadArchive, archiveQuery, setArchiveQuery, unarchive } = useStore();
+export function ArchiveView() {
+  const { archive, loadArchive, archiveQuery, setArchiveQuery, unarchive, scope } = useStore();
 
   useEffect(() => {
-    void loadArchive(projectId);
-  }, [loadArchive, projectId, archiveQuery]);
+    void loadArchive();
+  }, [loadArchive, scope, archiveQuery]);
 
   return (
     <div className="list pad">
