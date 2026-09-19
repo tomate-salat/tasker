@@ -100,11 +100,15 @@ Der reine UI-Zustand des Prototyps (`S.ui.sel`, `detail`, `editing`, `contentEdi
 **nicht** in die Datenbank, sondern in den Client-Store; nur die dauerhaften Teile (Theme, Tempo,
 Klappzustände, zuletzt gewähltes Projekt) gehen nach `setting`.
 
-### Offene Detailfragen
+### Entschiedene Detailfragen
 
-- Sind `collapsed` und Sortier-`order` wirklich serverseitig, oder pro Gerät? Vorschlag: `order`
-  serverseitig (es ist Inhalt), `collapsed` pro Gerät.
-- `doc` als Flag am Task oder eigene Ansicht über `parent_id IS NULL AND doc = 1`? Vorschlag: Flag.
+- **`order` serverseitig, `collapsed` pro Gerät.** Die Sortierung ist Inhalt und steht in der
+  Datenbank (Spalte `sort_order`); ob eine Zeile gerade zugeklappt ist, bleibt im Client.
+- **Dokumente als Flag `doc` am Task**, statt des Pseudo-Containers aus dem Prototyp.
+- **Kein `done`-Feld.** Im Prototyp war es immer `status === 'done'` und damit eine zweite Wahrheit,
+  die auseinanderlaufen kann. Es bleibt nur `status` und `done_at`.
+- **Abhängigkeiten ohne Fremdschlüssel**, weil `from_id`/`to_id` je nach `kind` auf Tasks oder
+  Milestones zeigen. Verwaiste Einträge räumt der Server auf, wie `pruneCrossDeps()` im Prototyp.
 
 ---
 
@@ -192,7 +196,8 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 1. ~~Projektgerüst: `package.json` mit `build`/`start`, Vite, TypeScript, Hono, Drizzle. Eine leere Seite,
    die auf Railway deployt – der Deploy-Weg wird als Erstes bewiesen, nicht als Letztes.~~
    **Erledigt lokal**, siehe `README.md`. Offen ist nur noch das Anlegen des Railway-Projekts samt Volume.
-2. Drizzle-Schema und erste Migration, Volume auf Railway einhängen.
+2. ~~Drizzle-Schema und erste Migration, Volume auf Railway einhängen.~~ **Erledigt**
+   (`db/schema.ts`, `db/migrations/0000_*.sql`; die Migrationen laufen beim Serverstart mit).
 3. Anmeldung: Konto aus Umgebungsvariablen, Argon2id, Session-Cookie, Login-Screen des Prototyps
    anschließen. Früh, weil die Instanz von Anfang an öffentlich erreichbar ist.
 4. Reine Logik aus dem Prototyp nach `src/shared` übernehmen, mit Tests – das ist der Teil, der
