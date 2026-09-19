@@ -1,0 +1,94 @@
+/**
+ * Die Datentypen, mit denen Server und Client rechnen.
+ *
+ * Bewusst unabhängig vom Drizzle-Schema: der Server setzt die Zeilen aus den
+ * Tabellen zu diesen Objekten zusammen (Labels und Abhängigkeiten werden dabei
+ * zu Arrays), der Client bekommt genau diese Form.
+ */
+
+export const TASK_STATUS = ['open', 'progress', 'done', 'unclear', 'blocked'] as const;
+export type Status = (typeof TASK_STATUS)[number];
+
+/** 0 = keine, 1 = hoch, 2 = mittel, 3 = niedrig. */
+export type Prio = 0 | 1 | 2 | 3;
+
+export type Project = {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+};
+
+export type Category = {
+  id: string;
+  projectId: string;
+  name: string;
+  order: number;
+};
+
+export type Mark = {
+  id: string;
+  emoji: string;
+  name: string;
+  order: number;
+};
+
+export type Group = {
+  id: string;
+  projectId: string;
+  title: string;
+  order: number;
+};
+
+export type Milestone = {
+  id: string;
+  projectId: string;
+  title: string;
+  desc: string;
+  planned: boolean;
+  status: Status;
+  order: number;
+  /** Reihenfolge in der Planung. */
+  qorder: number;
+  startDate: string | null;
+  endDate: string | null;
+  endAuto: boolean;
+  archivedAt: string | null;
+  /** IDs anderer Milestones, von denen dieser abhängt. */
+  deps: string[];
+};
+
+export type Task = {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  milestoneId: string | null;
+  groupId: string | null;
+  doc: boolean;
+  title: string;
+  desc: string;
+  prio: Prio;
+  status: Status;
+  doneAt: string | null;
+  order: number;
+  categoryId: string | null;
+  markId: string | null;
+  archivedAt: string | null;
+  tags: string[];
+  /** IDs anderer Tasks, von denen dieser abhängt. */
+  deps: string[];
+};
+
+export type Data = {
+  projects: Project[];
+  categories: Category[];
+  marks: Mark[];
+  groups: Group[];
+  milestones: Milestone[];
+  tasks: Task[];
+};
+
+/** Erledigt ist kein eigenes Feld – es ist genau dieser Status. */
+export const isDone = (x: { status: Status }): boolean => x.status === 'done';
+
+export const isArchived = (x: { archivedAt: string | null }): boolean => x.archivedAt !== null;

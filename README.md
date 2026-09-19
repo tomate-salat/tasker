@@ -22,6 +22,7 @@ Weitere Befehle:
 | Befehl | Zweck |
 |---|---|
 | `npm run check` | TypeScript prüfen |
+| `npm test` | Tests der Berechnungslogik |
 | `npm run build` | Client nach `dist/client`, Server nach `dist/server` |
 | `npm start` | Produktivstart, wie Railway ihn ausführt |
 | `npm run db:generate` | Migration aus dem Drizzle-Schema erzeugen |

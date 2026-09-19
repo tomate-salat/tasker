@@ -201,8 +201,9 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 3. ~~Anmeldung: Konto aus Umgebungsvariablen, Argon2id, Session-Cookie, Login-Screen des Prototyps
    anschließen. Früh, weil die Instanz von Anfang an öffentlich erreichbar ist.~~ **Erledigt**
    (`src/server/auth.ts`, `src/client/Login.tsx`).
-4. Reine Logik aus dem Prototyp nach `src/shared` übernehmen, mit Tests – das ist der Teil, der
-   unverändert bleibt und sich gut prüfen lässt.
+4. ~~Reine Logik aus dem Prototyp nach `src/shared` übernehmen, mit Tests – das ist der Teil, der
+   unverändert bleibt und sich gut prüfen lässt.~~ **Erledigt** (`src/shared/`, 122 Tests, davon 70
+   im direkten Abgleich mit den Werten, die der Prototyp für seine Beispieldaten selbst ausrechnet).
 5. API mit `bootstrap`, Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.
 6. Client-Grundgerüst: Store, Bootstrap-Laden, Tabellenansicht mit Baum, Auswahl, Inspektor.
 7. Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Archiv, Papierkorb.
