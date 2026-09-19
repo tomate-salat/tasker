@@ -167,15 +167,18 @@ Migration von Sekunden.
 ### Anmeldung: E-Mail und Passwort, selbst verwaltet
 
 - Das Konto wird **beim ersten Start** aus `TASKER_EMAIL` und `TASKER_PASSWORD` angelegt. Keine
-  Registrierung, kein zweites Konto.
+  Registrierung, kein zweites Konto. Existiert das Konto bereits, werden beide Variablen **ignoriert** –
+  sonst würde ein im Profil geändertes Passwort beim nächsten Deploy wieder überschrieben.
 - Passwort als **Argon2id-Hash** in der Datenbank, nie im Klartext, nie im Log.
 - Session als **HttpOnly-Cookie** mit `Secure` und `SameSite=Lax`. Laufzeit abhängig von „angemeldet
   bleiben“: reine Sitzung oder 90 Tage. Die Session-IDs liegen in einer Tabelle `session`, damit
   „Abmelden“ tatsächlich abmeldet und nicht nur das Cookie löscht.
 - **Passwort ändern** im Profil-Dialog, an der Stelle, an der jetzt der Hinweis steht, dass es im
   Prototyp keins gibt.
-- **Passwort vergessen:** neu setzen über die Umgebungsvariable und einmal neu deployen. Ohne
-  Mailversand gibt es keinen besseren Weg, und für ein Ein-Personen-Tool genügt er.
+- **Passwort vergessen:** `TASKER_PASSWORD` auf das neue Passwort setzen, zusätzlich
+  `TASKER_PASSWORD_RESET=1`, einmal neu deployen. Der Server setzt das Passwort dann einmalig neu,
+  verwirft alle offenen Sessions und schreibt in die Logs, dass die Variable wieder entfernt werden
+  soll. Ohne Mailversand gibt es keinen besseren Weg, und für ein Ein-Personen-Tool genügt er.
 - **Rate-Limit** auf der Login-Route, weil die Instanz öffentlich erreichbar ist.
 - Alle `/api`-Routen außer Login liegen hinter einer Session-Prüfung; der SSE-Stream ebenso.
 

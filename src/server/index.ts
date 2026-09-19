@@ -2,10 +2,11 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { readFileSync } from 'node:fs';
-import { DATABASE_PATH, HOST, PORT, PRODUCTION } from './env.js';
+import { DATABASE_PATH, HOST, PORT, PRODUCTION, warnIfNotPersistent } from './env.js';
 import { recordBoot } from './db.js';
 import { runMigrations } from './migrate.js';
 
+warnIfNotPersistent();
 runMigrations();
 const boot = recordBoot();
 const app = new Hono();

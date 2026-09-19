@@ -49,7 +49,9 @@ Kein Dockerfile nötig – Railway erkennt das Node-Projekt und nutzt `build` un
 3. Variablen setzen:
    - `DATABASE_PATH=/data/tasker.db`
    - `NODE_ENV=production`
-   - `TASKER_EMAIL`, `TASKER_PASSWORD` (sobald die Anmeldung steht)
+   - `TASKER_EMAIL`, `TASKER_PASSWORD` (sobald die Anmeldung steht) – gelten nur beim ersten Start,
+     danach ändert man das Passwort im Profil. Railways `secret(…)`-Vorschlag als Wert ist in Ordnung;
+     er wird einmal ausgewertet und bleibt dann fest.
 
    `PORT` setzt Railway selbst; der Server hört darauf und auf `0.0.0.0`.
 4. Prüfen: `/api/health` antwortet. Der Zähler `boots` steigt bei jedem Deploy, `firstBootAt` bleibt
