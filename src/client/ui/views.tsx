@@ -1,57 +1,86 @@
 import { useEffect } from 'react';
+import { outline, type OutlineView } from '@shared/outline.js';
 import { milestoneStats, statusSegments } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
+import { useDnd } from './dnd.js';
 import { SegBar } from './icons.js';
+import { useKeys } from './keys.js';
 import { GroupRow, TaskRow } from './rows.js';
 
-/* ------------------------------------------------------------------- Plan */
+/* ----------------------------------------------------- Plan, Backlog, Docs */
 
-/** Milestones mit ihren Aufgabenbäumen, dazu die Prognose. */
-export function PlanView({ ws, projectId }: { ws: Workspace; projectId: string }) {
+/**
+ * Die drei Arbeitsansichten teilen sich eine Zeilenfolge (`outline`), damit
+ * Anzeige, Tastatur und Drag & Drop dieselbe Reihenfolge sehen.
+ */
+export function Outline({
+  ws,
+  projectId,
+  view,
+}: {
+  ws: Workspace;
+  projectId: string;
+  view: OutlineView;
+}) {
   const { collapsed, select, settings } = useStore();
-  const milestones = ws.milestones
-    .filter((m) => m.projectId === projectId)
-    .sort((a, b) => Number(b.planned) - Number(a.planned) || a.qorder - b.qorder);
-  const plan = schedule(ws, { velocity: settings.velocity });
+  const rows = outline(ws, { view, projectId, collapsed });
+  const dnd = useDnd(ws);
+  useKeys(ws, rows);
 
-  if (!milestones.length) return <Empty>Noch keine Milestones in diesem Projekt.</Empty>;
+  const plan = view === 'plan' ? schedule(ws, { velocity: settings.velocity }) : null;
+
+  if (!rows.length) return <Empty>{EMPTY[view]}</Empty>;
 
   return (
-    <div className="list">
-      {milestones.map((m) => {
-        const stats = milestoneStats(ws, m);
-        const line = plan.byId.get(m.id);
+    <div className="list" onDragEnd={() => dnd.end()}>
+      {rows.map((row) => {
+        if (row.type === 'task') {
+          return <TaskRow key={row.id} ws={ws} task={row.task} depth={row.depth} dnd={dnd} />;
+        }
+        if (row.type === 'group') {
+          return (
+            <GroupRow key={row.id} id={row.id} title={row.title} count={row.count} dnd={dnd} droppable={!!row.group} />
+          );
+        }
+
+        const m = row.milestone;
+        const line = plan?.byId.get(m.id);
         return (
-          <div key={m.id}>
-            <GroupRow
-              id={m.id}
-              title={m.title || 'Ohne Titel'}
-              icon="◆"
-              count={stats.total}
-              onSelect={() => select(m.id)}
-              right={
-                <>
-                  <SegBar segments={statusSegments(ws, m)} />
-                  {line ? (
-                    <span className={`eta ${line.late ? 'late' : ''}`} title={forecastTitle(line)}>
-                      {formatWeeks(line.end)}
-                    </span>
-                  ) : (
-                    <span className="eta muted-eta">nicht eingeplant</span>
-                  )}
-                </>
-              }
-            />
-            {!collapsed[m.id] &&
-              ws.msRoots(m).map((t) => <TaskRow key={t.id} ws={ws} task={t} depth={0} />)}
-          </div>
+          <GroupRow
+            key={m.id}
+            id={m.id}
+            title={m.title || 'Ohne Titel'}
+            icon="◆"
+            count={milestoneStats(ws, m).total}
+            onSelect={() => select(m.id)}
+            dnd={dnd}
+            droppable
+            right={
+              <>
+                <SegBar segments={statusSegments(ws, m)} />
+                {line ? (
+                  <span className={`eta ${line.late ? 'late' : ''}`} title={forecastTitle(line)}>
+                    {formatWeeks(line.end)}
+                  </span>
+                ) : (
+                  <span className="eta muted-eta">nicht eingeplant</span>
+                )}
+              </>
+            }
+          />
         );
       })}
     </div>
   );
 }
+
+const EMPTY: Record<OutlineView, string> = {
+  plan: 'Noch keine Milestones in diesem Projekt.',
+  backlog: 'Der Backlog ist leer.',
+  docs: 'Noch keine Dokumente in diesem Projekt.',
+};
 
 const formatWeeks = (weeks: number): string => {
   const days = Math.round(weeks * 7);
@@ -64,62 +93,6 @@ const forecastTitle = (line: { open: number; late: boolean; fixedEnd: boolean })
   `${line.open} Aufgaben offen` +
   (line.fixedEnd ? ' · Enddatum gesetzt' : ' · errechnet aus dem Tempo') +
   (line.late ? ' · Prognose liegt dahinter' : '');
-
-/* ---------------------------------------------------------------- Backlog */
-
-/** Alles ohne Milestone: eigene Gruppen, Markierungen und der Rest. */
-export function BacklogView({ ws, projectId }: { ws: Workspace; projectId: string }) {
-  const { collapsed } = useStore();
-  const groups = ws.groups.filter((g) => g.projectId === projectId).sort((a, b) => a.order - b.order);
-  const loose = ws.tasks
-    .filter((t) => t.projectId === projectId && !t.parentId && !t.milestoneId && !t.groupId && !t.doc)
-    .sort((a, b) => a.order - b.order);
-
-  if (!groups.length && !loose.length) return <Empty>Der Backlog ist leer.</Empty>;
-
-  return (
-    <div className="list">
-      {groups.map((g) => {
-        const tasks = ws.tasks
-          .filter((t) => t.groupId === g.id && !t.parentId)
-          .sort((a, b) => a.order - b.order);
-        return (
-          <div key={g.id}>
-            <GroupRow id={g.id} title={g.title} count={tasks.length} />
-            {!collapsed[g.id] && tasks.map((t) => <TaskRow key={t.id} ws={ws} task={t} depth={0} />)}
-          </div>
-        );
-      })}
-
-      {loose.length > 0 && (
-        <>
-          <GroupRow id={`unsorted:${projectId}`} title="Unsortiert" count={loose.length} />
-          {!collapsed[`unsorted:${projectId}`] &&
-            loose.map((t) => <TaskRow key={t.id} ws={ws} task={t} depth={0} />)}
-        </>
-      )}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------- Dokumente */
-
-/** Dokumente sind Aufgaben mit gesetztem Flag; Unteraufgaben sind Unterseiten. */
-export function DocsView({ ws, projectId }: { ws: Workspace; projectId: string }) {
-  const docs = ws.tasks
-    .filter((t) => t.projectId === projectId && t.doc && !t.parentId)
-    .sort((a, b) => a.order - b.order);
-
-  if (!docs.length) return <Empty>Noch keine Dokumente in diesem Projekt.</Empty>;
-
-  return (
-    <div className="list">
-      {docs.map((t) => (
-        <TaskRow key={t.id} ws={ws} task={t} depth={0} />
-      ))}
-    </div>
-  );
-}
 
 /* ----------------------------------------------------------------- Archiv */
 

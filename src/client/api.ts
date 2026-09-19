@@ -3,9 +3,24 @@ import type { Data } from '@shared/model.js';
 
 export type Account = { email: string; name: string; avatar: string };
 
+export type Scene = { elements: unknown[]; files?: Record<string, unknown> };
+
+export type DrawingMeta = {
+  id: string;
+  version: number;
+  taskId: string;
+  name: string;
+  order: number;
+  updatedAt: string;
+};
+
+export type Drawing = DrawingMeta & { scene: Scene };
+
 export type Bootstrap = Data & {
   stubs: Stub[];
   archiveCounts: Record<string, number>;
+  /** Nur die Namen – die Szenen holt der Editor einzeln. */
+  drawings: DrawingMeta[];
 };
 
 export class ApiError extends Error {
@@ -88,6 +103,20 @@ export const api = {
   restoreTrash: (id: string) => post<{ restored: number }>(`/api/trash/${id}/restore`),
 
   purgeTrash: (id: string) => request<{ ok: true }>(`/api/trash/${id}`, { method: 'DELETE' }),
+
+  drawings: (taskId: string) =>
+    request<{ drawings: Drawing[] }>(`/api/drawings?taskId=${encodeURIComponent(taskId)}`),
+
+  addDrawing: (taskId: string, name?: string) =>
+    post<Drawing>('/api/drawings', { taskId, ...(name ? { name } : {}) }),
+
+  saveDrawing: (id: string, version: number, changes: { name?: string; scene?: Scene }) =>
+    request<Drawing>(`/api/drawings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ version, changes }),
+    }),
+
+  deleteDrawing: (id: string) => request<{ ok: true }>(`/api/drawings/${id}`, { method: 'DELETE' }),
 
   settings: () => request<Settings>('/api/settings'),
 

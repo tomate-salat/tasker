@@ -61,6 +61,26 @@ describe('Anlegen', () => {
     assert.equal(kind.milestoneId, null);
     assert.equal(kind.parentId, parent.id);
   });
+
+  it('nimmt Labels, Abhängigkeiten und Status schon beim Anlegen mit', () => {
+    // Das braucht die Schnell-Erfassung: eine Zeile, eine fertige Aufgabe.
+    const p = mkProject();
+    const erst = mkTask({ projectId: p.id, title: 'Erst' });
+    const t = mkTask({
+      projectId: p.id,
+      title: 'Danach',
+      prio: 1,
+      status: 'done',
+      tags: ['code', 'ui'],
+      deps: [erst.id],
+    });
+
+    assert.deepEqual(t.tags, ['code', 'ui']);
+    assert.deepEqual(t.deps, [erst.id]);
+    assert.equal(t.prio, 1);
+    assert.equal(t.status, 'done');
+    assert.ok(t.doneAt, 'erledigt angelegt heißt auch: mit Zeitpunkt');
+  });
 });
 
 describe('Ändern mit Versionsprüfung', () => {
@@ -248,6 +268,47 @@ describe('Verschieben und die hidden_by-Invariante', () => {
     assert.deepEqual(hiddenMismatches(ctx), []);
     // a, b, c und das darunter geschobene d – alles wieder sichtbar
     assert.deepEqual(active().sort(), [a.id, b.id, c.id, d.id].sort());
+  });
+});
+
+describe('Reihenfolge beim Verschieben', () => {
+  /** Die Titel der Wurzelaufgaben eines Milestones in Anzeigereihenfolge. */
+  const order = (milestoneId: string) =>
+    (
+      ctx.sqlite
+        .prepare('SELECT title FROM task WHERE milestone_id = ? AND parent_id IS NULL ORDER BY sort_order')
+        .all(milestoneId) as { title: string }[]
+    ).map((r) => r.title);
+
+  it('setzt eine Aufgabe auf den gewünschten Platz und nummeriert lückenlos neu', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    for (const title of ['A', 'B', 'C', 'D']) mkTask({ projectId: p.id, title, milestoneId: m.id });
+    const d = loadBootstrap(ctx).tasks.find((t) => t.title === 'D')!;
+
+    move(ctx, d.id, d.version, { milestoneId: m.id, index: 1 });
+
+    assert.deepEqual(order(m.id), ['A', 'D', 'B', 'C']);
+    // Lückenlos, damit der nächste Platz eindeutig bleibt.
+    assert.deepEqual(
+      loadBootstrap(ctx)
+        .tasks.filter((t) => t.milestoneId === m.id)
+        .map((t) => t.order)
+        .sort(),
+      [0, 1, 2, 3],
+    );
+  });
+
+  it('zählt beim Einsortieren die verschobene Aufgabe nicht mit', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    for (const title of ['A', 'B', 'C']) mkTask({ projectId: p.id, title, milestoneId: m.id });
+    const a = loadBootstrap(ctx).tasks.find((t) => t.title === 'A')!;
+
+    // „Hinter C“ heißt Platz 2, wenn A schon aus der Liste genommen ist.
+    move(ctx, a.id, a.version, { milestoneId: m.id, index: 2 });
+
+    assert.deepEqual(order(m.id), ['B', 'C', 'A']);
   });
 });
 

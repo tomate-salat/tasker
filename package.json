@@ -20,6 +20,7 @@
     "db:migrate": "tsx src/server/migrate.ts"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@hono/node-server": "^1.15.0",
     "@node-rs/argon2": "^2.2.1",
     "better-sqlite3": "^13.0.3",

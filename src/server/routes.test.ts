@@ -117,6 +117,48 @@ describe('Routen', () => {
     assert.deepEqual((await send('GET', '/settings')).body, { velocity: 12, theme: 'dark' });
   });
 
+  it('Zeichnungen: anlegen, speichern, umbenennen, löschen', async () => {
+    const p = await mk('project', { name: 'P' });
+    const t = await mk('task', { projectId: p.id, title: 'Mit Skizze' });
+
+    const created = await send('POST', '/drawings', { taskId: t.id, name: 'Ablauf' });
+    assert.equal(created.status, 201);
+    const d = created.body as { id: string; version: number; name: string };
+
+    // Das Startpaket nennt nur den Namen, nicht die Szene.
+    const boot = (await send('GET', '/bootstrap')).body as {
+      drawings: { id: string; name: string; scene?: unknown }[];
+    };
+    assert.deepEqual(
+      boot.drawings.map((x) => [x.name, 'scene' in x]),
+      [['Ablauf', false]],
+    );
+
+    const scene = { elements: [{ type: 'rectangle', id: 'a' }] };
+    const saved = await send('PATCH', `/drawings/${d.id}`, { version: d.version, changes: { scene } });
+    assert.equal(saved.status, 200);
+
+    const list = (await send('GET', `/drawings?taskId=${t.id}`)).body as {
+      drawings: { scene: { elements: unknown[] }; version: number }[];
+    };
+    assert.deepEqual(list.drawings[0]?.scene, scene);
+
+    // Ein zweiter gleicher Name bekommt eine Nummer, damit Verweise eindeutig bleiben.
+    const zwei = (await send('POST', '/drawings', { taskId: t.id, name: 'Ablauf' })).body as {
+      name: string;
+    };
+    assert.equal(zwei.name, 'Ablauf 2');
+
+    // Veraltete Version: dieselbe Behandlung wie überall.
+    assert.equal(
+      (await send('PATCH', `/drawings/${d.id}`, { version: d.version, changes: { name: 'X' } })).status,
+      409,
+    );
+
+    assert.equal((await send('DELETE', `/drawings/${d.id}`)).status, 200);
+    assert.equal((await send('DELETE', `/drawings/${d.id}`)).status, 404);
+  });
+
   it('Archiv wird gesondert geholt und ist durchsuchbar', async () => {
     const p = await mk('project', { name: 'P' });
     const a = await mk('task', { projectId: p.id, title: 'Engine auswählen' });

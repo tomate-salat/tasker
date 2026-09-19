@@ -5,7 +5,8 @@ import { Login } from './Login.js';
 import { useStore, VIEWS, VIEW_LABEL } from './store.js';
 import { Inspector } from './ui/Inspector.js';
 import { Sidebar } from './ui/Sidebar.js';
-import { ArchiveView, BacklogView, DocsView, PlanView, TrashView } from './ui/views.js';
+import { QuickAdd } from './ui/QuickAdd.js';
+import { ArchiveView, Outline, TrashView } from './ui/views.js';
 
 export function App() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -118,9 +119,9 @@ function Shell({ account, onLogout }: { account: Account; onLogout: () => void }
               onClick={() =>
                 void addTask({
                   projectId,
-                  title: 'Neue Aufgabe',
+                  title: '',
                   ...(view === 'docs' ? { doc: true } : {}),
-                })
+                }).then((id) => id && useStore.getState().edit(id))
               }
             >
               + {view === 'docs' ? 'Dokument' : 'Aufgabe'}
@@ -128,9 +129,12 @@ function Shell({ account, onLogout }: { account: Account; onLogout: () => void }
           )}
         </header>
 
-        {view === 'plan' && <PlanView ws={ws} projectId={projectId} />}
-        {view === 'backlog' && <BacklogView ws={ws} projectId={projectId} />}
-        {view === 'docs' && <DocsView ws={ws} projectId={projectId} />}
+        {(view === 'plan' || view === 'backlog' || view === 'docs') && (
+          <>
+            <QuickAdd ws={ws} projectId={projectId} />
+            <Outline ws={ws} projectId={projectId} view={view} />
+          </>
+        )}
         {view === 'archive' && <ArchiveView projectId={projectId} />}
         {view === 'trash' && <TrashView />}
       </main>

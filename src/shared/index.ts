@@ -5,3 +5,4 @@ export * from './progress.js';
 export * from './inherit.js';
 export * from './blocking.js';
 export * from './schedule.js';
+export * from './quickadd.js';

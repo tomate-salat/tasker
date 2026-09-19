@@ -122,10 +122,16 @@ Zugriffsmuster sind bekannt.
   Speicher, genau wie der Prototyp `S`. Das Archiv ist ausdrücklich nicht dabei (siehe unten).
 - `GET /api/archive` – das Archiv, seitenweise, mit Suche und Projektfilter. Wird erst geladen,
   wenn die Archivansicht geöffnet wird.
-- `POST /api/:kind` – anlegen
-- `PATCH /api/:kind/:id` – ändern, mit `version` des Standes, auf dem die Änderung basiert
-- `DELETE /api/:kind/:id` – in den Papierkorb
-- `POST /api/move` – Drag & Drop: neuer Elternteil / Milestone / Gruppe plus neue Reihenfolge, als eine Transaktion
+- `POST /api/kind/:kind` – anlegen
+- `PATCH /api/kind/:kind/:id` – ändern, mit `version` des Standes, auf dem die Änderung basiert
+- `DELETE /api/kind/:kind/:id` – in den Papierkorb
+- `POST /api/kind/:kind/:id/archive` bzw. `/restore` – archivieren und zurückholen
+- `POST /api/move` – Drag & Drop: neuer Elternteil / Milestone / Gruppe plus Platz (`index`), als eine Transaktion
+- `GET|POST /api/drawings`, `PATCH|DELETE /api/drawings/:id` – Zeichnungen (siehe Abschnitt 7, Schritt 8)
+
+Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit festen Pfaden wie
+`/move`, `/trash` oder `/settings` nicht überschneiden können. Sonst hinge die Korrektheit an der
+Reihenfolge, in der die Routen registriert werden, und kippte beim nächsten eingefügten Endpunkt.
 - `POST /api/bulk` – Mehrfachauswahl als eine Transaktion
 - `GET /api/events` – **SSE-Stream** mit jeder Änderung
 - `POST /api/import` – Prototyp-Export oder Codecks-Export einlesen
@@ -266,7 +272,29 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
    Dazu kamen serverseitig `/api/trash` (auflisten, wiederherstellen, endgültig löschen) und
    `/api/settings` (Tempo, Theme). Noch offen in diesen Ansichten: Markierungs-Sammelgruppen im
    Backlog, der Burnup im Milestone und der eigene Inspektor für Dokumente.
-8. Drag & Drop, Tastaturbedienung, Schnell-Erfassung, Zeichen-Editor.
+8. ~~Drag & Drop, Tastaturbedienung, Schnell-Erfassung, Zeichen-Editor.~~ **Erledigt.**
+   - **Schnell-Erfassung** als reine Funktion in `src/shared/quickadd.ts` (`Titel #label !1 >Ziel
+     +Projekt ~status %Markierung &Kategorie @nach:Aufgabe`), mit Vorschau beim Tippen. Weil eine
+     Zeile schon eine fertige Aufgabe ergibt, nimmt `POST /api/kind/task` jetzt dieselben Felder
+     entgegen wie `PATCH`.
+   - **Eine Zeilenfolge für alles:** `src/shared/outline.ts` berechnet die sichtbaren Zeilen einer
+     Ansicht. Anzeige, Tastatur und Drag & Drop benutzen dieselbe Liste, sonst laufen Pfeiltasten
+     und Bildschirm auseinander.
+   - **Tastatur:** Pfeile/`j`/`k` bewegen die Auswahl, `←/→` klappen, `Enter` legt eine
+     Geschwisteraufgabe direkt darunter an (mit `Shift` eine Unteraufgabe), `Tab`/`Shift+Tab` rücken
+     ein und aus, `Alt+↑/↓` sortieren um, `Leertaste` erledigt, `e`/`F2` bearbeitet den Titel in der
+     Zeile, `s` schaltet den Status weiter, `a` archiviert, `Entf` legt in den Papierkorb, `n`
+     oder `/` springt in die Erfassungszeile.
+   - **Drag & Drop:** über einer Aufgabe drei Zonen (davor, hinein, danach), über Milestone und
+     Gruppe nur „hinein“. Der Platz geht als `index` an den Server, der die Geschwister lückenlos
+     neu nummeriert – ganzzahlige Ordnungswerte bleiben ganzzahlig.
+   - **Zeichen-Editor: Excalidraw** (`@excalidraw/excalidraw`), nachgeladen, damit das Startpaket
+     klein bleibt. Die Szene liegt als JSON in `drawing.shapes`; das Startpaket liefert nur die
+     Namen, die Szene holt der Editor. Gespeichert wird 1,5 s nach der letzten echten Änderung und
+     beim Schließen, mit derselben Versionsprüfung wie überall.
+
+   Noch offen aus diesem Schritt: die Einbettung `![[zeichnung:Name]]` in der Beschreibung – dafür
+   fehlt im Inspektor bislang der Beschreibungs-Editor.
 9. SSE-Push und Konfliktbehandlung.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.
 11. Gamification, dezent.

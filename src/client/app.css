@@ -147,6 +147,68 @@
   font-size: 18px;
 }
 
+/* -------------------------------------------------------- Schnell-Erfassung */
+
+.qa-wrap {
+  padding: 10px 16px 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.qa {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  padding: 9px 12px;
+  font: 14px ui-monospace, 'Cascadia Code', Menlo, monospace;
+  color: var(--ink);
+  outline: none;
+}
+
+.qa:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.qa::placeholder {
+  color: var(--faint);
+}
+
+.qa-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+  font-size: 12px;
+}
+
+.pv {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--sunk);
+  color: var(--muted);
+}
+
+.pv b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.pv.bad {
+  background: var(--sunk);
+  color: var(--bad);
+}
+
+.pv kbd {
+  font: 11px ui-monospace, Menlo, monospace;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
 /* ----------------------------------------------------------------- Liste */
 
 .list {
@@ -179,6 +241,49 @@
 
 .row.sel {
   background: var(--accent-soft);
+}
+
+/* Ziehen und Ablegen: Linie für „davor/danach“, Rahmen für „hinein“. */
+.row.dragging {
+  opacity: 0.4;
+}
+
+.row.dz-child,
+.row.dz-into {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
+}
+
+.row.dz-before::before,
+.row.dz-after::after {
+  content: '';
+  position: absolute;
+  left: calc(46px + var(--d, 0) * 26px);
+  right: 8px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.row.dz-before::before {
+  top: -1px;
+}
+
+.row.dz-after::after {
+  bottom: -1px;
+}
+
+/* Titel direkt in der Zeile bearbeiten. */
+.edit-title {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 2px 6px;
+  font: inherit;
+  color: var(--ink);
+  outline: none;
 }
 
 /* Aufgaben: zwei feste Spalten links, dann der eingerückte Baum. */
@@ -672,4 +777,84 @@
   color: var(--bg);
   font-size: 13px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+/* ----------------------------------------------------------- Zeichnungen */
+
+.linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.linkish:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.draw-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.draw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--sunk);
+}
+
+.icon-btn.tiny {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+/* Der Editor legt sich über alles – Excalidraw braucht die ganze Fläche. */
+.draw-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.draw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.draw-name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  padding: 4px 8px;
+  font: 600 16px inherit;
+  color: var(--ink);
+}
+
+.draw-name:hover,
+.draw-name:focus {
+  border-color: var(--line);
+  background: var(--surface);
+  outline: none;
+}
+
+.draw-canvas {
+  flex: 1;
+  min-height: 0;
 }

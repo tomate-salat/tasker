@@ -5,6 +5,7 @@ import { blockers } from '@shared/blocking.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
+import { Drawings } from './Drawings.js';
 import { PRIO_LABEL, PrioIcon, SegBar, STATUS_LABEL, statusMark } from './icons.js';
 
 /** Fortschrittskette links, Sonderstatus rechts – zusammen eine Auswahl. */
@@ -104,6 +105,10 @@ function TaskRows({ ws, task }: { ws: Workspace; task: Task }) {
         ) : (
           <span className="empty-val">keine</span>
         )}
+      </Row>
+
+      <Row label="Zeichnungen">
+        <Drawings taskId={task.id} />
       </Row>
 
       {blocking.length > 0 && (

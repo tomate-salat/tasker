@@ -11,6 +11,7 @@ import type {
 } from '../shared/model.js';
 import type { Kind, Stub } from '../shared/api.js';
 import type { DbCtx } from './db.js';
+import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
 import { newId, type IdPrefix } from './ids.js';
 
 /* ============================================================ Lesen */
@@ -20,6 +21,8 @@ export type Bootstrap = Data & {
   stubs: Stub[];
   /** Anzahl archivierter Einträge je Projekt, für die Anzeige am Archiv-Tab. */
   archiveCounts: Record<string, number>;
+  /** Nur die Namen der Zeichnungen; die Szenen holt der Editor einzeln. */
+  drawings: DrawingMeta[];
 };
 
 /** Nur aktives Material: das Archiv wird bei Bedarf gesondert geladen. */
@@ -92,6 +95,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
     stubs,
     archiveCounts,
+    drawings: loadDrawingMeta(ctx),
   };
 }
 
@@ -211,7 +215,9 @@ const nowIso = (): string => new Date().toISOString();
 export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): unknown {
   return ctx.sqlite.transaction(() => {
     const id = newId(PREFIX[kind]);
-    const values: Record<string, unknown> = { id, ...input };
+    // Labels und Abhängigkeiten sind keine Spalten, sondern eigene Tabellen.
+    const { tags, deps, ...rest } = input;
+    const values: Record<string, unknown> = { id, ...rest };
 
     if (kind === 'task' || kind === 'milestone' || kind === 'group' || kind === 'category') {
       values['order'] = nextOrder(ctx, kind, input);
@@ -235,6 +241,14 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
          VALUES (${fields.map((f) => `:${f}`).join(',')})`,
       )
       .run(Object.fromEntries(fields.map((f) => [f, toSql(values[f])])));
+
+    if (kind === 'task' && Array.isArray(tags)) setTags(ctx, id, tags as string[]);
+    if ((kind === 'task' || kind === 'milestone') && Array.isArray(deps)) {
+      setDeps(ctx, kind, id, deps as string[]);
+    }
+    if (kind === 'task' && values['status'] === 'done') {
+      ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(nowIso(), id);
+    }
 
     return read(ctx, kind, id);
   })();
@@ -344,6 +358,8 @@ export type MoveTarget = {
   milestoneId?: string | null | undefined;
   groupId?: string | null | undefined;
   order?: number | undefined;
+  /** Platz unter den künftigen Geschwistern; danach wird lückenlos neu nummeriert. */
+  index?: number | undefined;
 };
 
 /** Verschiebt eine Aufgabe und zieht `hidden_by` für ihren Teilbaum nach. */
@@ -387,9 +403,48 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
         .run(projectId, ...subtree);
     }
 
+    if (target.index !== undefined) {
+      reorder(ctx, { parentId, milestoneId, groupId, projectId: String(projectId) }, id, target.index);
+    }
     refreshHidden(ctx, id);
     return read(ctx, 'task', id);
   })();
+}
+
+/**
+ * Nummeriert die Geschwister im Zielbehälter lückenlos neu und setzt die
+ * verschobene Aufgabe auf den gewünschten Platz. Ganzzahlige Ordnungswerte
+ * bleiben damit ganzzahlig – kein Bruchrechnen, das irgendwann zu fein wird.
+ */
+function reorder(
+  ctx: DbCtx,
+  where: { parentId: string | null; milestoneId: string | null; groupId: string | null; projectId: string },
+  movedId: string,
+  index: number,
+): void {
+  const [clause, param] = where.parentId
+    ? ['parent_id = ?', where.parentId]
+    : where.milestoneId
+      ? ['parent_id IS NULL AND milestone_id = ?', where.milestoneId]
+      : where.groupId
+        ? ['parent_id IS NULL AND group_id = ?', where.groupId]
+        : [
+            'parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL AND project_id = ?',
+            where.projectId,
+          ];
+
+  const siblings = (
+    ctx.sqlite
+      .prepare(`SELECT id FROM task WHERE ${clause} ORDER BY sort_order, id`)
+      .all(param) as { id: string }[]
+  )
+    .map((r) => r.id)
+    .filter((x) => x !== movedId);
+
+  siblings.splice(Math.min(index, siblings.length), 0, movedId);
+
+  const set = ctx.sqlite.prepare('UPDATE task SET sort_order = ? WHERE id = ?');
+  siblings.forEach((sid, i) => set.run(i, sid));
 }
 
 /**

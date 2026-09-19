@@ -26,6 +26,8 @@ export const createSchemas = {
     desc: desc.optional(),
     planned: z.boolean().optional(),
   }),
+  // Die Schnell-Erfassung setzt schon beim Anlegen mehr als nur den Titel,
+  // deshalb darf `create` dieselben Felder wie `patch` entgegennehmen.
   task: z.object({
     projectId: id,
     title: title.optional(),
@@ -34,6 +36,12 @@ export const createSchemas = {
     milestoneId: id.nullable().optional(),
     groupId: id.nullable().optional(),
     doc: z.boolean().optional(),
+    prio: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
+    status: z.enum(TASK_STATUS).optional(),
+    categoryId: id.nullable().optional(),
+    markId: id.nullable().optional(),
+    tags: z.array(z.string().min(1).max(60)).optional(),
+    deps: z.array(id).optional(),
   }),
 } satisfies Record<Kind, z.ZodType>;
 
@@ -86,6 +94,25 @@ export const moveBody = z.object({
   milestoneId: id.nullable().optional(),
   groupId: id.nullable().optional(),
   order: z.number().optional(),
+  /** Platz unter den künftigen Geschwistern; der Server nummeriert danach neu. */
+  index: z.number().int().min(0).optional(),
+});
+
+/**
+ * Zeichnungen: die Szene ist der Excalidraw-Zustand und wird am Stück
+ * gespeichert. Geprüft wird nur die Form, nicht jedes einzelne Element –
+ * das Format gehört Excalidraw, nicht uns.
+ */
+export const sceneSchema = z.object({
+  elements: z.array(z.unknown()).max(20_000),
+  files: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const drawingCreate = z.object({ taskId: id, name: title.optional() });
+
+export const drawingPatch = z.object({
+  version: z.number().int().positive(),
+  changes: z.object({ name: title, scene: sceneSchema, order: z.number() }).partial(),
 });
 
 export const settingsBody = z

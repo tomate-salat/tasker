@@ -42,6 +42,8 @@ type State = {
   projectId: string | null;
   view: View;
   selected: string | null;
+  /** Zeile, deren Titel gerade im Baum bearbeitet wird. */
+  editing: string | null;
   /** Zugeklappte Zeilen – bleibt pro Gerät, nicht auf dem Server. */
   collapsed: Record<string, boolean>;
   settings: Settings;
@@ -56,12 +58,16 @@ type State = {
   setProject: (id: string) => void;
   setView: (view: View) => void;
   select: (id: string | null) => void;
+  edit: (id: string | null) => void;
   toggle: (id: string) => void;
+  setCollapsed: (id: string, value: boolean) => void;
   say: (message: string | null) => void;
   setVelocity: (velocity: number) => Promise<void>;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
-  addTask: (input: Record<string, unknown>) => Promise<void>;
+  /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
+  addTask: (input: Record<string, unknown>) => Promise<string | null>;
+  moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   remove: (kind: Kind, id: string) => Promise<void>;
 
@@ -102,6 +108,7 @@ export const useStore = create<State>((set, get) => ({
   projectId: readLocal<string | null>(PROJECT_KEY, null),
   view: 'plan',
   selected: null,
+  editing: null,
   collapsed: readLocal<Record<string, boolean>>(COLLAPSED_KEY, {}),
   settings: { velocity: 8, theme: 'system' },
   archive: null,
@@ -126,10 +133,10 @@ export const useStore = create<State>((set, get) => ({
   setProject: (id) => {
     writeLocal(PROJECT_KEY, id);
     // Archiv und Papierkorb gehören zum alten Projekt und werden neu geholt.
-    set({ projectId: id, selected: null, archive: null });
+    set({ projectId: id, selected: null, editing: null, archive: null });
   },
 
-  setView: (view) => set({ view, selected: null }),
+  setView: (view) => set({ view, selected: null, editing: null }),
 
   setVelocity: async (velocity) => {
     try {
@@ -140,10 +147,14 @@ export const useStore = create<State>((set, get) => ({
   },
 
   // Den Inspektor zu schließen hebt auch die Auswahl auf (so wie im Prototyp).
-  select: (id) => set({ selected: id }),
+  select: (id) => set({ selected: id, editing: null }),
 
-  toggle: (id) => {
-    const collapsed = { ...get().collapsed, [id]: !get().collapsed[id] };
+  edit: (editing) => set({ editing, ...(editing ? { selected: editing } : {}) }),
+
+  toggle: (id) => get().setCollapsed(id, !get().collapsed[id]),
+
+  setCollapsed: (id, value) => {
+    const collapsed = { ...get().collapsed, [id]: value };
     writeLocal(COLLAPSED_KEY, collapsed);
     set({ collapsed });
   },
@@ -172,10 +183,29 @@ export const useStore = create<State>((set, get) => ({
 
   addTask: async (input) => {
     try {
-      await api.create<Task>('task', input);
+      const created = await api.create<Task>('task', input);
       await get().load();
+      return created.id;
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+      return null;
+    }
+  },
+
+  moveTask: async (id, target) => {
+    const boot = get().boot;
+    const current = boot?.tasks.find((t) => t.id === id);
+    if (!current) return;
+    try {
+      await api.move<Task>(id, current.version, target);
+      await get().load();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        set({ toast: 'Inzwischen woanders geändert – bitte nochmal.' });
+        await get().load();
+        return;
+      }
+      set({ toast: e instanceof Error ? e.message : 'Verschieben fehlgeschlagen' });
     }
   },
 

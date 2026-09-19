@@ -8,6 +8,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   root: 'src/client',
   plugins: [react()],
+  // Excalidraw fragt diese Variable zur Laufzeit ab; ohne Wert bricht das Bündel.
+  define: { 'process.env.IS_PREACT': JSON.stringify('false') },
   resolve: {
     alias: {
       '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),

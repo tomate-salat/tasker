@@ -2,6 +2,8 @@ import { Hono, type Context } from 'hono';
 import {
   archiveQuery,
   createSchemas,
+  drawingCreate,
+  drawingPatch,
   kindSchema,
   moveBody,
   settingsBody,
@@ -10,6 +12,7 @@ import {
   type Kind,
 } from '../shared/api.js';
 import type { DbCtx } from './db.js';
+import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import {
   Conflict,
   NotFound,
@@ -70,6 +73,28 @@ export function dataRoutes(ctx: DbCtx): Hono {
     const { id, version, ...target } = body.data;
     return run(c, () => move(ctx, id, version, target));
   });
+
+  /* Zeichnungen hängen an einer Aufgabe, sind aber zu groß fürs Startpaket. */
+
+  app.get('/drawings', (c) => {
+    const taskId = c.req.query('taskId');
+    if (!taskId) return c.json({ error: 'taskId fehlt.' }, 400);
+    return c.json({ drawings: loadDrawings(ctx, taskId) });
+  });
+
+  app.post('/drawings', async (c) => {
+    const body = drawingCreate.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return run(c, () => createDrawing(ctx, body.data.taskId, body.data.name), 201);
+  });
+
+  app.patch('/drawings/:id', async (c) => {
+    const body = drawingPatch.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return run(c, () => patchDrawing(ctx, c.req.param('id'), body.data.version, body.data.changes));
+  });
+
+  app.delete('/drawings/:id', (c) => run(c, () => removeDrawing(ctx, c.req.param('id'))));
 
   app.post('/kind/:kind', async (c) => {
     const kind = parseKind(c.req.param('kind'));
@@ -135,9 +160,9 @@ const fail = (c: Context, error: { issues: { path: PropertyKey[]; message: strin
 };
 
 /** Übersetzt die Fehler der Datenschicht in Antwortcodes. */
-function run(c: Context, fn: () => unknown) {
+function run(c: Context, fn: () => unknown, status: 200 | 201 = 200) {
   try {
-    return c.json(fn() as object);
+    return c.json(fn() as object, status);
   } catch (e) {
     if (e instanceof NotFound) return c.json({ error: 'Nicht gefunden.' }, 404);
     if (e instanceof Conflict) {
