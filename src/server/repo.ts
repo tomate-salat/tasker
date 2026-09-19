@@ -718,40 +718,41 @@ function groupValues<R, V>(
 
 /* ------------------------------------------------------ Zeilen ins Modell */
 
-type ProjectRow = { id: string; name: string; color: string; sort_order: number };
-type CategoryRow = { id: string; project_id: string; name: string; sort_order: number };
-type MarkRow = { id: string; emoji: string; name: string; sort_order: number };
-type GroupRow = { id: string; project_id: string; title: string; sort_order: number };
+type ProjectRow = { id: string; version: number; name: string; color: string; sort_order: number };
+type CategoryRow = { id: string; version: number; project_id: string; name: string; sort_order: number };
+type MarkRow = { id: string; version: number; emoji: string; name: string; sort_order: number };
+type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number };
 type MilestoneRow = {
-  id: string; project_id: string; title: string; desc: string; planned: number; status: string;
+  id: string; version: number; project_id: string; title: string; desc: string; planned: number; status: string;
   sort_order: number; queue_order: number; start_date: string | null; end_date: string | null;
   end_auto: number; archived_at: string | null;
 };
 type TaskRow = {
-  id: string; project_id: string; parent_id: string | null; milestone_id: string | null;
+  id: string; version: number; project_id: string; parent_id: string | null; milestone_id: string | null;
   group_id: string | null; doc: number; title: string; desc: string; prio: number; status: string;
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
   archived_at: string | null; hidden_by: string | null;
 };
 
 const toProject = (r: ProjectRow): Project => ({
-  id: r.id, name: r.name, color: r.color, order: r.sort_order,
+  id: r.id, version: r.version, name: r.name, color: r.color, order: r.sort_order,
 });
 
 const toCategory = (r: CategoryRow): Category => ({
-  id: r.id, projectId: r.project_id, name: r.name, order: r.sort_order,
+  id: r.id, version: r.version, projectId: r.project_id, name: r.name, order: r.sort_order,
 });
 
 const toMark = (r: MarkRow): Mark => ({
-  id: r.id, emoji: r.emoji, name: r.name, order: r.sort_order,
+  id: r.id, version: r.version, emoji: r.emoji, name: r.name, order: r.sort_order,
 });
 
 const toGroup = (r: GroupRow): Group => ({
-  id: r.id, projectId: r.project_id, title: r.title, order: r.sort_order,
+  id: r.id, version: r.version, projectId: r.project_id, title: r.title, order: r.sort_order,
 });
 
 const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
   id: r.id,
+  version: r.version,
   projectId: r.project_id,
   title: r.title,
   desc: r.desc,
@@ -768,6 +769,7 @@ const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
 
 const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   id: r.id,
+  version: r.version,
   projectId: r.project_id,
   parentId: r.parent_id,
   milestoneId: r.milestone_id,

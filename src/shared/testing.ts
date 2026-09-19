@@ -14,23 +14,27 @@ export class Builder {
   private n = 0;
 
   project(id: string, name = id): this {
-    this.data.projects.push({ id, name, color: '#2A6B5A', order: this.data.projects.length });
+    this.data.projects.push({ id,
+      version: 1, name, color: '#2A6B5A', order: this.data.projects.length });
     return this;
   }
 
   category(id: string, projectId: string, name = id): this {
-    this.data.categories.push({ id, projectId, name, order: this.data.categories.length });
+    this.data.categories.push({ id,
+      version: 1, projectId, name, order: this.data.categories.length });
     return this;
   }
 
   group(id: string, projectId: string, title = id): this {
-    this.data.groups.push({ id, projectId, title, order: this.data.groups.length });
+    this.data.groups.push({ id,
+      version: 1, projectId, title, order: this.data.groups.length });
     return this;
   }
 
   milestone(id: string, projectId: string, o: Partial<Milestone> = {}): this {
     this.data.milestones.push({
       id,
+      version: 1,
       projectId,
       title: id,
       desc: '',
@@ -51,6 +55,7 @@ export class Builder {
   task(id: string, projectId: string, o: Partial<Task> = {}): this {
     this.data.tasks.push({
       id,
+      version: 1,
       projectId,
       parentId: null,
       milestoneId: null,
@@ -83,6 +88,7 @@ export class Builder {
 
 export const projectOf = (p: Partial<Project>): Project => ({
   id: 'p',
+  version: 1,
   name: 'p',
   color: '#000',
   order: 0,
@@ -91,6 +97,7 @@ export const projectOf = (p: Partial<Project>): Project => ({
 
 export const groupOf = (g: Partial<Group>): Group => ({
   id: 'g',
+  version: 1,
   projectId: 'p',
   title: 'g',
   order: 0,

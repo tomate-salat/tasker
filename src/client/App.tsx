@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, type Account } from './api.js';
 import { Login } from './Login.js';
+import { useStore } from './store.js';
+import { Inspector } from './ui/Inspector.js';
+import { List } from './ui/List.js';
+import { Sidebar } from './ui/Sidebar.js';
 
-type Status = { database: string; boots: number; firstBootAt: string };
-
-/**
- * Bis die eigentliche Oberfläche aus dem Prototyp übernommen ist, zeigt die
- * angemeldete Ansicht nur, dass Anmeldung, Server und Datenbank zusammenspielen.
- */
 export function App() {
   const [account, setAccount] = useState<Account | null>(null);
   const [ready, setReady] = useState(false);
@@ -22,55 +20,74 @@ export function App() {
 
   if (!ready) return <main className="boot" />;
   if (!account) return <Login onDone={setAccount} />;
-  return <SignedIn account={account} onLogout={() => setAccount(null)} />;
+  return <Workspace account={account} onLogout={() => setAccount(null)} />;
 }
 
-function SignedIn({ account, onLogout }: { account: Account; onLogout: () => void }) {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [error, setError] = useState<string | null>(null);
+function Workspace({ account, onLogout }: { account: Account; onLogout: () => void }) {
+  const { ws, projectId, selected, loading, error, toast, load, say, addTask } = useStore();
 
   useEffect(() => {
-    api
-      .status()
-      .then(setStatus)
-      .catch((e: Error) => setError(e.message));
-  }, []);
+    void load();
+  }, [load]);
+
+  // Kurzmeldungen verschwinden von selbst wieder.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => say(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast, say]);
 
   async function logout() {
     await api.logout().catch(() => undefined);
     onLogout();
   }
 
-  return (
-    <main className="boot">
-      <h1>Tasker</h1>
-      <p className="lead">
-        Angemeldet als {account.avatar} {account.name}. Die Oberfläche kommt aus dem Prototyp.
-      </p>
-
-      {error && <p className="bad">{error}</p>}
-
-      {status && (
-        <dl>
-          <dt>Konto</dt>
-          <dd>{account.email}</dd>
-          <dt>Datenbank</dt>
-          <dd>{status.database}</dd>
-          <dt>Starts</dt>
-          <dd>
-            {status.boots}
-            {status.boots > 1 && ' – die Daten haben den Neustart überlebt'}
-          </dd>
-          <dt>Erster Start</dt>
-          <dd>{new Date(status.firstBootAt).toLocaleString('de-DE')}</dd>
-        </dl>
-      )}
-
-      <p className="actions">
-        <button className="btn" onClick={logout}>
-          Abmelden
+  if (loading && !ws) return <main className="boot">Lade …</main>;
+  if (error) {
+    return (
+      <main className="boot">
+        <p className="bad">{error}</p>
+        <button className="btn" onClick={() => void load()}>
+          Nochmal versuchen
         </button>
-      </p>
-    </main>
+      </main>
+    );
+  }
+  if (!ws || !projectId) {
+    return (
+      <main className="boot">
+        <p>Noch kein Projekt vorhanden.</p>
+        <p className="muted">Die Anlage von Projekten kommt mit dem nächsten Schritt.</p>
+      </main>
+    );
+  }
+
+  const project = ws.project(projectId);
+
+  return (
+    <div id="app" className={selected ? 'with-detail' : ''}>
+      <Sidebar ws={ws} account={account} onLogout={() => void logout()} />
+
+      <main id="main">
+        <header id="head">
+          <h1>{project?.name ?? 'Projekt'}</h1>
+          <button
+            className="btn"
+            onClick={() => void addTask({ projectId, title: 'Neue Aufgabe' })}
+          >
+            + Aufgabe
+          </button>
+        </header>
+        <List ws={ws} projectId={projectId} />
+      </main>
+
+      {selected && <Inspector ws={ws} id={selected} />}
+
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
+    </div>
   );
 }

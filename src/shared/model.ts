@@ -14,6 +14,8 @@ export type Prio = 0 | 1 | 2 | 3;
 
 export type Project = {
   id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
   name: string;
   color: string;
   order: number;
@@ -21,6 +23,8 @@ export type Project = {
 
 export type Category = {
   id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
   projectId: string;
   name: string;
   order: number;
@@ -28,6 +32,8 @@ export type Category = {
 
 export type Mark = {
   id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
   emoji: string;
   name: string;
   order: number;
@@ -35,6 +41,8 @@ export type Mark = {
 
 export type Group = {
   id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
   projectId: string;
   title: string;
   order: number;
@@ -42,6 +50,8 @@ export type Group = {
 
 export type Milestone = {
   id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
   projectId: string;
   title: string;
   desc: string;
@@ -60,6 +70,8 @@ export type Milestone = {
 
 export type Task = {
   id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
   projectId: string;
   parentId: string | null;
   milestoneId: string | null;

@@ -1,0 +1,563 @@
+/*
+ * Die Tabellenansicht aus dem Prototyp. Die Geometrie ist übernommen:
+ * 36px Markierungsspalte, 46px Prioritätsspalte, danach 26px Einrückung
+ * je Ebene – damit die Prioritätsspalte mit dem Aufklapppfeil der Milestones
+ * in einer Flucht steht.
+ */
+
+#app {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  height: 100vh;
+}
+
+#app.with-detail {
+  grid-template-columns: 220px 1fr minmax(300px, 380px);
+}
+
+/* ------------------------------------------------------------ Seitenleiste */
+
+#side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px;
+  background: var(--sunk);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.brand {
+  font: 700 16px var(--display, inherit);
+  padding: 4px 8px 12px;
+}
+
+.side-sec {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  padding: 10px 8px 4px;
+}
+
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-item:hover {
+  background: var(--hover);
+}
+
+.side-item.on {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.dotc {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.si-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-count,
+.ms-count {
+  font-size: 12px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.side-hint {
+  font-size: 12px;
+  color: var(--faint);
+  padding: 8px;
+  margin: 0;
+}
+
+.side-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: auto;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-user:hover {
+  background: var(--hover);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------------------ Kopf */
+
+#main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+#head h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+}
+
+/* ----------------------------------------------------------------- Liste */
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+
+.empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--faint);
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding-right: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row.sel {
+  background: var(--accent-soft);
+}
+
+/* Aufgaben: zwei feste Spalten links, dann der eingerückte Baum. */
+.task-row {
+  padding-left: calc(46px + var(--d, 0) * 26px);
+}
+
+.task-row .mark-gut {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+}
+
+.task-row .prio-gut {
+  position: absolute;
+  left: 36px;
+  top: 0;
+  bottom: 0;
+  width: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+}
+
+.mk-emoji.mk-default {
+  opacity: 0.32;
+}
+
+/* Milestones und Gruppen beginnen ganz links, ohne die Spalten. */
+.ms-row,
+.grp-row {
+  padding-left: 5px;
+  background: var(--sunk);
+  font-weight: 600;
+}
+
+.ms-row.sel,
+.grp-row.sel {
+  background: var(--accent-soft);
+}
+
+.ms-row:hover,
+.grp-row:hover {
+  background: var(--hover);
+}
+
+.ms-mark {
+  color: var(--accent);
+}
+
+.grp-title {
+  flex: 1;
+}
+
+.caret {
+  width: 20px;
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--faint);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dot {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.dot.st-done {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.dot.st-progress {
+  border-color: var(--info);
+  box-shadow: inset 0 0 0 3px var(--info);
+}
+
+.dot.st-blocked,
+.dot.blocked {
+  border-color: var(--p1);
+  color: var(--p1);
+}
+
+.dot.st-unclear {
+  border-color: var(--unclear);
+  color: var(--unclear);
+}
+
+.row .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row.done .title {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+/* --------------------------------------------------------- Fortschritt */
+
+.segbar {
+  display: flex;
+  flex: none;
+  width: 90px;
+  height: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--sunk);
+}
+
+.m-val .segbar {
+  flex: 1;
+  width: auto;
+  min-width: 60px;
+}
+
+.sg {
+  flex: 1;
+  min-width: 2px;
+}
+
+.sg.done {
+  background: var(--ok);
+}
+.sg.prog {
+  background: var(--info);
+}
+.sg.blocked {
+  background: var(--p1);
+}
+.sg.unclear {
+  background: var(--unclear);
+}
+.sg.cl {
+  background: var(--cl);
+}
+.sg.open {
+  background: var(--line-strong);
+}
+
+/* -------------------------------------------------------------- Chips */
+
+.chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: hsl(var(--h, 200) 60% 92%);
+  color: hsl(var(--h, 200) 60% 28%);
+}
+
+.tag.inherited,
+.chip.inherited {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.chip {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--sunk);
+  border: 1px solid var(--line);
+}
+
+.chip.warn {
+  border-color: var(--p1);
+  color: var(--p1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .tag {
+    background: hsl(var(--h, 200) 40% 24%);
+    color: hsl(var(--h, 200) 70% 82%);
+  }
+}
+
+/* ---------------------------------------------------------- Inspektor */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.d-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.d-title {
+  flex: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: 600 16px inherit;
+  padding: 6px 8px;
+}
+
+.d-title:hover {
+  border-color: var(--line);
+}
+
+.d-title:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.icon-btn {
+  border: none;
+  background: none;
+  color: var(--faint);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.meta {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.m-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.m-lbl {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.m-val {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.empty-val {
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.sub,
+.sep {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.status-groups {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font: 12px inherit;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.seg button:last-child {
+  border-right: none;
+}
+
+.seg button:hover {
+  background: var(--hover);
+}
+
+.seg button.on {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.status-seg button .st-ico {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1.3px solid currentColor;
+  border-radius: 50%;
+  font-size: 9px;
+}
+
+.d-actions {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+/* Schmal: der Inspektor legt sich über die Liste. */
+@media (max-width: 860px) {
+  #app,
+  #app.with-detail {
+    grid-template-columns: 1fr;
+  }
+
+  #side {
+    display: none;
+  }
+
+  .detail {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+  }
+}
+
+/* -------------------------------------------------------------- Toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}

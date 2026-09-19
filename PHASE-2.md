@@ -257,7 +257,10 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
 5. ~~API mit `bootstrap` (ohne Archiv), Anlegen/Ändern/Löschen, Transaktionen, Versionsprüfung.~~
    **Erledigt** (`src/server/repo.ts`, `src/server/routes.ts`, `src/shared/api.ts`). Noch offen aus
    der API-Liste: `/api/bulk` und `/api/events` (kommen mit Schritt 9), Import und Export.
-6. Client-Grundgerüst: Store, Bootstrap-Laden, Tabellenansicht mit Baum, Auswahl, Inspektor.
+6. ~~Client-Grundgerüst: Store, Bootstrap-Laden, Tabellenansicht mit Baum, Auswahl, Inspektor.~~
+   **Erledigt** (`src/client/store.ts`, `src/client/ui/`). Geschrieben wird vorerst ohne Vorgriff:
+   erst die Antwort des Servers, dann der neue Zustand. Optimistische Änderungen kommen mit
+   Schritt 9, zusammen mit dem Änderungs-Push.
 7. Die restlichen Ansichten: Backlog, Dokumente, Milestone-Planung, Papierkorb sowie das Archiv,
    das seine Daten erst beim Öffnen nachlädt.
 8. Drag & Drop, Tastaturbedienung, Schnell-Erfassung, Zeichen-Editor.

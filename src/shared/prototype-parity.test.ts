@@ -57,14 +57,15 @@ const dump = JSON.parse(
 /** Übersetzt den Prototyp-State ins neue Datenmodell. */
 function toData(d: Dump['data']): Data {
   return {
-    projects: d.projects.map((p, i) => ({ id: p.id, name: p.name, color: p.color, order: i })),
+    projects: d.projects.map((p, i) => ({ id: p.id, version: 1, name: p.name, color: p.color, order: i })),
     categories: d.projects.flatMap((p) =>
-      p.categories.map((c, i) => ({ id: c.id, projectId: p.id, name: c.name, order: i })),
+      p.categories.map((c, i) => ({ id: c.id, version: 1, projectId: p.id, name: c.name, order: i })),
     ),
-    marks: d.marks.map((k, i) => ({ ...k, order: i })),
-    groups: d.groups.map((g) => ({ id: g.id, projectId: g.project, title: g.title, order: g.order })),
+    marks: d.marks.map((k, i) => ({ ...k, version: 1, order: i })),
+    groups: d.groups.map((g) => ({ id: g.id, version: 1, projectId: g.project, title: g.title, order: g.order })),
     milestones: d.milestones.map((m) => ({
       id: m['id'] as string,
+      version: 1,
       projectId: m['project'] as string,
       title: m['title'] as string,
       desc: m['desc'] as string,
@@ -80,6 +81,7 @@ function toData(d: Dump['data']): Data {
     })),
     tasks: d.tasks.map((t) => ({
       id: t['id'] as string,
+      version: 1,
       projectId: t['project'] as string,
       parentId: (t['parent'] as string | null) ?? null,
       milestoneId: (t['ms'] as string | null) ?? null,
