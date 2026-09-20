@@ -25,6 +25,8 @@ type Placed = { items: MenuItem[]; x: number; y: number };
 export type Menu = {
   /** Öffnet unter dem Knopf; ein zweiter Klick auf denselben schließt wieder. */
   openAt: (el: HTMLElement, items: MenuItem[]) => void;
+  /** Öffnet an einem Punkt – für den Rechtsklick. */
+  openAtPoint: (x: number, y: number, items: MenuItem[]) => void;
   close: () => void;
   node: React.ReactNode;
 };
@@ -32,6 +34,10 @@ export type Menu = {
 export function useMenu(): Menu {
   const [open, setOpen] = useState<Placed | null>(null);
   const close = useCallback(() => setOpen(null), []);
+
+  const openAtPoint = useCallback((x: number, y: number, items: MenuItem[]) => {
+    setOpen({ items, x, y });
+  }, []);
 
   const openAt = useCallback((el: HTMLElement, items: MenuItem[]) => {
     const r = el.getBoundingClientRect();
@@ -43,7 +49,7 @@ export function useMenu(): Menu {
     ? createPortal(<Panel items={open.items} x={open.x} y={open.y} onClose={close} />, document.body)
     : null;
 
-  return { openAt, close, node };
+  return { openAt, openAtPoint, close, node };
 }
 
 function Panel({

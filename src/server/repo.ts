@@ -9,7 +9,7 @@ import type {
   Status,
   Task,
 } from '../shared/model.js';
-import type { Kind, Stub } from '../shared/api.js';
+import type { BulkAction, BulkItem, Kind, Stub } from '../shared/api.js';
 import type { DbCtx } from './db.js';
 import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
 import { newId, type IdPrefix } from './ids.js';
@@ -363,6 +363,8 @@ export type MoveTarget = {
   markId?: string | null | undefined;
   /** Fällt ein, wenn das Ziel kein eigenes Projekt hat (Unsortiert, smarte Gruppe). */
   projectId?: string | undefined;
+  /** In die Dokumentation oder heraus. Fehlt es, bleibt die Aufgabe, was sie ist. */
+  doc?: boolean | undefined;
   order?: number | undefined;
   /** Platz unter den künftigen Geschwistern; danach wird lückenlos neu nummeriert. */
   index?: number | undefined;
@@ -386,13 +388,15 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
     const projectId =
       targetProject(ctx, { parentId, milestoneId, groupId, projectId: target.projectId }) ??
       current['project_id'];
-    // Die Markierung wird nur angefasst, wenn sie ausdrücklich mitgeschickt wurde.
+    // Markierung und Dokumentations-Kennzeichen werden nur angefasst, wenn sie
+    // ausdrücklich mitgeschickt wurden.
     const markId = target.markId === undefined ? current['mark_id'] : target.markId;
+    const doc = target.doc === undefined ? (Number(current['doc']) ? 1 : 0) : target.doc ? 1 : 0;
 
     ctx.sqlite
       .prepare(
         `UPDATE task SET parent_id = ?, milestone_id = ?, group_id = ?, project_id = ?,
-           mark_id = ?, sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+           mark_id = ?, doc = ?, sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
       )
       .run(
         parentId,
@@ -400,6 +404,7 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
         groupId,
         projectId,
         markId,
+        doc,
         target.order ?? current['sort_order'],
         nowIso(),
         id,
@@ -423,7 +428,7 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
           groupId,
           projectId: String(projectId),
           markId: (markId as string | null) ?? null,
-          doc: Number(current['doc']) ? 1 : 0,
+          doc,
         },
         id,
         target.index,
@@ -551,6 +556,76 @@ export function hiddenMismatches(ctx: DbCtx): { id: string; stored: string | nul
   return rows
     .map((r) => ({ id: r.id, stored: r.hidden_by, want: want(r) }))
     .filter((x) => x.stored !== x.want);
+}
+
+/* -------------------------------------------------------- Mehrfachauswahl */
+
+/**
+ * Eine Handlung auf mehreren Aufgaben, als **eine** Transaktion: scheitert
+ * eine, bleibt der ganze Stapel liegen. Das ist der Unterschied zu vielen
+ * einzelnen Aufrufen aus dem Client – dort bliebe die Hälfte geändert zurück.
+ *
+ * Verschieben, Archivieren und Löschen nehmen Unteraufgaben ohnehin mit,
+ * deshalb fallen Ausgewählte weg, deren Vorfahre auch ausgewählt ist.
+ */
+export function bulk(ctx: DbCtx, items: BulkItem[], action: BulkAction): { count: number } {
+  return ctx.sqlite.transaction(() => {
+    const version = new Map(items.map((i) => [i.id, i.version]));
+    const ids = items.map((i) => i.id);
+    const targets = action.type === 'patch' || action.type === 'tag' ? ids : topLevel(ctx, ids);
+
+    for (const id of targets) {
+      const v = version.get(id) as number;
+      switch (action.type) {
+        case 'patch':
+          patch(ctx, 'task', id, v, action.changes);
+          break;
+        case 'tag': {
+          const tags = tagsOf(ctx, id);
+          const next = action.add
+            ? tags.includes(action.tag)
+              ? tags
+              : [...tags, action.tag]
+            : tags.filter((x) => x !== action.tag);
+          patch(ctx, 'task', id, v, { tags: next });
+          break;
+        }
+        case 'move':
+          // Ans Ende des Ziels, in der Reihenfolge der Auswahl.
+          move(ctx, id, v, { ...action.target, index: Number.MAX_SAFE_INTEGER });
+          break;
+        case 'archive':
+          expect(ctx, id, v);
+          archive(ctx, 'task', id);
+          break;
+        case 'trash':
+          expect(ctx, id, v);
+          remove(ctx, 'task', id);
+          break;
+      }
+    }
+
+    return { count: targets.length };
+  })();
+}
+
+/** Aufgaben ohne ausgewählten Vorfahren – `topSelected` aus dem Prototyp. */
+function topLevel(ctx: DbCtx, ids: string[]): string[] {
+  const chosen = new Set(ids);
+  const parentOf = (id: string): string | null =>
+    (readRow(ctx, 'task', id)?.['parent_id'] as string | null | undefined) ?? null;
+
+  return ids.filter((id) => {
+    for (let up = parentOf(id); up; up = parentOf(up)) if (chosen.has(up)) return false;
+    return true;
+  });
+}
+
+/** Die Versionsprüfung für Wege, die sie nicht selbst machen. */
+function expect(ctx: DbCtx, id: string, version: number): void {
+  const row = readRow(ctx, 'task', id);
+  if (!row) throw new NotFound();
+  if (row['version'] !== version) throw new Conflict(read(ctx, 'task', id));
 }
 
 /* ---------------------------------------------------------------- Löschen */

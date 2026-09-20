@@ -25,11 +25,44 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
 
       if (e.key === 'Escape') {
         if (typing) target?.blur();
+        // Escape hebt zuerst die Mehrfachauswahl auf, erst danach die Anzeige.
+        else if (store.multi.size) store.clearMulti();
         else if (store.selected) store.select(null);
         return;
       }
-      // Strg und Meta gehören dem Browser; Alt-Kombinationen kommen weiter unten.
+
+      // Strg+A wählt alles Sichtbare aus – die einzige Strg-Taste, die uns gehört.
+      if (!typing && (e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        store.selectAllVisible();
+        return;
+      }
+      // Sonst gehören Strg und Meta dem Browser; Alt-Kombinationen kommen weiter unten.
       if (typing || e.ctrlKey || e.metaKey) return;
+
+      // Umschalt plus Pfeiltaste erweitert die Auswahl, statt zu wandern.
+      if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        store.extendMulti(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (store.multi.size && !e.shiftKey) {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          void store.bulk(
+            { type: 'trash' },
+            (c) => `${c} ${c === 1 ? 'Aufgabe' : 'Aufgaben'} in den Papierkorb verschoben`,
+          );
+          return;
+        }
+        if (e.key === 'a' || e.key === 'A') {
+          void store.bulk(
+            { type: 'archive' },
+            (c) => `${c} ${c === 1 ? 'Aufgabe' : 'Aufgaben'} archiviert`,
+          );
+          return;
+        }
+      }
 
       if (e.key === 'n' || e.key === 'N' || e.key === '/') {
         e.preventDefault();

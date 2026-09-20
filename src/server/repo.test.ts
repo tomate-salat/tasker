@@ -10,6 +10,7 @@ import {
   Conflict,
   NotFound,
   archive,
+  bulk,
   create,
   hiddenMismatches,
   loadArchive,
@@ -478,6 +479,93 @@ describe('Löschen', () => {
       (ctx.sqlite.prepare('SELECT count(*) AS c FROM dependency').get() as { c: number }).c,
       0,
     );
+  });
+});
+
+describe('Mehrfachauswahl', () => {
+  const at = (t: Task) => ({ id: t.id, version: t.version });
+
+  it('setzt ein Feld auf allen ausgewählten Aufgaben', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const b = mkTask({ projectId: p.id, title: 'B' });
+
+    const r = bulk(ctx, [at(a), at(b)], { type: 'patch', changes: { prio: 1 } });
+
+    assert.equal(r.count, 2);
+    assert.equal(one(a.id).prio, 1);
+    assert.equal(one(b.id).prio, 1);
+  });
+
+  it('nimmt eine Aufgabe auch dann mit, wenn ihr Elternteil ausgewählt ist – beim Ändern', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const k = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
+
+    bulk(ctx, [at(a), at(k)], { type: 'patch', changes: { status: 'done' } });
+
+    assert.equal(one(k.id).status, 'done');
+  });
+
+  it('fügt ein Label hinzu, ohne die vorhandenen zu verlieren, und nimmt es wieder weg', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A', tags: ['code'] });
+    const b = mkTask({ projectId: p.id, title: 'B' });
+
+    bulk(ctx, [at(one(a.id)), at(one(b.id))], { type: 'tag', tag: 'ui', add: true });
+    assert.deepEqual(one(a.id).tags.sort(), ['code', 'ui']);
+    assert.deepEqual(one(b.id).tags, ['ui']);
+
+    bulk(ctx, [at(one(a.id)), at(one(b.id))], { type: 'tag', tag: 'ui', add: false });
+    assert.deepEqual(one(a.id).tags, ['code']);
+    assert.deepEqual(one(b.id).tags, []);
+  });
+
+  /** Beim Verschieben zählt nur die oberste ausgewählte Ebene – sonst risse es den Baum auseinander. */
+  it('verschiebt nur die obersten Ausgewählten und hängt sie hinten an', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const schon = mkTask({ projectId: p.id, title: 'Schon da', milestoneId: m.id });
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const k = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
+    const b = mkTask({ projectId: p.id, title: 'B' });
+
+    const r = bulk(ctx, [at(a), at(k), at(b)], { type: 'move', target: { milestoneId: m.id } });
+
+    assert.equal(r.count, 2);
+    assert.equal(one(k.id).parentId, a.id, 'das Kind bleibt, wo es ist');
+    const inMs = loadBootstrap(ctx)
+      .tasks.filter((t) => t.milestoneId === m.id)
+      .sort((x, y) => x.order - y.order)
+      .map((t) => t.title);
+    assert.deepEqual(inMs, ['Schon da', 'A', 'B']);
+  });
+
+  it('archiviert und löscht ebenfalls nur die obersten Ausgewählten', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const k = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
+
+    assert.equal(bulk(ctx, [at(a), at(k)], { type: 'archive' }).count, 1);
+    assert.deepEqual(active(), []);
+    assert.deepEqual(hiddenMismatches(ctx), []);
+
+    restore(ctx, 'task', a.id);
+    assert.equal(bulk(ctx, [at(one(a.id)), at(one(k.id))], { type: 'trash' }).count, 1);
+    assert.deepEqual(active(), []);
+  });
+
+  /** Alles oder nichts: eine überholte Version darf nicht die halbe Auswahl ändern. */
+  it('lässt bei einer veralteten Version den ganzen Stapel liegen', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const b = mkTask({ projectId: p.id, title: 'B' });
+
+    assert.throws(
+      () => bulk(ctx, [at(a), { id: b.id, version: 99 }], { type: 'patch', changes: { prio: 2 } }),
+      Conflict,
+    );
+    assert.equal(one(a.id).prio, 0);
   });
 });
 

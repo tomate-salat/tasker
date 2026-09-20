@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import {
   archiveQuery,
+  bulkBody,
   createSchemas,
   drawingCreate,
   drawingPatch,
@@ -20,6 +21,7 @@ import {
   Conflict,
   NotFound,
   archive,
+  bulk,
   create,
   loadArchive,
   loadBootstrap,
@@ -120,6 +122,15 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     // Verschieben rührt an Geschwistern und am ganzen Teilbaum – neu laden.
     return run(c, bus, () => move(ctx, id, version, target), {
       event: () => ({ type: 'reload', reason: 'Verschoben' }),
+    });
+  });
+
+  app.post('/bulk', async (c) => {
+    const body = bulkBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    // Ein Stapel rührt an vielen Zeilen auf einmal – die anderen Tabs laden neu.
+    return run(c, bus, () => bulk(ctx, body.data.items, body.data.action), {
+      event: () => ({ type: 'reload', reason: 'Mehrfachauswahl geändert' }),
     });
   });
 

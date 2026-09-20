@@ -6,6 +6,8 @@ import { TASK_STATUS } from './model.js';
 const id = z.string().min(1).max(64);
 const title = z.string().max(500);
 const desc = z.string().max(200_000);
+const prio = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]);
+const tag = z.string().min(1).max(60);
 const isoDay = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss YYYY-MM-DD sein')
@@ -36,11 +38,11 @@ export const createSchemas = {
     milestoneId: id.nullable().optional(),
     groupId: id.nullable().optional(),
     doc: z.boolean().optional(),
-    prio: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
+    prio: prio.optional(),
     status: z.enum(TASK_STATUS).optional(),
     categoryId: id.nullable().optional(),
     markId: id.nullable().optional(),
-    tags: z.array(z.string().min(1).max(60)).optional(),
+    tags: z.array(tag).optional(),
     deps: z.array(id).optional(),
   }),
 } satisfies Record<Kind, z.ZodType>;
@@ -68,13 +70,13 @@ export const patchSchemas = {
     .object({
       title,
       desc,
-      prio: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
+      prio,
       status: z.enum(TASK_STATUS),
       order: z.number(),
       categoryId: id.nullable(),
       markId: id.nullable(),
       doc: z.boolean(),
-      tags: z.array(z.string().min(1).max(60)),
+      tags: z.array(tag),
       deps: z.array(id),
     })
     .partial(),
@@ -86,10 +88,8 @@ export const patchBody = z.object({
   changes: z.record(z.string(), z.unknown()),
 });
 
-/** Verschieben innerhalb des Baums: neuer Platz plus neue Reihenfolge. */
-export const moveBody = z.object({
-  id,
-  version: z.number().int().positive(),
+/** Wohin eine Aufgabe wandert – ohne zu sagen, welche. */
+export const moveTarget = z.object({
   parentId: id.nullable().optional(),
   milestoneId: id.nullable().optional(),
   groupId: id.nullable().optional(),
@@ -100,10 +100,50 @@ export const moveBody = z.object({
   markId: id.nullable().optional(),
   /** Nur nötig, wenn das Ziel kein eigenes Projekt mitbringt (Unsortiert, smarte Gruppe). */
   projectId: id.optional(),
+  /** In die Dokumentation oder heraus. Fehlt das Feld, bleibt es, wie es war. */
+  doc: z.boolean().optional(),
   order: z.number().optional(),
   /** Platz unter den künftigen Geschwistern; der Server nummeriert danach neu. */
   index: z.number().int().min(0).optional(),
 });
+
+/** Verschieben innerhalb des Baums: neuer Platz plus neue Reihenfolge. */
+export const moveBody = moveTarget.extend({
+  id,
+  version: z.number().int().positive(),
+});
+
+/**
+ * Mehrfachauswahl: eine Handlung auf vielen Aufgaben, als eine Transaktion.
+ * Jede Aufgabe nennt ihre Version – passt eine nicht, bleibt alles, wie es war.
+ *
+ * Verschieben, Archivieren und In-den-Papierkorb nehmen Unteraufgaben ohnehin
+ * mit; der Server überspringt deshalb Ausgewählte, deren Vorfahre auch dabei
+ * ist. Das ist `topSelected` aus dem Prototyp.
+ */
+export const bulkBody = z.object({
+  items: z.array(z.object({ id, version: z.number().int().positive() })).min(1).max(1000),
+  action: z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('patch'),
+      changes: z
+        .object({
+          status: z.enum(TASK_STATUS),
+          prio,
+          categoryId: id.nullable(),
+          markId: id.nullable(),
+        })
+        .partial(),
+    }),
+    z.object({ type: z.literal('tag'), tag, add: z.boolean() }),
+    z.object({ type: z.literal('move'), target: moveTarget }),
+    z.object({ type: z.literal('archive') }),
+    z.object({ type: z.literal('trash') }),
+  ]),
+});
+
+export type BulkAction = z.infer<typeof bulkBody>['action'];
+export type BulkItem = z.infer<typeof bulkBody>['items'][number];
 
 /**
  * Zeichnungen: die Szene ist der Excalidraw-Zustand und wird am Stück

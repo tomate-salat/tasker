@@ -319,9 +319,8 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
    Der Strom ist damit eine Bequemlichkeit, keine Wahrheit: was vor stillem Datenverlust schützt,
    bleibt die Versionsprüfung beim Schreiben.
 
-   Noch offen: `POST /api/bulk` und der Undo-Stack aus Abschnitt 5. Beide hängen an einer
-   Mehrfachauswahl, die es in der Oberfläche noch nicht gibt – vorher wäre der Endpunkt ein
-   Endpunkt ohne Benutzer.
+   `POST /api/bulk` kam mit der Mehrfachauswahl (siehe „Angleichen an den Prototyp“). Noch offen
+   ist der Undo-Stack aus Abschnitt 5.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.
 11. Gamification, dezent.
 
@@ -356,9 +355,9 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Neu dafür: ein Aufklappmenü (`Menu.tsx`) mit Untermenüs, Häkchen und Trennern, sowie `marked`
   und `dompurify` für das Markdown (das Startpaket wächst dadurch von rund 266 auf 390 kB).
 - **Kontextmenüs.** Das „⋯“ im Inspektor zeigt vorerst nur, was es schon gibt (Umbenennen, Status,
-  Kategorie, Markierung, In den Backlog, Archivieren, Papierkorb). Die vollständigen Menüs des
-  Prototyps – Rechtsklick auf Zeilen, Duplizieren, „In anderes Projekt“, „Erledigte archivieren“,
-  Mehrfachauswahl – fehlen noch.
+  Kategorie, Markierung, In den Backlog, Archivieren, Papierkorb). Für die Mehrfachauswahl gibt es
+  den Rechtsklick inzwischen; für eine **einzelne** Zeile fehlt er noch, und mit ihm Duplizieren
+  und „In anderes Projekt“.
 - **Burnup.** Der Milestone-Inspektor hat im Prototyp eine Burnup-Kurve. Sie braucht ein
   Umfangs-Protokoll je Milestone (`m.log`), also eine eigene Tabelle und Fortschreibung bei jeder
   Änderung; deshalb ein eigener Punkt.
@@ -393,8 +392,26 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
 
   Nicht übernommen: das Feld „ungeschätzt“ in der Unterzeile – im Prototyp ist es ein Rest aus dem
   Punktemodell und immer 0.
+- ~~**Mehrfachauswahl.**~~ **Erledigt.** Strg-Klick wählt einzeln dazu, Umschalt-Klick den Bereich,
+  Umschalt plus Pfeiltaste erweitert, Strg+A nimmt alles Sichtbare, Escape hebt auf. Ausgewählte
+  Zeilen sind hinterlegt und stoßen als Block zusammen. Unten schwebt die Leiste des Prototyps mit
+  Status, Priorität, Kategorie, Markierung, Labels, Verschieben, Archivieren und Papierkorb;
+  derselbe Satz liegt als Kontextmenü auf dem Rechtsklick einer ausgewählten Zeile, und die
+  Kürzel `A` und `Entf` wirken auf die ganze Auswahl. Bei mehr als einer Auswahl zeigt der
+  Inspektor die Karten aus dem Prototyp – Titel, Status, Markierung, Ort und die Beschreibung zum
+  Anklicken und Bearbeiten.
+
+  Dafür neu: **`POST /api/bulk`** aus der API-Liste. Ein Aufruf, eine Transaktion – entweder alle
+  oder keine. Jede Aufgabe schickt ihre `version` mit; passt eine nicht, bleibt der ganze Stapel
+  liegen und der Client lädt neu. Verschieben, Archivieren und Löschen wirken nur auf die obersten
+  Ausgewählten, weil Unteraufgaben ohnehin mitgehen (`topSelected` im Prototyp). `POST /api/move`
+  kennt außerdem jetzt `doc`, sonst gäbe es keinen Weg in die Dokumentation und wieder heraus.
 - **Erledigte archivieren.** Der Prototyp hat in Plan und Backlog den Knopf „Erledigte archivieren
-  (n)“ neben den Reitern. Er gehört zur Mehrfachauswahl und fehlt hier noch.
+  (n)“ neben den Reitern. Er archiviert auch **Milestones**, und das kann `POST /api/bulk` bisher
+  nicht – der Stapel kennt nur Aufgaben. Fehlt deshalb noch.
+- **Undo.** Die Stapel-Meldungen des Prototyps bieten „Rückgängig“ an; hier gibt es das noch nicht.
+  Der Undo-Stack aus Abschnitt 5 gehört dem Client und muss die `version` gegenprüfen, also ein
+  eigener Punkt.
 
 ---
 

@@ -2623,3 +2623,201 @@ button.prop:hover {
     grid-column: 1 / -1;
   }
 }
+
+/* -------------------------------------------------------- Mehrfachauswahl
+ *
+ * Geometrie und Farben aus dem Prototyp. Die Leiste schwebt über allem, die
+ * Liste bekommt unten Platz, damit sie nichts verdeckt.
+ */
+
+.list .row.multi {
+  background: var(--accent-soft);
+}
+
+/* Zusammenhängende Auswahl wirkt wie ein Block: innere Ecken gerade. */
+.list .row.multi + .row.multi {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.list .row.multi:has(+ .row.multi) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.list.has-multi {
+  padding-bottom: 84px;
+}
+
+.bulk {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 62;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 6px 6px 6px 14px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+
+.bulk-count b {
+  font-weight: 600;
+}
+
+.bulk-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: color-mix(in srgb, var(--bg) 25%, transparent);
+}
+
+.bulk-btn {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--bg);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bulk-btn:hover,
+.bulk-btn:focus-visible {
+  background: color-mix(in srgb, var(--bg) 14%, transparent);
+  outline: none;
+}
+
+.bulk-btn[aria-haspopup]::after {
+  content: '▾';
+  margin-left: 5px;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+.bulk-btn.danger-text {
+  color: color-mix(in srgb, var(--p1) 70%, var(--bg));
+}
+
+.bulk .bulk-close {
+  margin-left: 2px;
+  color: var(--bg);
+}
+
+.bulk .bulk-close:hover {
+  background: color-mix(in srgb, var(--bg) 14%, transparent);
+  color: var(--bg);
+}
+
+/* Solange die Leiste steht, rückt die Kurzmeldung darüber. */
+body:has(.bulk) .toast {
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ------------------------------------------ Inspektor: Mehrfachauswahl */
+
+.multi-head {
+  font: 600 14px var(--body);
+  color: var(--ink);
+}
+
+.multi-hint {
+  margin: 2px 0 12px;
+}
+
+.mcard {
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--line);
+}
+
+.mcard-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.mcard-title {
+  min-width: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: 600 15px/1.3 var(--display);
+  text-align: left;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mcard-title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.mcard-where {
+  margin-left: auto;
+  max-width: 40%;
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcard-md {
+  display: block;
+  min-height: 40px;
+  margin: 0 -12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: text;
+  user-select: text;
+}
+
+.mcard-md:hover {
+  background: var(--bg);
+}
+
+.mcard-md:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.mcard-empty {
+  margin: 0;
+}
+
+.mcard-desc {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  max-height: 360px;
+  field-sizing: content;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 10px 12px;
+  font: 13px/1.55 var(--body);
+  color: var(--ink);
+}
+
+.mcard-desc:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--surface);
+}

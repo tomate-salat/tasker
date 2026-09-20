@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Kind } from '@shared/api.js';
+import type { BulkAction, Kind } from '@shared/api.js';
 import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
 import type { OutlineFilter } from '@shared/outline.js';
@@ -76,6 +76,24 @@ type State = {
   setView: (view: View) => void;
   select: (id: string | null) => void;
   edit: (id: string | null) => void;
+
+  /**
+   * Mehrfachauswahl. Nur Aufgaben, wie im Prototyp – Milestones und Gruppen
+   * bleiben draußen, weil die Stapel-Aktionen für sie nichts bedeuten.
+   */
+  multi: Set<string>;
+  /** Die sichtbare Zeilenfolge; die Liste meldet sie, Auswahl und Tastatur lesen sie. */
+  visible: string[];
+  /** Ankerzeile für die Bereichsauswahl mit der Umschalttaste. */
+  anchor: string | null;
+  setVisible: (ids: string[]) => void;
+  toggleMulti: (id: string) => void;
+  rangeMulti: (id: string) => void;
+  extendMulti: (delta: 1 | -1) => void;
+  selectAllVisible: () => void;
+  clearMulti: () => void;
+  /** Eine Handlung auf der ganzen Auswahl – ein Aufruf, eine Transaktion. */
+  bulk: (action: BulkAction, message: (count: number) => string) => Promise<void>;
   toggle: (id: string) => void;
   setCollapsed: (id: string, value: boolean) => void;
   say: (message: string | null) => void;
@@ -160,7 +178,10 @@ export const useStore = create<State>((set, get) => ({
         scope !== 'all' ? scope : (get().lastProject ?? boot.projects[0]?.id ?? null);
 
       applyTheme(settings.theme);
-      set({ boot, ws: new Workspace(boot), settings, scope, lastProject, loading: false });
+      const ws = new Workspace(boot);
+      // Was inzwischen weg ist – archiviert, gelöscht, woanders hin – fällt aus der Auswahl.
+      const multi = new Set([...get().multi].filter((id) => ws.task(id)));
+      set({ boot, ws, settings, scope, lastProject, loading: false, multi });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Laden fehlgeschlagen', loading: false });
     }
@@ -189,7 +210,9 @@ export const useStore = create<State>((set, get) => ({
 
   cycleTheme: async () => {
     const order: Settings['theme'][] = ['system', 'light', 'dark'];
-    const theme = order[(order.indexOf(get().settings.theme) + 1) % order.length] as Settings['theme'];
+    const theme = order[
+      (order.indexOf(get().settings.theme) + 1) % order.length
+    ] as Settings['theme'];
     await get().setTheme(theme);
   },
 
@@ -218,6 +241,111 @@ export const useStore = create<State>((set, get) => ({
   select: (id) => set({ selected: id, editing: null }),
 
   edit: (editing) => set({ editing, ...(editing ? { selected: editing } : {}) }),
+
+  /* ------------------------------------------------------ Mehrfachauswahl */
+
+  multi: new Set<string>(),
+  visible: [],
+  anchor: null,
+
+  setVisible: (ids) => {
+    const cur = get().visible;
+    if (cur.length === ids.length && cur.every((id, i) => id === ids[i])) return;
+    set({ visible: ids });
+  },
+
+  /**
+   * Strg-Klick. Ist noch nichts ausgewählt, kommt die gerade markierte Zeile
+   * mit dazu – sonst verlöre man sie beim ersten Strg-Klick aus dem Blick.
+   */
+  toggleMulti: (id) => {
+    const { multi, selected, ws } = get();
+    if (!ws?.task(id)) return;
+    const next = new Set(multi);
+    if (!next.size && selected && selected !== id && ws.task(selected)) next.add(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    set({ multi: next, anchor: id });
+  },
+
+  /** Umschalt-Klick: alles zwischen Anker und angeklickter Zeile. */
+  rangeMulti: (id) => {
+    const { multi, visible, anchor, selected, ws } = get();
+    if (!ws) return;
+    const from = visible.indexOf(anchor ?? selected ?? '');
+    const to = visible.indexOf(id);
+    if (from < 0 || to < 0) {
+      get().toggleMulti(id);
+      return;
+    }
+    const next = new Set(multi);
+    if (!next.size && selected && ws.task(selected)) next.add(selected);
+    for (const rid of visible.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+      if (ws.task(rid)) next.add(rid);
+    }
+    set({ multi: next });
+  },
+
+  /** Umschalt plus Pfeiltaste: die Auswahl wächst um die nächste Zeile. */
+  extendMulti: (delta) => {
+    const { multi, visible, anchor, selected, ws } = get();
+    if (!ws) return;
+    const at = visible.indexOf(anchor && multi.size ? anchor : (selected ?? ''));
+    const next = visible[Math.max(0, Math.min(visible.length - 1, at + delta))];
+    if (!next || !ws.task(next)) return;
+    const set_ = new Set(multi);
+    if (!set_.size && selected && ws.task(selected)) set_.add(selected);
+    set_.add(next);
+    set({ multi: set_, anchor: next });
+    document.querySelector(`[data-row="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+  },
+
+  selectAllVisible: () => {
+    const { visible, ws } = get();
+    if (!ws) return;
+    const multi = new Set(visible.filter((id) => ws.task(id)));
+    set({ multi, toast: `${multi.size} Aufgaben ausgewählt` });
+  },
+
+  clearMulti: () => {
+    if (!get().multi.size) return;
+    set({ multi: new Set(), anchor: null });
+  },
+
+  bulk: async (action, message) => {
+    const { ws, multi, visible } = get();
+    if (!ws || !multi.size) return;
+    const order = (id: string): number => {
+      const i = visible.indexOf(id);
+      return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    const items = [...multi]
+      .sort((a, b) => order(a) - order(b))
+      .map((id) => ws.task(id))
+      .filter((t): t is Task => !!t)
+      .map((t) => ({ id: t.id, version: t.version }));
+    if (!items.length) return;
+
+    try {
+      const { count } = await api.bulk(items, action);
+      await get().load();
+      // Archivieren und Löschen nehmen die Zeilen weg – danach ist nichts mehr ausgewählt.
+      const gone = action.type === 'archive' || action.type === 'trash';
+      set({
+        toast: message(count),
+        ...(gone ? { multi: new Set<string>(), anchor: null, selected: null } : {}),
+        ...(action.type === 'archive' ? { archive: null } : {}),
+        ...(action.type === 'trash' ? { trash: null } : {}),
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        await get().load();
+        set({ toast: 'Inzwischen woanders geändert – nichts geändert, bitte nochmal.' });
+        return;
+      }
+      set({ toast: e instanceof Error ? e.message : 'Stapel-Änderung fehlgeschlagen' });
+    }
+  },
 
   toggle: (id) => get().setCollapsed(id, !get().collapsed[id]),
 
@@ -351,7 +479,6 @@ export const useStore = create<State>((set, get) => ({
 
   live: false,
   setLive: (live) => set({ live }),
-
 
   applyEvent: (event) => {
     const boot = get().boot;

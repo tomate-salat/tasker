@@ -29,7 +29,8 @@ export function TaskRow({
   dnd?: Dnd;
   doc?: boolean;
 }) {
-  const { selected, select, collapsed, toggle, editing } = useStore();
+  const { selected, select, collapsed, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } =
+    useStore();
   const kids = ws.kids(task.id);
   const open = !collapsed[task.id];
   const mark = ws.mark(task.markId);
@@ -52,7 +53,8 @@ export function TaskRow({
       className={[
         'row task-row',
         doc ? 'doc-row' : 'prio-left',
-        selected === task.id ? 'sel' : '',
+        multi.has(task.id) ? 'multi' : '',
+        selected === task.id && !multi.size ? 'sel' : '',
         isDone(task) ? 'done' : '',
         kids.length ? 'has-kids' : '',
         dnd?.dragId === task.id ? 'dragging' : '',
@@ -61,7 +63,15 @@ export function TaskRow({
         .filter(Boolean)
         .join(' ')}
       style={{ '--d': depth } as React.CSSProperties}
-      onClick={() => select(task.id)}
+      onClick={(e) => {
+        // Strg wählt einzeln dazu, Umschalt den Bereich – sonst gilt nur diese Zeile.
+        if (e.ctrlKey || e.metaKey) toggleMulti(task.id);
+        else if (e.shiftKey) rangeMulti(task.id);
+        else {
+          clearMulti();
+          select(task.id);
+        }
+      }}
       draggable={!editing}
       onDragStart={() => dnd?.start(task.id)}
       onDragEnd={() => dnd?.end()}
@@ -357,7 +367,7 @@ function Caret({
   );
 }
 
-function StatusDot({ task, implicit }: { task: Task; implicit: boolean }) {
+export function StatusDot({ task, implicit }: { task: Task; implicit: boolean }) {
   const label = implicit ? 'Offen · eine Unteraufgabe ist in Arbeit' : task.status;
   return (
     <span
@@ -372,7 +382,7 @@ function StatusDot({ task, implicit }: { task: Task; implicit: boolean }) {
 }
 
 /** Checklisten in der Beschreibung zählen mit – als kleines Kästchen mit Zahl. */
-function ChecklistBadge({ desc }: { desc: string }) {
+export function ChecklistBadge({ desc }: { desc: string }) {
   const c = checklist(desc);
   if (!c.total) return null;
   return (

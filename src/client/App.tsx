@@ -8,6 +8,8 @@ import { SIDE_ICON } from './ui/icons.js';
 import { Inspector } from './ui/Inspector.js';
 import { NewThing } from './ui/NewThing.js';
 import { QuickAdd } from './ui/QuickAdd.js';
+import { BulkBar } from './ui/BulkBar.js';
+import { MultiDetail } from './ui/MultiDetail.js';
 import { Sidebar } from './ui/Sidebar.js';
 import { Timeline } from './ui/Timeline.js';
 import { ArchiveView, Outline, TrashView } from './ui/views.js';
@@ -42,7 +44,7 @@ function Shell({
   onLogout: () => void;
 }) {
   const state = useStore();
-  const { ws, view, setView, selected, loading, error, toast, load, say, addTask, live, scope } =
+  const { ws, view, setView, selected, loading, error, toast, load, say, addTask, live, scope, multi } =
     state;
   const projectId = currentProjectId(state);
   const [dialog, setDialog] = useState<Dialog>('none');
@@ -125,7 +127,11 @@ function Shell({
     ws.milestone(selected)?.id ?? ws.milestones.find((m) => m.projectId === projectId)?.id ?? null;
 
   return (
-    <div className={`app ${selected ? 'with-detail' : ''} ${state.sideCollapsed ? 'side-collapsed' : ''}`}>
+    <div
+      className={`app ${selected || multi.size > 1 ? 'with-detail' : ''} ${
+        state.sideCollapsed ? 'side-collapsed' : ''
+      }`}
+    >
       <Sidebar
         ws={ws}
         account={account}
@@ -204,7 +210,10 @@ function Shell({
         {view === 'trash' && <TrashView />}
       </main>
 
-      {selected && <Inspector ws={ws} id={selected} />}
+      {/* Bei mehreren Ausgewählten zeigt der Inspektor sie alle nebeneinander. */}
+      {multi.size > 1 ? <MultiDetail ws={ws} /> : selected && <Inspector ws={ws} id={selected} />}
+
+      <BulkBar ws={ws} />
 
       {dialog === 'categories' && (
         <CategoriesDialog ws={ws} projectId={projectId} onClose={() => setDialog('none')} />

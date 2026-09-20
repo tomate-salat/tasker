@@ -1,4 +1,4 @@
-import type { Kind, Stub } from '@shared/api.js';
+import type { BulkAction, BulkItem, Kind, Stub } from '@shared/api.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data } from '@shared/model.js';
 
@@ -112,6 +112,9 @@ export const api = {
 
   move: <T>(id: string, version: number, target: Record<string, unknown>) =>
     post<T>('/api/move', { id, version, ...target }),
+
+  bulk: (items: BulkItem[], action: BulkAction) =>
+    post<{ count: number }>('/api/bulk', { items, action }),
 
   archivePage: (params: { q?: string; projectId?: string }) => {
     const q = new URLSearchParams();

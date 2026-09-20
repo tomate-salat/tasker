@@ -5,8 +5,10 @@ import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
+import { bulkMenu } from './BulkBar.js';
 import { useDnd } from './dnd.js';
 import { useKeys } from './keys.js';
+import { useMenu } from './Menu.js';
 import { NewThing } from './NewThing.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
 
@@ -29,89 +31,113 @@ export function Outline({
   const { collapsed, settings, filter } = state;
   const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
   const dnd = useDnd(ws);
+  const menu = useMenu();
   useKeys(ws, rows);
+
+  // Auswahl und Tastatur brauchen dieselbe Reihenfolge, die hier gezeichnet wird.
+  const { setVisible } = state;
+  useEffect(() => {
+    setVisible(rows.filter((r) => r.type === 'task').map((r) => r.id));
+  });
 
   const plan = view === 'plan' ? schedule(ws, { velocity: settings.velocity }) : null;
 
   if (!rows.length) return <Empty>{view === 'plan' ? <PlanEmpty /> : EMPTY[view]}</Empty>;
 
   return (
-    <div className="list" onDragEnd={() => dnd.end()}>
-      {rows.map((row) => {
-        if (row.type === 'task') {
-          return (
-            <TaskRow
-              key={row.id}
-              ws={ws}
-              task={row.task}
-              depth={row.depth}
-              dnd={dnd}
-              doc={view === 'docs'}
-            />
-          );
-        }
-        if (row.type === 'group') {
-          return (
-            <GroupRow
-              key={row.id}
-              row={row}
-              count={openIn(ws, row.tasks)}
-              onAdd={() => void addIn(row.projectId, row.place)}
-              onManageMarks={onManageMarks}
-              dnd={dnd}
-            />
-          );
-        }
-        if (row.type === 'empty') {
-          return (
-            <EmptyDrop
-              key={row.id}
-              row={row}
-              onAdd={() => void addIn(row.projectId, row.place)}
-              dnd={dnd}
-            />
-          );
-        }
-        if (row.type === 'section') {
-          return (
-            <SectionRow
-              key={row.id}
-              title={row.title}
-              action={<SectionAction row={row} onManageMarks={onManageMarks} />}
-            />
-          );
-        }
-        if (row.type === 'hint') {
-          return (
-            <div key={row.id} className="hint-row">
-              {row.text}
-            </div>
-          );
-        }
-        if (row.type === 'project') {
-          return (
-            <div key={row.id} className="phead">
-              <span className="dot" style={{ background: row.project.color }} aria-hidden="true" />
-              {row.project.name}
-            </div>
-          );
-        }
+    <>
+      <div
+        className={`list ${state.multi.size ? 'has-multi' : ''}`}
+        onDragEnd={() => dnd.end()}
+        onContextMenu={(e) => {
+          // Rechtsklick auf eine ausgewählte Zeile gilt der ganzen Auswahl.
+          const id = (e.target as HTMLElement).closest('[data-row]')?.getAttribute('data-row');
+          if (!id || !state.multi.has(id)) return;
+          e.preventDefault();
+          menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ws));
+        }}
+      >
+        {rows.map((row) => {
+          if (row.type === 'task') {
+            return (
+              <TaskRow
+                key={row.id}
+                ws={ws}
+                task={row.task}
+                depth={row.depth}
+                dnd={dnd}
+                doc={view === 'docs'}
+              />
+            );
+          }
+          if (row.type === 'group') {
+            return (
+              <GroupRow
+                key={row.id}
+                row={row}
+                count={openIn(ws, row.tasks)}
+                onAdd={() => void addIn(row.projectId, row.place)}
+                onManageMarks={onManageMarks}
+                dnd={dnd}
+              />
+            );
+          }
+          if (row.type === 'empty') {
+            return (
+              <EmptyDrop
+                key={row.id}
+                row={row}
+                onAdd={() => void addIn(row.projectId, row.place)}
+                dnd={dnd}
+              />
+            );
+          }
+          if (row.type === 'section') {
+            return (
+              <SectionRow
+                key={row.id}
+                title={row.title}
+                action={<SectionAction row={row} onManageMarks={onManageMarks} />}
+              />
+            );
+          }
+          if (row.type === 'hint') {
+            return (
+              <div key={row.id} className="hint-row">
+                {row.text}
+              </div>
+            );
+          }
+          if (row.type === 'project') {
+            return (
+              <div key={row.id} className="phead">
+                <span
+                  className="dot"
+                  style={{ background: row.project.color }}
+                  aria-hidden="true"
+                />
+                {row.project.name}
+              </div>
+            );
+          }
 
-        const m = row.milestone;
-        const stats = milestoneStats(ws, m);
-        return (
-          <MilestoneRow
-            key={m.id}
-            ws={ws}
-            milestone={m}
-            dnd={dnd}
-            stats={stats}
-            pct={milestoneProgressPct(ws, m)}
-            right={<MilestoneRight ws={ws} milestone={m} line={plan?.byId.get(m.id) ?? null} />}
-          />
-        );
-      })}
-    </div>
+          const m = row.milestone;
+          const stats = milestoneStats(ws, m);
+          return (
+            <MilestoneRow
+              key={m.id}
+              ws={ws}
+              milestone={m}
+              dnd={dnd}
+              stats={stats}
+              pct={milestoneProgressPct(ws, m)}
+              right={<MilestoneRight ws={ws} milestone={m} line={plan?.byId.get(m.id) ?? null} />}
+            />
+          );
+        })}
+      </div>
+      {menu.node}
+    </>
   );
 }
 
@@ -147,7 +173,9 @@ function SectionAction({
       placeholder="Titel des Milestones"
       // Aus dem Backlog heraus ist ein Milestone ein vorbereiteter.
       onCreate={async (t) =>
-        void (await useStore.getState().addMilestone(t, { planned: false, projectId: row.projectId }))
+        void (await useStore
+          .getState()
+          .addMilestone(t, { planned: false, projectId: row.projectId }))
       }
     />
   );
@@ -239,7 +267,10 @@ function MilestoneRight({
                 : `Prognose bei ${settings.velocity} Aufgaben pro Woche`
             }
           >
-            bis {line.fixedEnd && milestone.endDate ? formatDay(new Date(milestone.endDate)) : formatWeeks(line.end)}
+            bis{' '}
+            {line.fixedEnd && milestone.endDate
+              ? formatDay(new Date(milestone.endDate))
+              : formatWeeks(line.end)}
             {line.late ? ' ⚠' : ''}
           </span>
         )
