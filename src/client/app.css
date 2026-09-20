@@ -2459,3 +2459,167 @@ button.prop:hover {
 .side-new:hover {
   color: var(--accent);
 }
+
+/* ------------------------------------------------------------- Zeitplan
+ *
+ * Geometrie und Farben aus dem Prototyp. Die Rasterlinien der Spur sind ein
+ * Streifenverlauf mit einer Woche Abstand (`--wk`), damit die Achse ohne
+ * zusätzliche Elemente auskommt.
+ */
+
+.tl {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 24px 60px;
+}
+
+.tl-note {
+  margin: 0 0 14px;
+  max-width: 70ch;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tl-axis,
+.tl-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 118px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.tl-axis {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font: 11px var(--mono);
+  color: var(--faint);
+}
+
+.tl-weeks {
+  position: relative;
+  height: 14px;
+}
+
+.tl-weeks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.tl-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tl-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 15px/1.2 var(--display);
+}
+
+.tl-name .linkish {
+  color: var(--ink);
+}
+
+.tl-sub {
+  margin-top: 3px;
+  padding-left: 17px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tl-sub .wait {
+  color: var(--p2);
+}
+
+.tl-dates {
+  font: 12px var(--mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-track {
+  position: relative;
+  height: 22px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(var(--wk) - 1px),
+    var(--line) calc(var(--wk) - 1px) var(--wk)
+  );
+}
+
+.tl-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  min-width: 4px;
+  border-radius: 4px;
+  opacity: 0.85;
+}
+
+/* Der schon vergangene Teil eines laufenden Milestones. */
+.tl-bar.past {
+  border-radius: 4px 0 0 4px;
+  opacity: 0.3;
+}
+
+.tl-bar.donebar {
+  opacity: 0.35;
+}
+
+/* Der Überhang über ein gesetztes Enddatum hinaus. */
+.tl-bar.over {
+  background: repeating-linear-gradient(135deg, var(--p1) 0 4px, transparent 4px 8px) !important;
+  border-radius: 0 4px 4px 0;
+  opacity: 0.85;
+}
+
+.tl-today {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--p1);
+  opacity: 0.7;
+  z-index: 1;
+}
+
+.tl-done {
+  padding-left: 4px;
+  font: 12px var(--mono);
+  line-height: 22px;
+  color: var(--ok);
+}
+
+.warn-text {
+  color: var(--p1);
+}
+
+/* Schmal: die Achse entfällt, der Balken bekommt eine eigene Zeile. */
+@media (max-width: 900px) {
+  .tl {
+    padding: 4px 16px 60px;
+  }
+
+  .tl-axis {
+    display: none;
+  }
+
+  .tl-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+
+  .tl-dates {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .tl-track {
+    grid-column: 1 / -1;
+  }
+}

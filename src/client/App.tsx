@@ -9,6 +9,7 @@ import { Inspector } from './ui/Inspector.js';
 import { NewThing } from './ui/NewThing.js';
 import { QuickAdd } from './ui/QuickAdd.js';
 import { Sidebar } from './ui/Sidebar.js';
+import { Timeline } from './ui/Timeline.js';
 import { ArchiveView, Outline, TrashView } from './ui/views.js';
 
 export function App() {
@@ -191,14 +192,14 @@ function Shell({
           </nav>
         </header>
 
+        {/* Die Schnellerfassung steht im Prototyp über der Filterleiste und in jeder Ansicht. */}
+        <QuickAdd ws={ws} projectId={projectId} />
         <FilterBar ws={ws} />
 
         {(view === 'plan' || view === 'backlog' || view === 'docs') && (
-          <>
-            <QuickAdd ws={ws} projectId={projectId} />
-            <Outline ws={ws} view={view} onManageMarks={() => setDialog('marks')} />
-          </>
+          <Outline ws={ws} view={view} onManageMarks={() => setDialog('marks')} />
         )}
+        {view === 'timeline' && <Timeline ws={ws} />}
         {view === 'archive' && <ArchiveView />}
         {view === 'trash' && <TrashView />}
       </main>
@@ -235,7 +236,30 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   const mark = ws.mark(filter.markId ?? null);
   const any = filter.tag || category || mark;
 
-  if (!any && view !== 'plan') return null;
+  // Wie im Prototyp: über dem Zeitplan steht allein das Tempo, sonst die Filter.
+  if (view === 'timeline') {
+    return (
+      <div className="toolbar">
+        <label className="ctl" title="Aufgaben pro Woche – Grundlage der Prognose">
+          Tempo
+          <input
+            type="number"
+            min={1}
+            max={200}
+            defaultValue={settings.velocity}
+            key={settings.velocity}
+            onBlur={(e) => void setVelocity(Number(e.target.value))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+          />
+          Aufgaben / Woche
+        </label>
+      </div>
+    );
+  }
+
+  if (!any) return null;
 
   return (
     <div className="toolbar">
@@ -261,26 +285,6 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
         >
           {mark.emoji} {mark.name} ×
         </button>
-      )}
-
-      <span className="spacer" />
-
-      {view === 'plan' && (
-        <label className="ctl" title="Aufgaben pro Woche – Grundlage der Prognose">
-          Tempo
-          <input
-            type="number"
-            min={1}
-            max={200}
-            defaultValue={settings.velocity}
-            key={settings.velocity}
-            onBlur={(e) => void setVelocity(Number(e.target.value))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.currentTarget.blur();
-            }}
-          />
-          Aufgaben / Woche
-        </label>
       )}
     </div>
   );

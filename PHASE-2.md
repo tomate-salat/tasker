@@ -382,7 +382,17 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Neunummerierung zählt Unsortiert, Dokumentation und jede smarte Gruppe getrennt. Außerdem nehmen
   **Milestone und Gruppe ihre Aufgaben nicht mehr mit in den Papierkorb** – wie im Prototyp sind sie
   eine Ablage, kein Besitzer; die Aufgaben liegen danach unter „Unsortiert“.
-- **Zeitplan.** Die Ansicht fehlt bislang ganz.
+- ~~**Zeitplan.**~~ **Erledigt.** Der eigene Reiter mit Hinweistext, Wochenachse (KW-Beschriftung,
+  Schrittweite nach Spannweite), einer Zeile je eingeplantem Milestone und dem Balken aus dem
+  Prototyp: blasser Vorlauf bei einem Startdatum in der Vergangenheit, schraffierter Überhang über
+  ein zu knappes Enddatum, „✓ Done“ beziehungsweise „keine offenen Aufgaben“ statt eines Balkens.
+  Gerechnet wird immer projektübergreifend, der Projektfilter wählt nur die sichtbaren Zeilen aus.
+  Das Tempo steht wie im Prototyp allein über dieser Ansicht – aus dem Plan ist es dorthin
+  gewandert. Dabei ist auch die Reihenfolge im Kopf geradegezogen: die Schnellerfassung steht jetzt
+  wie im Prototyp über der Filterleiste und in jeder Ansicht, nicht nur in Plan, Backlog und Doku.
+
+  Nicht übernommen: das Feld „ungeschätzt“ in der Unterzeile – im Prototyp ist es ein Rest aus dem
+  Punktemodell und immer 0.
 - **Erledigte archivieren.** Der Prototyp hat in Plan und Backlog den Knopf „Erledigte archivieren
   (n)“ neben den Reitern. Er gehört zur Mehrfachauswahl und fehlt hier noch.
 

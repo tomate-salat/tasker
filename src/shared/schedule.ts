@@ -10,6 +10,23 @@ export function weeksFromToday(iso: string, today: Date = new Date()): number {
   return (target.getTime() - base.getTime()) / (7 * 864e5);
 }
 
+/** Die Umkehrung: das Datum, das `weeks` Wochen von heute entfernt liegt. */
+export function dateFromWeeks(weeks: number, today: Date = new Date()): Date {
+  const d = new Date(today);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + Math.round(weeks * 7));
+  return d;
+}
+
+/** Kalenderwoche nach ISO 8601 – die Beschriftung der Zeitachse. */
+export function isoWeek(d: Date): number {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  // Auf den Donnerstag derselben Woche schieben; dessen Jahr zählt.
+  x.setUTCDate(x.getUTCDate() + 4 - (x.getUTCDay() || 7));
+  const jan1 = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+  return Math.ceil(((x.getTime() - jan1.getTime()) / 864e5 + 1) / 7);
+}
+
 export type ScheduledMilestone = MilestoneStats & {
   milestone: Milestone;
   /** Milestones, auf die gewartet wird – eigene und über Task-Abhängigkeiten gefundene. */

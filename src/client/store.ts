@@ -13,19 +13,20 @@ import {
   type TrashList,
 } from './api.js';
 
-export const VIEWS = ['plan', 'backlog', 'docs', 'archive', 'trash'] as const;
+export const VIEWS = ['plan', 'backlog', 'docs', 'timeline', 'archive', 'trash'] as const;
 export type View = (typeof VIEWS)[number];
 
 export const VIEW_LABEL: Record<View, string> = {
   plan: 'Plan',
   backlog: 'Backlog',
   docs: 'Doku',
+  timeline: 'Zeitplan',
   archive: 'Archiv',
   trash: 'Papierkorb',
 };
 
 /** Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste. */
-export const TABS: View[] = ['plan', 'backlog', 'docs', 'archive'];
+export const TABS: View[] = ['plan', 'backlog', 'docs', 'timeline', 'archive'];
 
 /**
  * Der gesamte aktive Datenbestand liegt im Speicher – wie `S` im Prototyp.

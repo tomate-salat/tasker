@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { schedule, weeksFromToday } from './schedule.js';
+import { dateFromWeeks, isoWeek, schedule, weeksFromToday } from './schedule.js';
 import { Builder } from './testing.js';
 
 // Fester Bezugstag, damit die Tests nicht vom Kalender abhängen.
@@ -17,7 +17,25 @@ describe('weeksFromToday', () => {
     assert.equal(weeksFromToday(day(0), TODAY), 0);
     assert.equal(weeksFromToday(day(-14), TODAY), -2);
   });
+
+  it('lässt sich mit dateFromWeeks wieder umkehren', () => {
+    for (const w of [-2, 0, 1, 3.5]) {
+      assert.equal(weeksFromToday(iso(dateFromWeeks(w, TODAY)), TODAY), Math.round(w * 7) / 7);
+    }
+  });
 });
+
+describe('isoWeek', () => {
+  it('zählt die Kalenderwochen nach ISO 8601', () => {
+    // Der 1.1.2027 ist ein Freitag und gehört noch zur 53. Woche von 2026.
+    assert.equal(isoWeek(new Date('2027-01-01T12:00:00')), 53);
+    // Der 4.1.2027 ist der Montag der ersten Woche.
+    assert.equal(isoWeek(new Date('2027-01-04T12:00:00')), 1);
+    assert.equal(isoWeek(new Date('2026-09-19T12:00:00')), 38);
+  });
+});
+
+const iso = (d: Date): string => d.toISOString().slice(0, 10);
 
 describe('Zeitplan', () => {
   it('rechnet offene Aufgaben durch das Tempo', () => {
