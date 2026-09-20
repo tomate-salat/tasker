@@ -9,6 +9,7 @@ import {
   kindSchema,
   moveBody,
   settingsBody,
+  stepsBody,
   patchBody,
   patchSchemas,
   type Kind,
@@ -20,6 +21,7 @@ import { appEvents, type EventBus } from './events.js';
 import {
   Conflict,
   NotFound,
+  applySteps,
   archive,
   bulk,
   create,
@@ -131,6 +133,28 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     // Ein Stapel rührt an vielen Zeilen auf einmal – die anderen Tabs laden neu.
     return run(c, bus, () => bulk(ctx, body.data.items, body.data.action), {
       event: () => ({ type: 'reload', reason: 'Mehrfachauswahl geändert' }),
+    });
+  });
+
+  /**
+   * Mehrere Schritte in einer Transaktion. Damit läuft „Erledigte archivieren“
+   * (Milestones und Aufgaben gemischt) und die Rücknahme: der Client schickt
+   * die Gegen-Schritte zurück, die er beim Ausführen mitbekommen hat.
+   */
+  app.post('/steps', async (c) => {
+    const body = stepsBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+
+    // Die Änderungen eines `patch`-Schritts hängen am Typ und werden erst hier geprüft.
+    for (const s of body.data.steps) {
+      if (s.op !== 'patch') continue;
+      const changes = patchSchemas[s.kind].safeParse(s.changes);
+      if (!changes.success) return fail(c, changes.error);
+      s.changes = changes.data as Record<string, unknown>;
+    }
+
+    return run(c, bus, () => applySteps(ctx, body.data.steps), {
+      event: () => ({ type: 'reload', reason: 'Mehrere Änderungen' }),
     });
   });
 

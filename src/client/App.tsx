@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api, type Account } from './api.js';
 import { connectEvents } from './events.js';
 import { Login } from './Login.js';
-import { currentProjectId, TABS, useStore, VIEW_LABEL } from './store.js';
+import { doneCandidates } from '@shared/outline.js';
+import { currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL } from './store.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { SIDE_ICON } from './ui/icons.js';
 import { Inspector } from './ui/Inspector.js';
@@ -170,6 +171,7 @@ function Shell({
             ))}
 
             <span className="tab-actions">
+              <ArchiveDone ws={ws} />
               {view === 'plan' && (
                 <NewThing
                   label="+ Milestone"
@@ -231,10 +233,39 @@ function Shell({
 
       {toast && (
         <div className="toast" role="status">
-          {toast}
+          <span>{toast}</span>
+          {state.toastUndo && (
+            <button onClick={() => void state.undo()} title="Rückgängig (Strg+Z)">
+              Rückgängig
+            </button>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * „Erledigte archivieren (n)“ neben den Reitern – wie im Prototyp nur in Plan
+ * und Backlog, und nur wenn es überhaupt etwas Erledigtes gibt.
+ */
+function ArchiveDone({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
+  const state = useStore();
+  const { view, archiveDone } = state;
+  if (view !== 'plan' && view !== 'backlog') return null;
+
+  const found = doneCandidates(ws, { view, projectIds: scopeProjectIds(state) });
+  const n = found.milestones.length + found.tasks.length;
+  if (!n) return null;
+
+  return (
+    <button
+      className="btn ghost"
+      title="Erledigte Milestones und Aufgaben dieser Ansicht archivieren"
+      onClick={() => void archiveDone()}
+    >
+      Erledigte archivieren ({n})
+    </button>
   );
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { outline, siblings, smartTasks, unsortedTasks, type OutlineRow } from './outline.js';
+import { doneCandidates, outline, siblings, smartTasks, unsortedTasks, type OutlineRow } from './outline.js';
 import { Builder } from './testing.js';
 
 /**
@@ -112,5 +112,50 @@ describe('Behälter loser Aufgaben', () => {
       siblings(ws, bug).map((t) => t.id),
       ['t-bug'],
     );
+  });
+});
+
+describe('Erledigte archivieren', () => {
+  const ws = () =>
+    new Builder()
+      .project('p')
+      .milestone('fertig', 'p', { planned: true, status: 'done' })
+      .milestone('laeuft', 'p', { planned: true })
+      .milestone('entwurf', 'p', { planned: false, status: 'done' })
+      .task('imFertigen', 'p', { milestoneId: 'fertig', status: 'done' })
+      .task('imLaufenden', 'p', { milestoneId: 'laeuft', status: 'done' })
+      .task('offen', 'p', { milestoneId: 'laeuft' })
+      .task('lose', 'p', { status: 'done' })
+      .task('seite', 'p', { doc: true, status: 'done' })
+      .build();
+
+  it('nimmt im Plan nur eingeplante Milestones und ihre erledigten Aufgaben', () => {
+    const found = doneCandidates(ws(), { view: 'plan', projectIds: ['p'] });
+    assert.deepEqual(found.milestones.map((m) => m.id), ['fertig']);
+    // „imFertigen“ geht mit seinem Milestone mit und zählt nicht doppelt.
+    assert.deepEqual(found.tasks.map((t) => t.id), ['imLaufenden']);
+  });
+
+  it('nimmt im Backlog die vorbereiteten Milestones und alles Lose', () => {
+    const found = doneCandidates(ws(), { view: 'backlog', projectIds: ['p'] });
+    assert.deepEqual(found.milestones.map((m) => m.id), ['entwurf']);
+    assert.deepEqual(found.tasks.map((t) => t.id), ['lose']);
+  });
+
+  it('lässt Dokumentationsseiten in Ruhe', () => {
+    for (const view of ['plan', 'backlog'] as const) {
+      const found = doneCandidates(ws(), { view, projectIds: ['p'] });
+      assert.equal(found.tasks.some((t) => t.doc), false);
+    }
+  });
+
+  it('zählt eine Aufgabe mit, deren Unteraufgaben alle erledigt sind', () => {
+    const w = new Builder()
+      .project('p')
+      .task('eltern', 'p')
+      .task('kind', 'p', { parentId: 'eltern', status: 'done' })
+      .build();
+    const found = doneCandidates(w, { view: 'backlog', projectIds: ['p'] });
+    assert.deepEqual(found.tasks.map((t) => t.id), ['eltern']);
   });
 });

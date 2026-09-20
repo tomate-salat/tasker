@@ -146,6 +146,44 @@ export type BulkAction = z.infer<typeof bulkBody>['action'];
 export type BulkItem = z.infer<typeof bulkBody>['items'][number];
 
 /**
+ * Ein einzelner Schritt für `POST /api/steps`: eine Liste kleiner Operationen,
+ * die zusammen in einer Transaktion laufen.
+ *
+ * Zwei Dinge brauchen das. „Erledigte archivieren“ fasst Milestones **und**
+ * Aufgaben in einem Rutsch – das kann `/api/bulk` nicht, der kennt nur
+ * Aufgaben. Und die **Rücknahme**: jede schreibende Route liefert die
+ * Gegen-Schritte gleich mit, der Client legt sie auf seinen Stapel und schickt
+ * sie bei „Rückgängig“ hierher zurück. Der Server führt damit keinen eigenen
+ * Verlauf – er weiß nur, wie man etwas rückwärts tut.
+ */
+export const stepSchema = z.discriminatedUnion('op', [
+  z.object({
+    op: z.literal('patch'),
+    kind: kindSchema,
+    id,
+    version: z.number().int().positive(),
+    changes: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    op: z.literal('move'),
+    id,
+    version: z.number().int().positive(),
+    target: moveTarget,
+  }),
+  z.object({ op: z.literal('archive'), kind: z.enum(['task', 'milestone']), id }),
+  z.object({ op: z.literal('unarchive'), kind: z.enum(['task', 'milestone']), id }),
+  z.object({ op: z.literal('trash'), kind: kindSchema, id }),
+  z.object({ op: z.literal('untrash'), trashId: id }),
+]);
+
+export const stepsBody = z.object({ steps: z.array(stepSchema).min(1).max(1000) });
+
+export type Step = z.infer<typeof stepSchema>;
+
+/** Was eine schreibende Route zurückgibt, wenn sie rückgängig gemacht werden kann. */
+export type Undoable = { count: number; undo: Step[] };
+
+/**
  * Zeichnungen: die Szene ist der Excalidraw-Zustand und wird am Stück
  * gespeichert. Geprüft wird nur die Form, nicht jedes einzelne Element –
  * das Format gehört Excalidraw, nicht uns.

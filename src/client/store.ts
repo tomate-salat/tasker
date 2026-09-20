@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import type { BulkAction, Kind } from '@shared/api.js';
+import type { BulkAction, Kind, Step } from '@shared/api.js';
 import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
-import type { OutlineFilter } from '@shared/outline.js';
+import { doneCandidates, type OutlineFilter } from '@shared/outline.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -94,6 +94,19 @@ type State = {
   clearMulti: () => void;
   /** Eine Handlung auf der ganzen Auswahl – ein Aufruf, eine Transaktion. */
   bulk: (action: BulkAction, message: (count: number) => string) => Promise<void>;
+
+  /**
+   * Der Rücknahme-Stapel. Er lebt im Tab, nicht auf dem Server: jede
+   * schreibende Handlung legt hier die Gegen-Schritte ab, die sie zurücknehmen
+   * würden. Beim Zurücknehmen prüft der Server die `version` mit – eine
+   * Rücknahme auf einem überholten Stand wird abgelehnt statt blind ausgeführt.
+   */
+  undoStack: { label: string; steps: Step[] }[];
+  /** Zeigt die Kurzmeldung gerade ein „Rückgängig“ an? */
+  toastUndo: boolean;
+  undo: () => Promise<void>;
+  /** Archiviert alles Erledigte der aktuellen Ansicht – Milestones und Aufgaben. */
+  archiveDone: () => Promise<void>;
   toggle: (id: string) => void;
   setCollapsed: (id: string, value: boolean) => void;
   say: (message: string | null) => void;
@@ -327,12 +340,12 @@ export const useStore = create<State>((set, get) => ({
     if (!items.length) return;
 
     try {
-      const { count } = await api.bulk(items, action);
+      const { count, undo } = await api.bulk(items, action);
       await get().load();
       // Archivieren und Löschen nehmen die Zeilen weg – danach ist nichts mehr ausgewählt.
       const gone = action.type === 'archive' || action.type === 'trash';
+      remember(message(count), undo);
       set({
-        toast: message(count),
         ...(gone ? { multi: new Set<string>(), anchor: null, selected: null } : {}),
         ...(action.type === 'archive' ? { archive: null } : {}),
         ...(action.type === 'trash' ? { trash: null } : {}),
@@ -347,6 +360,63 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
+  /* ------------------------------------------------------------ Rücknahme */
+
+  undoStack: [],
+  toastUndo: false,
+
+  undo: async () => {
+    const stack = get().undoStack;
+    const entry = stack[stack.length - 1];
+    if (!entry) {
+      set({ toast: 'Nichts zum Rückgängigmachen', toastUndo: false });
+      return;
+    }
+    set({ undoStack: stack.slice(0, -1) });
+
+    try {
+      await api.steps(entry.steps);
+      await get().load();
+      set({ toast: 'Rückgängig gemacht', toastUndo: false, archive: null, trash: null });
+    } catch (e) {
+      await get().load();
+      const stale = e instanceof ApiError && e.status === 409;
+      set({
+        toast: stale
+          ? 'Inzwischen woanders geändert – Rückgängig nicht mehr möglich.'
+          : e instanceof Error
+            ? e.message
+            : 'Rückgängig fehlgeschlagen',
+        toastUndo: false,
+      });
+    }
+  },
+
+  archiveDone: async () => {
+    const state = get();
+    const { ws, view } = state;
+    if (!ws || (view !== 'plan' && view !== 'backlog')) return;
+
+    const found = doneCandidates(ws, { view, projectIds: scopeProjectIds(state) });
+    const steps: Step[] = [
+      ...found.milestones.map((m) => ({ op: 'archive' as const, kind: 'milestone' as const, id: m.id })),
+      ...found.tasks.map((t) => ({ op: 'archive' as const, kind: 'task' as const, id: t.id })),
+    ];
+    if (!steps.length) {
+      set({ toast: 'Nichts Erledigtes zum Archivieren', toastUndo: false });
+      return;
+    }
+
+    try {
+      const { count, undo } = await api.steps(steps);
+      await get().load();
+      remember(`${count} ${count === 1 ? 'Eintrag' : 'Einträge'} archiviert`, undo);
+      set({ archive: null });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen', toastUndo: false });
+    }
+  },
+
   toggle: (id) => get().setCollapsed(id, !get().collapsed[id]),
 
   setCollapsed: (id, value) => {
@@ -355,7 +425,7 @@ export const useStore = create<State>((set, get) => ({
     set({ collapsed });
   },
 
-  say: (toast) => set({ toast }),
+  say: (toast) => set({ toast, toastUndo: false }),
 
   /**
    * Ändern mit Vorgriff: die Zeile ändert sich sofort, die Antwort des Servers
@@ -373,6 +443,19 @@ export const useStore = create<State>((set, get) => ({
     try {
       const updated = await api.patch<Task | Milestone>(kind, id, current.version, changes);
       set(replace(get().boot ?? boot, kind, updated));
+      // Die Gegen-Schritte kennt hier der Client selbst: die alten Werte plus
+      // die Version, die dabei herauskam.
+      pushUndo([
+        {
+          op: 'patch',
+          kind,
+          id,
+          version: updated.version,
+          changes: Object.fromEntries(
+            Object.keys(changes).map((k) => [k, (current as Record<string, unknown>)[k]]),
+          ),
+        },
+      ]);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.current) {
         // Woanders geändert: den neuen Stand übernehmen und sagen, was los war.
@@ -441,8 +524,25 @@ export const useStore = create<State>((set, get) => ({
     const current = boot?.tasks.find((t) => t.id === id);
     if (!current) return;
     try {
-      await api.move<Task>(id, current.version, target);
+      const moved = await api.move<Task>(id, current.version, target);
       await get().load();
+      // Zurück an die alte Stelle – der alte Ordnungswert füllt die Lücke wieder.
+      pushUndo([
+        {
+          op: 'move',
+          id,
+          version: moved.version,
+          target: {
+            parentId: current.parentId,
+            milestoneId: current.milestoneId,
+            groupId: current.groupId,
+            markId: current.markId,
+            projectId: current.projectId,
+            doc: current.doc,
+            order: current.order,
+          },
+        },
+      ]);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         set({ toast: 'Inzwischen woanders geändert – bitte nochmal.' });
@@ -458,7 +558,8 @@ export const useStore = create<State>((set, get) => ({
       await api.archive(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      set({ toast: 'Archiviert', archive: null });
+      set({ archive: null });
+      remember('Archiviert', [{ op: 'unarchive', kind, id }]);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen' });
     }
@@ -466,10 +567,11 @@ export const useStore = create<State>((set, get) => ({
 
   remove: async (kind, id) => {
     try {
-      await api.remove(kind, id);
+      const { trashId } = await api.remove(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      set({ toast: REMOVED[kind] ?? 'In den Papierkorb gelegt', trash: null });
+      set({ trash: null });
+      remember(REMOVED[kind] ?? 'In den Papierkorb gelegt', [{ op: 'untrash', trashId }]);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
@@ -571,6 +673,30 @@ const REMOVED: Partial<Record<Kind, string>> = {
   milestone: 'Milestone im Papierkorb – seine Tasks liegen unter „Unsortiert“',
   group: 'Gruppe gelöscht – ihre Tasks liegen unter „Unsortiert“',
 };
+
+/** Wie tief der Rücknahme-Stapel reicht. Mehr braucht niemand, weniger nervt. */
+const UNDO_DEPTH = 25;
+
+/**
+ * Meldung zeigen und die Gegen-Schritte auf den Stapel legen. Ohne Schritte
+ * bleibt es bei der Meldung – dann gibt es nichts zurückzunehmen.
+ */
+function remember(message: string, steps: Step[]): void {
+  if (!steps.length) {
+    useStore.setState({ toast: message, toastUndo: false });
+    return;
+  }
+  pushUndo(steps, message);
+  useStore.setState({ toast: message, toastUndo: true });
+}
+
+/** Nur den Stapel füllen, ohne Meldung – für Änderungen, die man ohnehin sieht. */
+function pushUndo(steps: Step[], label = 'Änderung'): void {
+  if (!steps.length) return;
+  useStore.setState((s) => ({
+    undoStack: [...s.undoStack, { label, steps }].slice(-UNDO_DEPTH),
+  }));
+}
 
 /* ---------------------------------------------------------- Abgeleitetes */
 

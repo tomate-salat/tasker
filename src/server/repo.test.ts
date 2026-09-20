@@ -9,6 +9,7 @@ import { createDbCtx, type DbCtx } from './db.js';
 import {
   Conflict,
   NotFound,
+  applySteps,
   archive,
   bulk,
   create,
@@ -566,6 +567,73 @@ describe('Mehrfachauswahl', () => {
       Conflict,
     );
     assert.equal(one(a.id).prio, 0);
+  });
+});
+
+describe('Schritte und Rücknahme', () => {
+  const at = (t: Task) => ({ id: t.id, version: t.version });
+
+  it('führt gemischte Schritte aus und liefert die Gegen-Schritte', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+
+    const done = applySteps(ctx, [
+      { op: 'archive', kind: 'milestone', id: m.id },
+      { op: 'patch', kind: 'task', id: a.id, version: a.version, changes: { prio: 2 } },
+    ]);
+
+    assert.equal(done.count, 2);
+    assert.equal(one(a.id).prio, 2);
+    assert.deepEqual(loadBootstrap(ctx).milestones, []);
+
+    // Rückwärts: erst die Änderung zurück, dann das Archiv.
+    applySteps(ctx, done.undo);
+    assert.equal(one(a.id).prio, 0);
+    assert.equal(loadBootstrap(ctx).milestones.length, 1);
+    assert.deepEqual(hiddenMismatches(ctx), []);
+  });
+
+  it('holt eine gelöschte Aufgabe samt Teilbaum aus dem Papierkorb zurück', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
+
+    const done = applySteps(ctx, [{ op: 'trash', kind: 'task', id: a.id }]);
+    assert.deepEqual(active(), []);
+
+    applySteps(ctx, done.undo);
+    assert.equal(loadBootstrap(ctx).tasks.length, 2);
+  });
+
+  /** Die Rücknahme muss die Reihenfolge wiederherstellen, nicht nur den Behälter. */
+  it('stellt beim Zurückschieben auch den alten Platz wieder her', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    mkTask({ projectId: p.id, title: 'B', milestoneId: m.id });
+    mkTask({ projectId: p.id, title: 'C', milestoneId: m.id });
+
+    const done = bulk(ctx, [at(a)], { type: 'move', target: { groupId: null, projectId: p.id } });
+    applySteps(ctx, done.undo);
+
+    const inMs = loadBootstrap(ctx)
+      .tasks.filter((t) => t.milestoneId === m.id)
+      .sort((x, y) => x.order - y.order)
+      .map((t) => t.title);
+    assert.deepEqual(inMs, ['A', 'B', 'C']);
+  });
+
+  it('lehnt eine Rücknahme auf veraltetem Stand ab', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const done = bulk(ctx, [at(a)], { type: 'patch', changes: { prio: 1 } });
+
+    // Jemand anderes ändert dazwischen.
+    patch(ctx, 'task', a.id, one(a.id).version, { title: 'anders' });
+
+    assert.throws(() => applySteps(ctx, done.undo), Conflict);
+    assert.equal(one(a.id).prio, 1, 'nichts halb zurückgenommen');
   });
 });
 

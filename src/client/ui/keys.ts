@@ -31,6 +31,12 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
         return;
       }
 
+      // Strg+Z nimmt die letzte Änderung zurück.
+      if (!typing && (e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        void store.undo();
+        return;
+      }
       // Strg+A wählt alles Sichtbare aus – die einzige Strg-Taste, die uns gehört.
       if (!typing && (e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();

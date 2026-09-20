@@ -1,4 +1,5 @@
 import { effectiveCategory, effectiveTags } from './inherit.js';
+import { allDone } from './progress.js';
 import { isArchived, type Group, type Mark, type Milestone, type Project, type Task } from './model.js';
 import type { Workspace } from './workspace.js';
 
@@ -323,4 +324,37 @@ export function placeLabel(ws: Workspace, t: Task): string {
   if (group) return group.title || 'Neue Gruppe';
   const mark = ws.mark(root.markId);
   return mark ? `${mark.emoji} ${mark.name}` : 'Unsortiert';
+}
+
+/**
+ * Was der Knopf „Erledigte archivieren (n)“ mitnehmen würde – wie `doneCands`
+ * im Prototyp, getrennt nach Ansicht.
+ *
+ * Ein Milestone zählt, wenn sein Status auf „Done“ steht; eine Aufgabe, wenn
+ * sie selbst erledigt ist oder nur noch aus Erledigtem besteht. Aufgaben eines
+ * mitgenommenen Milestones bleiben draußen – sie gehen ohnehin mit ihm.
+ * Dokumentationsseiten werden nie archiviert.
+ */
+export function doneCandidates(
+  ws: Workspace,
+  o: { view: 'plan' | 'backlog'; projectIds: string[] },
+): { milestones: Milestone[]; tasks: Task[] } {
+  const inScope = new Set(o.projectIds);
+  const planned = o.view === 'plan';
+
+  const milestones = ws.milestones.filter(
+    (m) => inScope.has(m.projectId) && !isArchived(m) && m.planned === planned && m.status === 'done',
+  );
+  const taken = new Set(milestones.map((m) => m.id));
+
+  const tasks = ws.tasks.filter((t) => {
+    if (t.parentId || t.doc || isArchived(t) || !inScope.has(t.projectId)) return false;
+    if (!allDone(ws, t)) return false;
+    const ms = ws.milestone(t.milestoneId);
+    if (ms && taken.has(ms.id)) return false;
+    // Im Plan zählt nur, was in einem eingeplanten Milestone liegt; im Backlog alles andere.
+    return planned ? !!ms?.planned : !ms?.planned;
+  });
+
+  return { milestones, tasks };
 }

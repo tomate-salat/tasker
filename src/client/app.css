@@ -2821,3 +2821,26 @@ body:has(.bulk) .toast {
   box-shadow: 0 0 0 3px var(--accent-soft);
   background: var(--surface);
 }
+
+/* Die Kurzmeldung kann eine Handlung anbieten – im Prototyp immer „Rückgängig“. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+}
+
+.toast button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent-soft);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.toast button:hover {
+  text-decoration: underline;
+}

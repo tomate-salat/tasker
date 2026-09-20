@@ -133,6 +133,9 @@ Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit fe
 `/move`, `/trash` oder `/settings` nicht überschneiden können. Sonst hinge die Korrektheit an der
 Reihenfolge, in der die Routen registriert werden, und kippte beim nächsten eingefügten Endpunkt.
 - `POST /api/bulk` – Mehrfachauswahl als eine Transaktion
+- `POST /api/steps` – mehrere kleine Schritte als eine Transaktion. Das braucht „Erledigte
+  archivieren“ (Milestones und Aufgaben gemischt) und die Rücknahme: jede schreibende Route liefert
+  die Gegen-Schritte mit, der Client schickt sie hierher zurück.
 - `GET /api/events` – **SSE-Stream** mit jeder Änderung (siehe Abschnitt 7, Schritt 9)
 - `POST /api/import` – Prototyp-Export oder Codecks-Export einlesen
 - `GET /api/export` – der gesamte Bestand als JSON
@@ -203,7 +206,8 @@ sind zwei Tabs oder Handy plus Rechner der Normalfall. Zwei Mechanismen, von Anf
 
 Der **Undo-Stack** lebt weiterhin im Client, wird aber pro Tab geführt und beim Zurücknehmen gegen die
 `version` geprüft; eine Rücknahme, die auf einem überholten Stand basiert, wird abgelehnt statt blind
-ausgeführt.
+ausgeführt. Umgesetzt über `POST /api/steps`: jede schreibende Handlung liefert ihre Gegen-Schritte
+mit, der Stapel hält sie, und „Rückgängig“ schickt sie in einer Transaktion zurück.
 
 ---
 
@@ -319,8 +323,8 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
    Der Strom ist damit eine Bequemlichkeit, keine Wahrheit: was vor stillem Datenverlust schützt,
    bleibt die Versionsprüfung beim Schreiben.
 
-   `POST /api/bulk` kam mit der Mehrfachauswahl (siehe „Angleichen an den Prototyp“). Noch offen
-   ist der Undo-Stack aus Abschnitt 5.
+   `POST /api/bulk` kam mit der Mehrfachauswahl, der Undo-Stack aus Abschnitt 5 mit `POST
+   /api/steps` – beides steht unter „Angleichen an den Prototyp“.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.
 11. Gamification, dezent.
 
@@ -406,12 +410,24 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   liegen und der Client lädt neu. Verschieben, Archivieren und Löschen wirken nur auf die obersten
   Ausgewählten, weil Unteraufgaben ohnehin mitgehen (`topSelected` im Prototyp). `POST /api/move`
   kennt außerdem jetzt `doc`, sonst gäbe es keinen Weg in die Dokumentation und wieder heraus.
-- **Erledigte archivieren.** Der Prototyp hat in Plan und Backlog den Knopf „Erledigte archivieren
-  (n)“ neben den Reitern. Er archiviert auch **Milestones**, und das kann `POST /api/bulk` bisher
-  nicht – der Stapel kennt nur Aufgaben. Fehlt deshalb noch.
-- **Undo.** Die Stapel-Meldungen des Prototyps bieten „Rückgängig“ an; hier gibt es das noch nicht.
-  Der Undo-Stack aus Abschnitt 5 gehört dem Client und muss die `version` gegenprüfen, also ein
-  eigener Punkt.
+- ~~**Erledigte archivieren.**~~ **Erledigt.** Der Knopf „Erledigte archivieren (n)“ steht in Plan
+  und Backlog neben den Reitern und verschwindet, wenn es nichts Erledigtes gibt. Was er mitnimmt,
+  rechnet `doneCandidates` aus – dieselbe Aufteilung wie im Prototyp: im Plan die eingeplanten
+  Milestones auf „Done“ und die erledigten Aufgaben darin, im Backlog die vorbereiteten Milestones
+  und alles Lose. Aufgaben eines mitgenommenen Milestones zählen nicht doppelt, Dokumentationsseiten
+  bleiben außen vor.
+- ~~**Undo.**~~ **Erledigt.** Der Stapel liegt wie geplant im Tab (25 Schritte tief), der Server
+  führt keinen Verlauf. Stattdessen liefert jede schreibende Handlung die **Gegen-Schritte** gleich
+  mit; „Rückgängig“ schickt sie an `POST /api/steps` zurück, wo sie in einer Transaktion und in
+  umgekehrter Reihenfolge laufen. Jeder `patch`- und `move`-Schritt nennt die Version, die nach der
+  Handlung galt – hat sich inzwischen etwas geändert, wird die **ganze** Rücknahme abgelehnt statt
+  halb ausgeführt. Ausgelöst wird sie über den Knopf in der Kurzmeldung oder mit Strg+Z.
+
+  Abgedeckt sind Ändern, Verschieben, Archivieren, Papierkorb, alle Stapel-Aktionen und „Erledigte
+  archivieren“. **Nicht abgedeckt: das Anlegen** – ein neu angelegter Eintrag lässt sich nicht
+  wegnehmen, und aus dem Papierkorb Geholtes nicht wieder hineinlegen (es bekommt neue Zeilen, ein
+  sauberes Gegenstück gibt es dafür nicht). Im Prototyp geht beides, weil er den ganzen Zustand
+  sichert.
 
 ---
 
