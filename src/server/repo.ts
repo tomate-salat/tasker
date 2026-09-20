@@ -291,6 +291,18 @@ export function patch(
       setDeps(ctx, kind, id, deps as string[]);
     }
 
+    // Ein Milestone nimmt beim Projektwechsel seine Wurzelaufgaben mit – sonst
+    // hinge er in einem Projekt und seine Aufgaben in einem anderen.
+    if (kind === 'milestone' && typeof fields['projectId'] === 'string') {
+      const target = fields['projectId'];
+      for (const rootId of milestoneRoots(ctx, id)) {
+        const ids = [rootId, ...descendantIds(ctx, rootId)];
+        ctx.sqlite
+          .prepare(`UPDATE task SET project_id = ? WHERE id IN (${ids.map(() => '?').join(',')})`)
+          .run(target, ...ids);
+      }
+    }
+
     // „Erledigt“ führt den Zeitpunkt mit, damit Burnup und Archiv ihn haben.
     if (kind === 'task' && typeof fields['status'] === 'string') {
       const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
@@ -319,14 +331,7 @@ export function archive(ctx: DbCtx, kind: 'task' | 'milestone', id: string): unk
                 WHERE id = ?`)
       .run(nowIso(), nowIso(), id);
 
-    const roots =
-      kind === 'task'
-        ? [id]
-        : (
-            ctx.sqlite
-              .prepare('SELECT id FROM task WHERE milestone_id = ? AND parent_id IS NULL')
-              .all(id) as { id: string }[]
-          ).map((r) => r.id);
+    const roots = kind === 'task' ? [id] : milestoneRoots(ctx, id);
 
     for (const rootId of roots) {
       const subtree = descendantIds(ctx, rootId);
@@ -444,20 +449,27 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
  * verschobene Aufgabe auf den gewünschten Platz. Ganzzahlige Ordnungswerte
  * bleiben damit ganzzahlig – kein Bruchrechnen, das irgendwann zu fein wird.
  */
-function reorder(
-  ctx: DbCtx,
-  where: {
-    parentId: string | null;
-    milestoneId: string | null;
-    groupId: string | null;
-    projectId: string;
-    /** Nur für lose Wurzeln: Unsortiert und jede smarte Gruppe zählen getrennt. */
-    markId: string | null;
-    doc: number;
-  },
-  movedId: string,
-  index: number,
-): void {
+function reorder(ctx: DbCtx, where: Container, movedId: string, index: number): void {
+  const siblings = containerIds(ctx, where).filter((x) => x !== movedId);
+  siblings.splice(Math.min(index, siblings.length), 0, movedId);
+
+  const set = ctx.sqlite.prepare('UPDATE task SET sort_order = ? WHERE id = ?');
+  siblings.forEach((sid, i) => set.run(i, sid));
+}
+
+/** Der Behälter, in dem Wurzelaufgaben nebeneinander liegen. */
+type Container = {
+  parentId: string | null;
+  milestoneId: string | null;
+  groupId: string | null;
+  projectId: string;
+  /** Nur für lose Wurzeln: Unsortiert und jede smarte Gruppe zählen getrennt. */
+  markId: string | null;
+  doc: number;
+};
+
+/** Die Geschwister eines Behälters in ihrer Reihenfolge. */
+function containerIds(ctx: DbCtx, where: Container): string[] {
   const [clause, params] = where.parentId
     ? ['parent_id = ?', [where.parentId]]
     : where.milestoneId
@@ -477,19 +489,68 @@ function reorder(
               [where.projectId, where.markId],
             ];
 
-  const siblings = (
+  return (
     ctx.sqlite
       .prepare(`SELECT id FROM task WHERE ${clause} ORDER BY sort_order, id`)
       .all(...(params as unknown[])) as { id: string }[]
-  )
-    .map((r) => r.id)
-    .filter((x) => x !== movedId);
-
-  siblings.splice(Math.min(index, siblings.length), 0, movedId);
-
-  const set = ctx.sqlite.prepare('UPDATE task SET sort_order = ? WHERE id = ?');
-  siblings.forEach((sid, i) => set.run(i, sid));
+  ).map((r) => r.id);
 }
+
+/** Der Behälter, in dem diese Zeile liegt. */
+const containerOf = (row: Record<string, unknown>): Container => ({
+  parentId: (row['parent_id'] as string | null) ?? null,
+  milestoneId: (row['milestone_id'] as string | null) ?? null,
+  groupId: (row['group_id'] as string | null) ?? null,
+  projectId: String(row['project_id']),
+  markId: (row['mark_id'] as string | null) ?? null,
+  doc: Number(row['doc']) ? 1 : 0,
+});
+
+/**
+ * Kopiert eine Aufgabe mitsamt Unteraufgaben, Labels und Abhängigkeiten. Die
+ * Kopie legt sich direkt unter das Original und heißt „… (Kopie)“ – wie im
+ * Prototyp. Angelegtes lässt sich nicht zurücknehmen, deshalb kommt hier auch
+ * kein Gegen-Schritt heraus.
+ */
+export function duplicate(ctx: DbCtx, id: string): { id: string } {
+  return ctx.sqlite.transaction(() => {
+    const row = readRow(ctx, 'task', id);
+    if (!row) throw new NotFound();
+
+    const copy = (source: Record<string, unknown>, parentId: string | null, title: string): string => {
+      const copyId = newId('t');
+      const rest = Object.fromEntries(
+        Object.entries(source).filter(([k]) => !FRESH_ON_COPY.has(k)),
+      );
+      insertRows(ctx, 'task', [{ ...rest, id: copyId, parent_id: parentId, title }]);
+      setTags(ctx, copyId, tagsOf(ctx, source['id'] as string));
+      setDeps(ctx, 'task', copyId, depsOf(ctx, 'task', source['id'] as string));
+      for (const kidId of childIds(ctx, source['id'] as string)) {
+        const kid = readRow(ctx, 'task', kidId);
+        if (kid) copy(kid, copyId, String(kid['title'] ?? ''));
+      }
+      return copyId;
+    };
+
+    // Der Platz wird vor dem Einfügen bestimmt, sonst zählt die Kopie sich selbst mit.
+    const where = containerOf(row);
+    const index = containerIds(ctx, where).indexOf(id) + 1;
+
+    const copyId = copy(row, (row['parent_id'] as string | null) ?? null, `${row['title'] ?? ''} (Kopie)`);
+    reorder(ctx, where, copyId, index);
+    return { id: copyId };
+  })();
+}
+
+/** Spalten, die die Kopie nicht erbt: Kennung, Titel, Zeitstempel, Version. */
+const FRESH_ON_COPY = new Set(['id', 'parent_id', 'title', 'created_at', 'updated_at', 'version']);
+
+const milestoneRoots = (ctx: DbCtx, milestoneId: string): string[] =>
+  (
+    ctx.sqlite
+      .prepare('SELECT id FROM task WHERE milestone_id = ? AND parent_id IS NULL')
+      .all(milestoneId) as { id: string }[]
+  ).map((r) => r.id);
 
 /**
  * Setzt `hidden_by` für einen Teilbaum neu – die eine Stelle, an der der

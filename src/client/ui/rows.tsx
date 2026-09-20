@@ -228,17 +228,15 @@ export function GroupRow({
   row,
   count,
   onAdd,
-  onManageMarks,
   dnd,
 }: {
   row: Extract<OutlineRow, { type: 'group' }>;
   /** Offene Aufgaben in dieser Gruppe. */
   count: number;
   onAdd: () => void;
-  onManageMarks: () => void;
   dnd?: Dnd;
 }) {
-  const { collapsed, toggle, editing, edit, remove } = useStore();
+  const { collapsed, toggle, editing, edit, remove, setDialog } = useStore();
   const { id, group, mark } = row;
   const open = !collapsed[id];
   const active = dnd?.drop?.id === id;
@@ -281,7 +279,11 @@ export function GroupRow({
           +
         </button>
         {mark && (
-          <button title="Markierungen verwalten" aria-label="Markierungen verwalten" onClick={onManageMarks}>
+          <button
+            title="Markierungen verwalten"
+            aria-label="Markierungen verwalten"
+            onClick={() => setDialog('marks')}
+          >
             ✎
           </button>
         )}

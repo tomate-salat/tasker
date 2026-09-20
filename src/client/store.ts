@@ -28,6 +28,8 @@ export const VIEW_LABEL: Record<View, string> = {
 /** Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste. */
 export const TABS: View[] = ['plan', 'backlog', 'docs', 'timeline', 'archive'];
 
+export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help';
+
 /**
  * Der gesamte aktive Datenbestand liegt im Speicher – wie `S` im Prototyp.
  * Nach jeder Änderung wird der Index neu gebaut; das ist billiger als ihn
@@ -44,6 +46,10 @@ type State = {
   error: string | null;
   /** Kurze Rückmeldung am unteren Rand. */
   toast: string | null;
+
+  /** Welcher Dialog offen ist – immer höchstens einer. Menüs öffnen ihn von überall. */
+  dialog: Dialog;
+  setDialog: (dialog: Dialog) => void;
 
   /** `'all'` für „Alle Projekte“, sonst eine Projekt-ID. */
   scope: string;
@@ -105,6 +111,8 @@ type State = {
   /** Zeigt die Kurzmeldung gerade ein „Rückgängig“ an? */
   toastUndo: boolean;
   undo: () => Promise<void>;
+  /** Mehrere Schritte in einer Transaktion, mit Meldung und Rücknahme. */
+  runSteps: (steps: Step[], message: (count: number) => string) => Promise<void>;
   /** Archiviert alles Erledigte der aktuellen Ansicht – Milestones und Aufgaben. */
   archiveDone: () => Promise<void>;
   toggle: (id: string) => void;
@@ -121,7 +129,10 @@ type State = {
     title: string,
     o?: { planned?: boolean; projectId?: string },
   ) => Promise<string | null>;
-  addGroup: (title: string, projectId?: string) => Promise<void>;
+  /** Gibt die ID zurück – „Neue Gruppe“ im Menü benennt sie gleich um. */
+  addGroup: (title: string, projectId?: string) => Promise<string | null>;
+  /** Kopiert eine Aufgabe samt Unterbaum und wählt die Kopie aus. */
+  duplicateTask: (id: string) => Promise<void>;
   moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   remove: (kind: Kind, id: string) => Promise<void>;
@@ -167,6 +178,8 @@ export const useStore = create<State>((set, get) => ({
   loading: true,
   error: null,
   toast: null,
+  dialog: 'none',
+  setDialog: (dialog) => set({ dialog }),
   scope: readLocal<string>(SCOPE_KEY, 'all'),
   lastProject: null,
   filter: { tag: null, categoryId: null, markId: null },
@@ -392,6 +405,27 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
+  runSteps: async (steps, message) => {
+    if (!steps.length) return;
+    try {
+      const { count, undo } = await api.steps(steps);
+      await get().load();
+      remember(message(count), undo);
+      set({ archive: null, trash: null });
+    } catch (e) {
+      const stale = e instanceof ApiError && e.status === 409;
+      if (stale) await get().load();
+      set({
+        toast: stale
+          ? 'Inzwischen woanders geändert – nichts geändert, bitte nochmal.'
+          : e instanceof Error
+            ? e.message
+            : 'Änderung fehlgeschlagen',
+        toastUndo: false,
+      });
+    }
+  },
+
   archiveDone: async () => {
     const state = get();
     const { ws, view } = state;
@@ -406,15 +440,7 @@ export const useStore = create<State>((set, get) => ({
       set({ toast: 'Nichts Erledigtes zum Archivieren', toastUndo: false });
       return;
     }
-
-    try {
-      const { count, undo } = await api.steps(steps);
-      await get().load();
-      remember(`${count} ${count === 1 ? 'Eintrag' : 'Einträge'} archiviert`, undo);
-      set({ archive: null });
-    } catch (e) {
-      set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen', toastUndo: false });
-    }
+    await get().runSteps(steps, (n) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'} archiviert`);
   },
 
   toggle: (id) => get().setCollapsed(id, !get().collapsed[id]),
@@ -510,12 +536,25 @@ export const useStore = create<State>((set, get) => ({
 
   addGroup: async (title, projectIdArg) => {
     const projectId = projectIdArg ?? currentProjectId(get());
-    if (!projectId) return;
+    if (!projectId) return null;
     try {
-      await api.create('group', { projectId, title });
+      const created = await api.create<{ id: string }>('group', { projectId, title });
       await get().load();
+      return created.id;
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+      return null;
+    }
+  },
+
+  duplicateTask: async (id) => {
+    try {
+      const copy = await api.duplicate(id);
+      await get().load();
+      // Anlegen lässt sich nicht zurücknehmen – deshalb nur die Meldung.
+      set({ selected: copy.id, toast: 'Dupliziert', toastUndo: false });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Duplizieren fehlgeschlagen' });
     }
   },
 

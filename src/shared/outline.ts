@@ -327,6 +327,13 @@ export function placeLabel(ws: Workspace, t: Task): string {
 }
 
 /**
+ * Dasselbe für einen einzelnen Behälter: was „Erledigte archivieren“ im
+ * Kontextmenü eines Milestones oder einer Gruppe mitnehmen würde.
+ */
+export const doneInContainer = (ws: Workspace, projectId: string, place: Placement): Task[] =>
+  containerTasks(ws, projectId, place).filter((t) => !isArchived(t) && allDone(ws, t));
+
+/**
  * Was der Knopf „Erledigte archivieren (n)“ mitnehmen würde – wie `doneCands`
  * im Prototyp, getrennt nach Ansicht.
  *

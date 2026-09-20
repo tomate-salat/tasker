@@ -133,6 +133,7 @@ Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit fe
 `/move`, `/trash` oder `/settings` nicht überschneiden können. Sonst hinge die Korrektheit an der
 Reihenfolge, in der die Routen registriert werden, und kippte beim nächsten eingefügten Endpunkt.
 - `POST /api/bulk` – Mehrfachauswahl als eine Transaktion
+- `POST /api/duplicate` – eine Aufgabe samt Unterbaum, Labels und Abhängigkeiten kopieren
 - `POST /api/steps` – mehrere kleine Schritte als eine Transaktion. Das braucht „Erledigte
   archivieren“ (Milestones und Aufgaben gemischt) und die Rücknahme: jede schreibende Route liefert
   die Gegen-Schritte mit, der Client schickt sie hierher zurück.
@@ -358,10 +359,24 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Abhängigkeiten in beiden Richtungen mit Suche, die Verknüpftes und Zirkuläres ausblendet.
   Neu dafür: ein Aufklappmenü (`Menu.tsx`) mit Untermenüs, Häkchen und Trennern, sowie `marked`
   und `dompurify` für das Markdown (das Startpaket wächst dadurch von rund 266 auf 390 kB).
-- **Kontextmenüs.** Das „⋯“ im Inspektor zeigt vorerst nur, was es schon gibt (Umbenennen, Status,
-  Kategorie, Markierung, In den Backlog, Archivieren, Papierkorb). Für die Mehrfachauswahl gibt es
-  den Rechtsklick inzwischen; für eine **einzelne** Zeile fehlt er noch, und mit ihm Duplizieren
-  und „In anderes Projekt“.
+- ~~**Kontextmenüs.**~~ **Erledigt.** Der Rechtsklick auf eine **einzelne** Zeile öffnet jetzt das
+  Menü aus dem Prototyp – vier Fassungen, je nach Zeile: Aufgabe, Dokumentationsseite, Milestone
+  und Gruppe (mit den Sonderfällen „Unsortiert“ und smarte Gruppe). Sie stehen in
+  `src/client/ui/rowMenu.ts`; das „⋯“ im Inspektor zeigt dasselbe Menü ohne „Details öffnen“,
+  genau wie im Prototyp. Das Menü selbst kann jetzt Tastenkürzel rechts (`kbd`) und die
+  Chip-Reihe der Priorität. Ein Klick auf einen Untermenü-Eintrag öffnet ihn nur noch, statt zu
+  schalten – sonst schloss der Klick zu, was das Überfahren gerade aufgeklappt hatte.
+
+  Neu dafür: **`POST /api/duplicate`** (kopiert eine Aufgabe samt Unterbaum, Labels und
+  Abhängigkeiten und legt die Kopie direkt unter das Original), `projectId` im Patch eines
+  Milestones (er nimmt seine Wurzelaufgaben mit ins andere Projekt) und die Taste `B`, die eine
+  Aufgabe zurück in den losen Backlog holt. „Nach oben/Nach unten“ für Milestones und Gruppen
+  tauscht die beiden Ordnungswerte in **einem** Schritt-Paar über `POST /api/steps`.
+
+  Zwei Abweichungen, beide bewusst: das **Duplizieren lässt sich nicht zurücknehmen** (wie jedes
+  Anlegen, siehe Abschnitt 5), und die Priorität steht im Menü als Chip-Reihe, kennt aber kein
+  eigenes Tastenkürzel. „Nach oben/Nach unten“ trägt kein `Alt ↑/↓` im Menü, weil die Pfeiltasten
+  mit Alt bisher nur Aufgaben verschieben, keine Milestones.
 - **Burnup.** Der Milestone-Inspektor hat im Prototyp eine Burnup-Kurve. Sie braucht ein
   Umfangs-Protokoll je Milestone (`m.log`), also eine eigene Tabelle und Fortschreibung bei jeder
   Änderung; deshalb ein eigener Punkt.

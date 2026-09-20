@@ -6,6 +6,7 @@ import {
   createSchemas,
   drawingCreate,
   drawingPatch,
+  duplicateBody,
   kindSchema,
   moveBody,
   settingsBody,
@@ -25,6 +26,7 @@ import {
   archive,
   bulk,
   create,
+  duplicate,
   loadArchive,
   loadBootstrap,
   move,
@@ -124,6 +126,16 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     // Verschieben rührt an Geschwistern und am ganzen Teilbaum – neu laden.
     return run(c, bus, () => move(ctx, id, version, target), {
       event: () => ({ type: 'reload', reason: 'Verschoben' }),
+    });
+  });
+
+  app.post('/duplicate', async (c) => {
+    const body = duplicateBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    // Die Kopie bringt einen ganzen Teilbaum mit – andere Tabs laden neu.
+    return run(c, bus, () => duplicate(ctx, body.data.id), {
+      status: 201,
+      event: () => ({ type: 'reload', reason: 'Dupliziert' }),
     });
   });
 

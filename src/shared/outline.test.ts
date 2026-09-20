@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { doneCandidates, outline, siblings, smartTasks, unsortedTasks, type OutlineRow } from './outline.js';
+import { doneCandidates, doneInContainer, outline, siblings, smartTasks, unsortedTasks, type OutlineRow } from './outline.js';
 import { Builder } from './testing.js';
 
 /**
@@ -157,5 +157,18 @@ describe('Erledigte archivieren', () => {
       .build();
     const found = doneCandidates(w, { view: 'backlog', projectIds: ['p'] });
     assert.deepEqual(found.tasks.map((t) => t.id), ['eltern']);
+  });
+
+  it('nimmt für einen einzelnen Behälter nur dessen erledigte Wurzeln', () => {
+    const w = ws();
+    assert.deepEqual(
+      doneInContainer(w, 'p', { milestoneId: 'laeuft' }).map((t) => t.id),
+      ['imLaufenden'],
+    );
+    // „Unsortiert“ ist ein eigener Behälter – der Milestone zählt hier nicht mit.
+    assert.deepEqual(
+      doneInContainer(w, 'p', { markId: null }).map((t) => t.id),
+      ['lose'],
+    );
   });
 });

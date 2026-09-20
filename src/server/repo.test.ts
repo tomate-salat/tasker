@@ -13,6 +13,7 @@ import {
   archive,
   bulk,
   create,
+  duplicate,
   hiddenMismatches,
   loadArchive,
   loadBootstrap,
@@ -634,6 +635,61 @@ describe('Schritte und Rücknahme', () => {
 
     assert.throws(() => applySteps(ctx, done.undo), Conflict);
     assert.equal(one(a.id).prio, 1, 'nichts halb zurückgenommen');
+  });
+});
+
+describe('Duplizieren', () => {
+  it('kopiert den ganzen Teilbaum samt Labels und legt ihn direkt darunter', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id, tags: ['ui'] });
+    mkTask({ projectId: p.id, title: 'A1', parentId: a.id });
+    mkTask({ projectId: p.id, title: 'B', milestoneId: m.id });
+
+    const copy = duplicate(ctx, a.id);
+    const boot = loadBootstrap(ctx);
+    const inMs = boot.tasks
+      .filter((t) => t.milestoneId === m.id)
+      .sort((x, y) => x.order - y.order)
+      .map((t) => t.title);
+
+    assert.deepEqual(inMs, ['A', 'A (Kopie)', 'B'], 'die Kopie liegt direkt unter dem Original');
+    const made = boot.tasks.find((t) => t.id === copy.id) as Task;
+    assert.deepEqual(made.tags, ['ui']);
+    assert.equal(made.version, 1);
+    const kids = boot.tasks.filter((t) => t.parentId === copy.id);
+    assert.deepEqual(kids.map((t) => t.title), ['A1'], 'Unteraufgaben heißen weiter wie vorher');
+  });
+
+  it('eine Unteraufgabe wird unter demselben Elternteil kopiert', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const kid = mkTask({ projectId: p.id, title: 'A1', parentId: a.id });
+
+    const copy = duplicate(ctx, kid.id);
+    const made = loadBootstrap(ctx).tasks.find((t) => t.id === copy.id) as Task;
+    assert.equal(made.parentId, a.id);
+    assert.equal(made.title, 'A1 (Kopie)');
+  });
+});
+
+describe('Milestone in ein anderes Projekt', () => {
+  it('nimmt seine Wurzelaufgaben mitsamt Unteraufgaben mit', () => {
+    const a = mkProject();
+    const b = create(ctx, 'project', { name: 'Website' }) as { id: string };
+    const m = mkMilestone({ projectId: a.id, title: 'M' });
+    const root = mkTask({ projectId: a.id, title: 'A', milestoneId: m.id });
+    const kid = mkTask({ projectId: a.id, title: 'A1', parentId: root.id });
+    const other = mkTask({ projectId: a.id, title: 'Lose' });
+
+    patch(ctx, 'milestone', m.id, m.version, { projectId: b.id });
+
+    const boot = loadBootstrap(ctx);
+    const project = (id: string) => boot.tasks.find((t) => t.id === id)?.projectId;
+    assert.equal(boot.milestones.find((x) => x.id === m.id)?.projectId, b.id);
+    assert.equal(project(root.id), b.id);
+    assert.equal(project(kid.id), b.id, 'auch die Unteraufgabe wandert mit');
+    assert.equal(project(other.id), a.id, 'was nicht am Milestone hängt, bleibt');
   });
 });
 

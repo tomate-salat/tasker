@@ -10,12 +10,16 @@ import { createPortal } from 'react-dom';
 export type MenuItem =
   | { sep: true }
   | { head: string }
+  /** Eine Zeile kleiner Knöpfe statt untereinander – im Prototyp die Priorität. */
+  | { label: string; chips: { label: string; on?: boolean; onSelect: () => void }[] }
   | {
       label: string;
       /** Häkchen links – sobald ein Eintrag eines hat, rücken alle ein. */
       check?: boolean;
       disabled?: boolean;
       danger?: boolean;
+      /** Das Tastenkürzel, das dasselbe tut – rechts, blass. */
+      kbd?: string;
       sub?: MenuItem[];
       onSelect?: () => void;
     };
@@ -122,6 +126,28 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
             </div>
           );
 
+        if ('chips' in item) {
+          return (
+            <div key={i} className="ctx-chips" role="group" aria-label={item.label}>
+              <span className="lbl">{item.label}</span>
+              {item.chips.map((c) => (
+                <button
+                  key={c.label}
+                  className={c.on ? 'on' : ''}
+                  role="menuitemradio"
+                  aria-checked={!!c.on}
+                  onClick={() => {
+                    c.onSelect();
+                    onClose();
+                  }}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          );
+        }
+
         if (item.sub) {
           return (
             <div
@@ -135,7 +161,9 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
                 role="menuitem"
                 aria-haspopup="menu"
                 aria-expanded={openSub === i}
-                onClick={() => setOpenSub(openSub === i ? null : i)}
+                // Ein Klick öffnet, er schließt nicht wieder: sonst macht er das
+                // zu, was das Überfahren gerade aufgeklappt hat.
+                onClick={() => setOpenSub(i)}
               >
                 <span className="lab">{item.label}</span>
                 <span className="arrow" aria-hidden="true">
@@ -162,6 +190,7 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
           >
             {hasCheck && <span className="chk">{item.check ? '✓' : ''}</span>}
             <span className="lab">{item.label}</span>
+            {item.kbd && <kbd>{item.kbd}</kbd>}
           </button>
         );
       })}

@@ -113,6 +113,8 @@ export const api = {
   move: <T>(id: string, version: number, target: Record<string, unknown>) =>
     post<T>('/api/move', { id, version, ...target }),
 
+  duplicate: (id: string) => post<{ id: string }>('/api/duplicate', { id }),
+
   bulk: (items: BulkItem[], action: BulkAction) => post<Undoable>('/api/bulk', { items, action }),
 
   steps: (steps: Step[]) => post<Undoable>('/api/steps', { steps }),

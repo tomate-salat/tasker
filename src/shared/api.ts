@@ -56,6 +56,8 @@ export const patchSchemas = {
     .object({
       title,
       desc,
+      /** „In anderes Projekt“: der Milestone nimmt seine Wurzelaufgaben mit. */
+      projectId: id,
       planned: z.boolean(),
       status: z.enum(TASK_STATUS),
       order: z.number(),
@@ -106,6 +108,9 @@ export const moveTarget = z.object({
   /** Platz unter den künftigen Geschwistern; der Server nummeriert danach neu. */
   index: z.number().int().min(0).optional(),
 });
+
+/** „Duplizieren“ aus dem Kontextmenü: eine Aufgabe samt allem, was daran hängt. */
+export const duplicateBody = z.object({ id });
 
 /** Verschieben innerhalb des Baums: neuer Platz plus neue Reihenfolge. */
 export const moveBody = moveTarget.extend({

@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
-import { outline, type OutlineRow, type OutlineView, type Placement } from '@shared/outline.js';
+import { outline, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
+import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { useDnd } from './dnd.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { NewThing } from './NewThing.js';
+import { rowMenu } from './rowMenu.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
@@ -18,15 +20,7 @@ import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.j
  * Die drei Arbeitsansichten teilen sich eine Zeilenfolge (`outline`), damit
  * Anzeige, Tastatur und Drag & Drop dieselbe Reihenfolge sehen.
  */
-export function Outline({
-  ws,
-  view,
-  onManageMarks,
-}: {
-  ws: Workspace;
-  view: OutlineView;
-  onManageMarks: () => void;
-}) {
+export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const state = useStore();
   const { collapsed, settings, filter } = state;
   const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
@@ -50,11 +44,22 @@ export function Outline({
         className={`list ${state.multi.size ? 'has-multi' : ''}`}
         onDragEnd={() => dnd.end()}
         onContextMenu={(e) => {
-          // Rechtsklick auf eine ausgewählte Zeile gilt der ganzen Auswahl.
-          const id = (e.target as HTMLElement).closest('[data-row]')?.getAttribute('data-row');
-          if (!id || !state.multi.has(id)) return;
+          const el = e.target as HTMLElement;
+          const id = el.closest('[data-row]')?.getAttribute('data-row');
+          if (!id || el.closest('input, textarea')) return;
           e.preventDefault();
-          menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ws));
+
+          // Rechtsklick auf eine ausgewählte Zeile gilt der ganzen Auswahl,
+          // sonst nur dieser einen – so wie im Prototyp.
+          if (state.multi.has(id)) {
+            menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ws));
+            return;
+          }
+          const row = rows.find((r) => r.id === id);
+          if (!row) return;
+          state.clearMulti();
+          if (row.type === 'task' || row.type === 'milestone') state.select(id);
+          menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
         }}
       >
         {rows.map((row) => {
@@ -77,7 +82,6 @@ export function Outline({
                 row={row}
                 count={openIn(ws, row.tasks)}
                 onAdd={() => void addIn(row.projectId, row.place)}
-                onManageMarks={onManageMarks}
                 dnd={dnd}
               />
             );
@@ -94,11 +98,7 @@ export function Outline({
           }
           if (row.type === 'section') {
             return (
-              <SectionRow
-                key={row.id}
-                title={row.title}
-                action={<SectionAction row={row} onManageMarks={onManageMarks} />}
-              />
+              <SectionRow key={row.id} title={row.title} action={<SectionAction row={row} />} />
             );
           }
           if (row.type === 'hint') {
@@ -142,16 +142,10 @@ export function Outline({
 }
 
 /** Die Handlung rechts in einer Abschnittsüberschrift. */
-function SectionAction({
-  row,
-  onManageMarks,
-}: {
-  row: Extract<OutlineRow, { type: 'section' }>;
-  onManageMarks: () => void;
-}) {
+function SectionAction({ row }: { row: Extract<OutlineRow, { type: 'section' }> }) {
   if (row.action === 'manage-marks') {
     return (
-      <button className="linkish" onClick={onManageMarks}>
+      <button className="linkish" onClick={() => useStore.getState().setDialog('marks')}>
         Markierungen verwalten
       </button>
     );
@@ -162,7 +156,7 @@ function SectionAction({
         className="linkish"
         label="+ Gruppe"
         placeholder="Name der Gruppe"
-        onCreate={(t) => useStore.getState().addGroup(t, row.projectId)}
+        onCreate={async (t) => void (await useStore.getState().addGroup(t, row.projectId))}
       />
     );
   }
@@ -179,22 +173,6 @@ function SectionAction({
       }
     />
   );
-}
-
-/**
- * Legt eine Aufgabe an der genannten Stelle an und öffnet gleich den Titel.
- * Die Markierung gehört dazu: sie entscheidet über die smarte Gruppe.
- */
-async function addIn(projectId: string, place: Placement): Promise<void> {
-  const store = useStore.getState();
-  const id = await store.addTask({
-    projectId,
-    title: '',
-    milestoneId: place.milestoneId ?? null,
-    groupId: place.groupId ?? null,
-    markId: place.markId ?? null,
-  });
-  if (id) store.edit(id);
 }
 
 const openIn = (ws: Workspace, tasks: Task[]): number =>

@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { TASK_STATUS, isDone, type Status, type Task } from '@shared/model.js';
-import { container, siblings, type OutlineRow } from '@shared/outline.js';
+import { container, isLooseRoot, siblings, type OutlineRow } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
+import { addAndEdit, addChild, addSibling, toBacklog } from './actions.js';
 import { focusQuickAdd } from './QuickAdd.js';
 
 /**
@@ -134,7 +135,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
       switch (e.key) {
         case 'Enter':
           e.preventDefault();
-          void (e.shiftKey ? addChild(t) : addSibling(t));
+          void (e.shiftKey ? addChild(t) : addSibling(ws, t));
           return;
         case 'Tab':
           e.preventDefault();
@@ -158,6 +159,11 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
         case 'A':
           void store.archiveItem('task', t.id);
           return;
+        case 'b':
+        case 'B':
+          // Aus Milestone oder Gruppe heraus zurück in den losen Backlog.
+          if (!isLooseRoot(t)) void toBacklog(t);
+          return;
         case 'Delete':
         case 'Backspace':
           e.preventDefault();
@@ -172,26 +178,6 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
       if (!row) return;
       store.select(row.id);
       document.querySelector(`[data-row="${row.id}"]`)?.scrollIntoView({ block: 'nearest' });
-    };
-
-    /** Neue Aufgabe anlegen und gleich den Titel bearbeiten. */
-    const addAndEdit = async (input: Record<string, unknown>): Promise<void> => {
-      const id = await store.addTask({ title: '', ...input });
-      if (id) store.edit(id);
-    };
-
-    /** Neue Aufgabe direkt unter der aktuellen, nicht am Ende der Liste. */
-    const addSibling = async (t: Task): Promise<void> => {
-      const at = siblings(ws, t).indexOf(t) + 1;
-      const id = await store.addTask({ title: '', projectId: t.projectId, ...container(t) });
-      if (!id) return;
-      await store.moveTask(id, { ...container(t), index: at });
-      store.edit(id);
-    };
-
-    const addChild = async (t: Task): Promise<void> => {
-      store.setCollapsed(t.id, false);
-      await addAndEdit({ projectId: t.projectId, parentId: t.id });
     };
 
     const indent = async (t: Task): Promise<void> => {

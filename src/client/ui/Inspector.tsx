@@ -21,6 +21,7 @@ import {
   StatusIcon,
 } from './icons.js';
 import { markdownParts, checkboxClick } from './markdown.js';
+import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
 
 /** Fortschrittskette links, Sonderstatus rechts – zusammen eine Auswahl. */
@@ -264,7 +265,7 @@ function TaskHead({
           menu={menu}
           empty={!cat || !!cat.from}
           title={cat?.from ? `Kategorie – geerbt von „${cat.from.title}“` : 'Kategorie'}
-          items={() => categoryMenu(ws, task)}
+          items={() => categorySub(ws, task)}
         >
           {cat ? (
             <>
@@ -281,7 +282,7 @@ function TaskHead({
       </MetaRow>
 
       <MetaRow k="mark" label="Markierung">
-        <PropButton menu={menu} empty={!mark} title="Markierung" items={() => markMenu(ws, task)}>
+        <PropButton menu={menu} empty={!mark} title="Markierung" items={() => markSub(ws, task)}>
           {mark ? `${mark.emoji} ${mark.name}` : 'Keine'}
         </PropButton>
       </MetaRow>
@@ -997,102 +998,17 @@ function StatusGroups({
 
 /* ----------------------------------------------------------------- Menüs */
 
-function categoryMenu(ws: Workspace, task: Task): MenuItem[] {
-  const patch = useStore.getState().patch;
-  const effective = effectiveCategory(ws, task);
-  const own = ws.categories
-    .filter((c) => c.projectId === task.projectId)
-    .sort((a, b) => a.order - b.order);
-
-  return [
-    ...(effective?.from
-      ? [{ head: `Geerbt: ${effective.category.name} (von „${effective.from.title}“)` }]
-      : []),
-    {
-      label: effective?.from ? 'Keine eigene' : 'Keine',
-      check: !task.categoryId,
-      onSelect: () => void patch('task', task.id, { categoryId: null }),
-    },
-    ...own.map((c) => ({
-      label: c.name,
-      check: task.categoryId === c.id,
-      onSelect: () => void patch('task', task.id, { categoryId: c.id }),
-    })),
-  ];
-}
-
-function markMenu(ws: Workspace, task: Task): MenuItem[] {
-  const patch = useStore.getState().patch;
-  return [
-    { label: 'Keine', check: !task.markId, onSelect: () => void patch('task', task.id, { markId: null }) },
-    ...ws.marks.map((k) => ({
-      label: `${k.emoji} ${k.name}`,
-      check: task.markId === k.id,
-      onSelect: () => void patch('task', task.id, { markId: k.id }),
-    })),
-  ];
-}
-
 /**
- * Das „⋯“-Menü. Es zeigt, was heute schon geht; die vollständigen
- * Kontextmenüs des Prototyps (Duplizieren, Verschieben, Mehrfachauswahl)
- * stehen als eigener Punkt im Plan.
+ * Das „⋯“-Menü ist dasselbe wie der Rechtsklick auf die Zeile, nur ohne
+ * „Details öffnen“ – die stehen ja schon offen. Genauso macht es der Prototyp.
  */
-function moreMenu(ws: Workspace, kind: 'task' | 'milestone', item: Task | Milestone): MenuItem[] {
-  const store = useStore.getState();
-  const common: MenuItem[] = [
-    { sep: true },
-    { label: 'Archivieren', onSelect: () => void store.archiveItem(kind, item.id) },
-    { label: 'In den Papierkorb', danger: true, onSelect: () => void store.remove(kind, item.id) },
-  ];
-
-  if (kind === 'milestone') {
-    const m = item as Milestone;
-    return [
-      { label: 'Umbenennen', onSelect: () => store.edit(m.id) },
-      {
-        label: 'Status',
-        sub: MS_KEYS.map((s) => ({
-          label: MS_STATUS[s as 'open' | 'progress' | 'done'],
-          check: m.status === s,
-          onSelect: () => void store.patch('milestone', m.id, { status: s }),
-        })),
-      },
-      {
-        label: m.planned ? 'Zurück in den Backlog' : 'In den Plan',
-        onSelect: () => void store.patch('milestone', m.id, { planned: !m.planned }),
-      },
-      ...common,
-    ];
-  }
-
-  const t = item as Task;
-  return [
-    { label: 'Umbenennen', onSelect: () => store.edit(t.id) },
-    {
-      label: isDone(t) ? 'Als offen markieren' : 'Als erledigt markieren',
-      onSelect: () => void store.patch('task', t.id, { status: isDone(t) ? 'open' : 'done' }),
-    },
-    {
-      label: 'Status',
-      sub: [...PROGRESS_CHAIN, ...SPECIAL].map((s) => ({
-        label: STATUS_LABEL[s],
-        check: t.status === s,
-        onSelect: () => void store.patch('task', t.id, { status: s }),
-      })),
-    },
-    { label: 'Kategorie', sub: categoryMenu(ws, t) },
-    { label: 'Markierung', sub: markMenu(ws, t) },
-    { sep: true },
-    {
-      label: 'In den Backlog',
-      disabled: !t.parentId && !t.milestoneId && !t.groupId,
-      onSelect: () =>
-        void store.moveTask(t.id, { parentId: null, milestoneId: null, groupId: null }),
-    },
-    ...common,
-  ];
-}
+const moreMenu = (ws: Workspace, kind: 'task' | 'milestone', item: Task | Milestone): MenuItem[] =>
+  (kind === 'milestone'
+    ? milestoneMenu(ws, item as Milestone)
+    : ws.isDoc(item as Task)
+      ? docMenu(ws, item as Task)
+      : taskMenu(ws, item as Task)
+  ).slice(1);
 
 /* --------------------------------------------------------------- Kleinkram */
 

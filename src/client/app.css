@@ -2189,6 +2189,14 @@ button.prop:hover {
   color: var(--faint);
 }
 
+.ctx-i kbd {
+  margin-left: 16px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--faint);
+}
+
 .ctx-i .chk {
   width: 14px;
   color: var(--accent);
@@ -2222,6 +2230,43 @@ button.prop:hover {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--faint);
+}
+
+.ctx-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+}
+
+.ctx-chips .lbl {
+  width: 62px;
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ctx-chips button {
+  min-width: 26px;
+  padding: 3px 5px;
+  border-radius: 5px;
+  font: 12px var(--mono);
+  border: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ctx-chips button:hover,
+.ctx-chips button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.ctx-chips button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
 }
 
 .ctx-wrap {

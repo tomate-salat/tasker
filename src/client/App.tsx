@@ -32,9 +32,6 @@ export function App() {
   return <Shell account={account} onAccount={setAccount} onLogout={() => setAccount(null)} />;
 }
 
-/** Welcher Dialog gerade offen ist – immer höchstens einer. */
-type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help';
-
 function Shell({
   account,
   onAccount,
@@ -48,7 +45,8 @@ function Shell({
   const { ws, view, setView, selected, loading, error, toast, load, say, addTask, live, scope, multi } =
     state;
   const projectId = currentProjectId(state);
-  const [dialog, setDialog] = useState<Dialog>('none');
+  // Der Dialog liegt im Speicher, weil ihn auch die Kontextmenüs öffnen.
+  const { dialog, setDialog } = state;
 
   // Ein kurzer Aussetzer beim Verbinden ist normal und soll nichts melden.
   const [offline, setOffline] = useState(false);
@@ -81,7 +79,10 @@ function Shell({
       const el = e.target as HTMLElement | null;
       if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === '?') setDialog((d) => (d === 'help' ? 'none' : 'help'));
+      if (e.key === '?') {
+        const s = useStore.getState();
+        s.setDialog(s.dialog === 'help' ? 'none' : 'help');
+      }
       if (e.key === '[') {
         e.preventDefault();
         useStore.getState().toggleSide();
@@ -205,7 +206,7 @@ function Shell({
         <FilterBar ws={ws} />
 
         {(view === 'plan' || view === 'backlog' || view === 'docs') && (
-          <Outline ws={ws} view={view} onManageMarks={() => setDialog('marks')} />
+          <Outline ws={ws} view={view} />
         )}
         {view === 'timeline' && <Timeline ws={ws} />}
         {view === 'archive' && <ArchiveView />}
