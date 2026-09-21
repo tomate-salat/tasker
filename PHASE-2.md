@@ -594,8 +594,13 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Aufgabe verstecken würde, auswählen; Archiviertes öffnet das Archiv. Die Schnellerfassung klappt
   wie `expandTo` den Behälter der neuen Aufgabe auf. Am Planen/Zurücklegen steht dafür jetzt
   „Anzeigen“ statt „Rückgängig“ (wie im Prototyp; `Strg+Z` geht weiter).
-  Noch nicht wie im Prototyp: Nach der Schnellerfassung heißt die Meldung „Angelegt: …“ statt
-  „Angelegt im Backlog › … · Projekt“, und bei sichtbarer neuer Zeile fehlt dort „Rückgängig“.
+  Nach der Schnellerfassung heißt die Meldung wie im Prototyp „Angelegt im Backlog › … · Projekt“
+  (`whereLabel`); ist die neue Zeile zu sehen, bietet sie „Rückgängig“. Abweichung: Das
+  Zurücknehmen legt die Aufgabe in den Papierkorb, im Prototyp verschwindet sie ganz.
+- ~~„+ Milestone“ / „+ Gruppe“ in den Backlog-Abschnitten~~ **Erledigt.** Wie `addMilestone` und
+  `addGroup` im Prototyp: sofort anlegen, Name in der neuen Zeile; leer oder Escape entfernt sie
+  wieder.
+- Neue Zeichnungen heißen „Zeichnung“ statt „Skizze n“ – so gewollt (Entscheidung des Nutzers).
 - ~~Die Kürzel-Hilfe ist gekürzt~~ **Erledigt.** Vollständig wie im Prototyp (Text Zeile für Zeile
   verglichen, Knopf „Schließen“). Zwei gewollte Abweichungen: `S` nennt den Ablauf Offen → In
   Progress → Erledigt (Unklar/Blockiert nur ausdrücklich, auf Wunsch), und die Zeile „Zeichnung“

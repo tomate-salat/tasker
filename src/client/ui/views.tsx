@@ -9,7 +9,6 @@ import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
-import { NewThing } from './NewThing.js';
 import { rowMenu } from './rowMenu.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
 
@@ -178,28 +177,35 @@ function SectionAction({ row }: { row: Extract<OutlineRow, { type: 'section' }> 
       </button>
     );
   }
+  // Wie im Prototyp (`addGroup`, `addMilestone`): sofort anlegen und den Namen in
+  // der neuen Zeile bearbeiten – bleibt er leer, verschwindet die Zeile wieder.
+  const store = useStore.getState;
   if (row.action === 'add-group') {
     return (
-      <NewThing
+      <button
         className="linkish"
-        label="+ Gruppe"
-        placeholder="Name der Gruppe"
-        onCreate={async (t) => void (await useStore.getState().addGroup(t, row.projectId))}
-      />
+        onClick={() =>
+          void store()
+            .addGroup('', row.projectId)
+            .then((id) => id && store().edit(id, true))
+        }
+      >
+        + Gruppe
+      </button>
     );
   }
   return (
-    <NewThing
+    <button
       className="linkish"
-      label="+ Milestone"
-      placeholder="Titel des Milestones"
       // Aus dem Backlog heraus ist ein Milestone ein vorbereiteter.
-      onCreate={async (t) =>
-        void (await useStore
-          .getState()
-          .addMilestone(t, { planned: false, projectId: row.projectId }))
+      onClick={() =>
+        void store()
+          .addMilestone('', { planned: false, projectId: row.projectId })
+          .then((id) => id && store().edit(id, true))
       }
-    />
+    >
+      + Milestone
+    </button>
   );
 }
 

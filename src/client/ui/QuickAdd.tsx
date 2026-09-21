@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { parseQuickAdd, quickAddInput, targetLabel } from '@shared/quickadd.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore } from '../store.js';
+import { useStore, whereLabel } from '../store.js';
 import { STATUS_LABEL } from './icons.js';
 import { tagStyle } from './rows.js';
 
@@ -26,12 +26,15 @@ export function QuickAdd({ ws, projectId }: { ws: Workspace; projectId: string }
     setText('');
     expandTo(id);
     select(id);
-    const message = `Angelegt: ${targetLabel(parsed.target)}`;
-    say(message);
-    // Wie im Prototyp: Landet die Aufgabe außerhalb der aktuellen Ansicht, holt
-    // „Anzeigen“ sie in den Blick.
+    const store = useStore.getState();
+    const t = store.ws?.task(id);
+    const message = `Angelegt ${store.ws && t ? whereLabel(store.ws, t) : ''}`.trim();
+    // Wie im Prototyp: Ist die neue Zeile zu sehen, gibt es „Rückgängig“; landet
+    // sie außerhalb der aktuellen Ansicht, holt „Anzeigen“ sie in den Blick.
     requestAnimationFrame(() => {
-      if (!document.querySelector(`[data-row="${id}"]`)) {
+      if (document.querySelector(`[data-row="${id}"]`)) {
+        useStore.getState().sayUndo(message, [{ op: 'trash', kind: 'task', id }]);
+      } else {
         useStore.getState().sayLink(message, 'Anzeigen', () => useStore.getState().reveal(id));
       }
     });

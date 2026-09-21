@@ -154,6 +154,8 @@ type State = {
   expandTo: (id: string) => void;
   /** Meldung mit eigenem Knopf, etwa „Anzeigen“. */
   sayLink: (message: string, label: string, run: () => void) => void;
+  /** Meldung mit „Rückgängig“, das die übergebenen Gegen-Schritte ausführt. */
+  sayUndo: (message: string, steps: Step[]) => void;
   undo: () => Promise<void>;
   /**
    * Mehrere Schritte in einer Transaktion, mit Meldung und Rücknahme. Ohne
@@ -495,6 +497,7 @@ export const useStore = create<State>((set, get) => ({
   toastUndo: false,
   toastLink: null,
   sayLink: (message, label, run) => linked(message, label, run),
+  sayUndo: (message, steps) => remember(message, steps),
   drawingOpen: null,
   openDrawing: (drawingOpen) => set({ drawingOpen }),
 
