@@ -4,7 +4,7 @@ import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { placeLabel } from '@shared/outline.js';
-import { allDone, doneCount, milestoneStats, statusSegments, total } from '@shared/progress.js';
+import { allDone, milestoneStats, statusSegments, subtaskCounts } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
@@ -703,7 +703,7 @@ function ChildList({ ws, tasks, doc }: { ws: Workspace; tasks: Task[]; doc: bool
               {doc
                 ? ws.kids(k.id).length || ''
                 : ws.kids(k.id).length
-                  ? `${doneCount(ws, k)}/${total(ws, k)}`
+                  ? `${subtaskCounts(ws, k).done}/${subtaskCounts(ws, k).total}`
                   : ''}
             </span>
           </button>

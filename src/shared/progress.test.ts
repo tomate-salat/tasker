@@ -7,6 +7,7 @@ import {
   milestoneStats,
   progressPct,
   statusSegments,
+  subtaskCounts,
   total,
 } from './progress.js';
 import { Builder } from './testing.js';
@@ -42,6 +43,13 @@ describe('Aufgaben zählen', () => {
       .build();
     const s = milestoneStats(ws, ws.milestone('m')!);
     assert.deepEqual({ total: s.total, done: s.done }, { total: 3, done: 2 });
+    // An Heiner selbst stehen nur die Unteraufgaben: 1/1.
+    assert.deepEqual(subtaskCounts(ws, ws.task('heiner')!), { done: 1, total: 1 });
+  });
+
+  it('das x/y an einer offenen Sammel-Aufgabe zählt nur die Unteraufgaben', () => {
+    const ws = tree();
+    assert.deepEqual(subtaskCounts(ws, ws.task('t1')!), { done: 0, total: 4 });
   });
 
   it('erledigte Unteraufgaben summieren sich nach oben', () => {

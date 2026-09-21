@@ -20,6 +20,15 @@ export function doneCount(ws: Workspace, t: Task): number {
   return sumBy(ws.kids(t.id), (k) => doneCount(ws, k));
 }
 
+/**
+ * Nur die Unteraufgaben darunter, ohne die Aufgabe selbst – für das „x/y“ an
+ * einer Aufgabe. Milestone, Burnup und Balken zählen dagegen mit `total`.
+ */
+export function subtaskCounts(ws: Workspace, t: Task): { done: number; total: number } {
+  const tot = total(ws, t) - 1;
+  return { done: isDone(t) ? tot : doneCount(ws, t), total: tot };
+}
+
 /** Erledigt oder nur noch aus erledigten Unteraufgaben bestehend. */
 export function allDone(ws: Workspace, t: Task): boolean {
   if (isDone(t)) return true;
