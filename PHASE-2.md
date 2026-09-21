@@ -465,7 +465,10 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Namensfeld behalten ihre eigene Handlung, umbenennen lassen sich nur eigene Gruppen. Nebenbei:
   `Strg+A` griff auch in Eingabefeldern der Liste und wählte alle Aufgaben aus, statt den Text zu
   markieren – jetzt wie im Prototyp nur, wenn nicht getippt wird.
-- Das Zeichnungs-Abzeichen öffnet im Prototyp direkt die Zeichnung, hier nur die Aufgabe.
+- ~~Zeichnungs-Abzeichen~~ **Erledigt.** Öffnet wie `openDraw` im Prototyp direkt die (erste)
+  Zeichnung im Editor, an Aufgaben und Milestones, ohne die Auswahl zu ändern; Tooltip wie im
+  Prototyp („Zeichnung „…“ öffnen“ bzw. „2 Zeichnungen: … – öffnet „…““). Der Editor dafür hängt
+  global in der App (`BadgeDrawingEditor`) und holt die Szene selbst.
 - ~~Status auf Englisch~~ **Erledigt** (Tooltip und Vorschau der Schnell-Erfassung).
 
 **Tastatur**

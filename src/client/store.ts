@@ -20,6 +20,7 @@ import {
   api,
   type ArchivePage,
   type Bootstrap,
+  type DrawingOwner,
   type Settings,
   type TrashList,
 } from './api.js';
@@ -143,6 +144,12 @@ type State = {
    * verstecken würde.
    */
   reveal: (id: string) => void;
+  /**
+   * Die Zeichnung, die das Abzeichen an einer Zeile geöffnet hat (`openDraw` im
+   * Prototyp) – unabhängig davon, was im Inspektor steht.
+   */
+  drawingOpen: { owner: DrawingOwner; id: string } | null;
+  openDrawing: (open: { owner: DrawingOwner; id: string } | null) => void;
   /** Klappt die Behälter einer Aufgabe auf (`expandTo` im Prototyp) – nur die Ansicht bleibt. */
   expandTo: (id: string) => void;
   /** Meldung mit eigenem Knopf, etwa „Anzeigen“. */
@@ -488,6 +495,8 @@ export const useStore = create<State>((set, get) => ({
   toastUndo: false,
   toastLink: null,
   sayLink: (message, label, run) => linked(message, label, run),
+  drawingOpen: null,
+  openDrawing: (drawingOpen) => set({ drawingOpen }),
 
   expandTo: (id) => {
     const ws = get().ws;

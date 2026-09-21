@@ -77,6 +77,39 @@ export function useDrawings(owner: DrawingOwner, desc: string): DrawingsApi {
 }
 
 /**
+ * Der Editor für die Zeichnung, die das Abzeichen an einer Zeile geöffnet hat.
+ * Er holt die Szene selbst, weil der Besitzer nicht im Inspektor stehen muss.
+ */
+export function BadgeDrawingEditor() {
+  const { drawingOpen, openDrawing, say } = useStore();
+  const [drawing, setDrawing] = useState<Drawing | null>(null);
+
+  useEffect(() => {
+    setDrawing(null);
+    if (!drawingOpen) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const { drawings } = await api.drawings(drawingOpen.owner);
+        const d = drawings.find((x) => x.id === drawingOpen.id);
+        if (!alive) return;
+        if (d) setDrawing(d);
+        else openDrawing(null);
+      } catch (e) {
+        if (!alive) return;
+        say(e instanceof Error ? e.message : 'Zeichnung konnte nicht geladen werden');
+        openDrawing(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [drawingOpen, openDrawing, say]);
+
+  return drawing ? <DrawingEditor drawing={drawing} onClose={() => openDrawing(null)} /> : null;
+}
+
+/**
  * Eine Zeichnung im Text. Die Vorschau zeichnet Excalidraw selbst
  * (`exportToSvg`), damit sie genau so aussieht wie im Editor; das Paket kommt
  * dafür nachgeladen.

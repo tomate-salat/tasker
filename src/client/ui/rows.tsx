@@ -425,18 +425,27 @@ export function ChecklistBadge({ desc }: { desc: string }) {
 
 /** Zeigt an, dass an der Aufgabe oder dem Milestone eine Zeichnung hängt. */
 function DrawingBadge({ ownerId }: { ownerId: string }) {
-  const { boot, select } = useStore();
+  const { boot, openDrawing } = useStore();
   const drawings = drawingsOf(boot?.drawings, ownerId);
-  if (!drawings.length) return null;
+  const first = drawings[0];
+  if (!first) return null;
   const names = drawings.map((d) => d.name).join(', ');
+  // Wie im Prototyp öffnet das Abzeichen die (erste) Zeichnung direkt.
   return (
     <button
       className="draw-badge"
-      title={drawings.length === 1 ? `Zeichnung „${names}“` : `${drawings.length} Zeichnungen: ${names}`}
-      aria-label="Zeichnungen"
+      title={
+        drawings.length === 1
+          ? `Zeichnung „${first.name}“ öffnen`
+          : `${drawings.length} Zeichnungen: ${names} – öffnet „${first.name}“`
+      }
+      aria-label="Zeichnung öffnen"
       onClick={(e) => {
         e.stopPropagation();
-        select(ownerId);
+        openDrawing({
+          owner: first.taskId ? { kind: 'task', id: first.taskId } : { kind: 'milestone', id: ownerId },
+          id: first.id,
+        });
       }}
     >
       {DRAW_ICON}
