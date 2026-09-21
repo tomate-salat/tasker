@@ -8,7 +8,6 @@ import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useZone } from './dnd.js';
 import { SIDE_ICON, THEME_ICON, THEME_LABEL } from './icons.js';
 import { useMenu } from './Menu.js';
-import { NewThing } from './NewThing.js';
 import { projectMenu } from './rowMenu.js';
 
 /**
@@ -146,11 +145,20 @@ export function Sidebar({
           ),
         )}
 
-        <NewThing
-          label="+ Neues Projekt"
-          placeholder="Name des Projekts"
-          className="nav-i muted new-proj-btn"
-          onCreate={(name) => state.addProject(name)}
+        {/* Wie im Prototyp gleich ein Feld: Enter legt an, leer passiert nichts. */}
+        <input
+          className="new-proj"
+          placeholder="+ Neues Projekt"
+          aria-label="Neues Projekt anlegen"
+          autoComplete="off"
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            const input = e.currentTarget;
+            const name = input.value.trim();
+            if (!name) return;
+            input.value = '';
+            void state.addProject(name);
+          }}
         />
       </div>
 

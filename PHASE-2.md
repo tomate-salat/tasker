@@ -519,8 +519,9 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Kind älter sein als sein Elternteil). Test: `ein gelöschtes Projekt kommt vollständig wieder`.
 - ~~Projekte lassen sich nicht zum Sortieren ziehen~~ **Erledigt** (siehe Ziehen und Ablegen);
   die Projektzeile trägt den Titel des Prototyps.
-- „+ Neues Projekt“ ist im Prototyp ein gestricheltes Eingabefeld, hier ein Knopf, der erst zum
-  Feld wird.
+- ~~„+ Neues Projekt“~~ **Erledigt.** Wie im Prototyp gleich ein gestricheltes Eingabefeld; Enter
+  legt an und öffnet das Projekt im Backlog, leer passiert nichts. Maße und Rahmen gegen den
+  Prototyp gemessen.
 - ~~Filterleiste~~ **Erledigt.** „Gefiltert:“ vor den Chips, Label-Chip in seiner Farbe,
   Kategorie-Chip mit Farbfeld – Markup gegen den Prototyp verglichen.
 - ~~Zähler in Doku und Archiv~~ **Erledigt.** Die Zahlen an Kategorien, Markierungen und Labels
