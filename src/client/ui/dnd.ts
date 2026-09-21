@@ -27,7 +27,8 @@ import { placeSteps, toBacklog } from './actions.js';
  *   Projekts: davor oder danach.
  *
  * Über den Prototyp hinaus (Wunsch des Nutzers): Gehört die gezogene Aufgabe
- * zu einer Mehrfachauswahl, wandern alle Ausgewählten mit.
+ * zu einer Mehrfachauswahl, wandern alle Ausgewählten mit. Am Listenrand
+ * scrollt es mit, und kurzes Verweilen über einem Reiter öffnet ihn.
  *
  * Der Zustand liegt in einem eigenen kleinen Speicher, weil Liste,
  * Seitenleiste und Reiter an einem Ziehvorgang beteiligt sind.
@@ -92,14 +93,71 @@ const clear = (): void => useDrag.setState({ drag: null, over: null });
 const EDGE = 60;
 const MAX_STEP = 8;
 
+let pointerX: number | null = null;
 let pointerY: number | null = null;
 let frame = 0;
 
 const track = (e: DragEvent): void => {
+  pointerX = e.clientX;
   pointerY = e.clientY;
 };
 
+/* Reiter öffnen sich beim Verweilen */
+
+/**
+ * Ebenfalls Wunsch des Nutzers: Bleibt man mit einer gezogenen Zeile kurz über
+ * Plan, Backlog oder Doku, öffnet sich der Reiter – so lässt sich etwa eine
+ * Auswahl aus dem Backlog direkt auf einen Milestone im Plan legen.
+ */
+const SPRING_MS = 600;
+const SPRING_VIEWS: View[] = ['plan', 'backlog', 'docs'];
+
+let tabHover: { view: View; el: HTMLElement; since: number } | null = null;
+
+function hoverTab(view: View, el: HTMLElement): void {
+  if (tabHover?.view === view) return;
+  tabHover = { view, el, since: performance.now() };
+}
+
+function springStep(): void {
+  if (!tabHover || pointerX === null || pointerY === null) return;
+  const box = tabHover.el.getBoundingClientRect();
+  const inside =
+    pointerX >= box.left && pointerX <= box.right && pointerY >= box.top && pointerY <= box.bottom;
+  if (!inside) {
+    tabHover = null;
+    return;
+  }
+  if (performance.now() - tabHover.since < SPRING_MS) return;
+  const store = useStore.getState();
+  if (store.view !== tabHover.view && SPRING_VIEWS.includes(tabHover.view)) {
+    store.setView(tabHover.view);
+    watchDetached();
+  }
+  tabHover = null;
+}
+
+/**
+ * Mit dem Ansichtswechsel verschwindet meist die gezogene Zeile aus dem DOM –
+ * dann meldet der Browser das Ende des Ziehens (`dragend`) nicht mehr. Maus-
+ * ereignisse gibt es während des Ziehens nicht; kommt wieder eins, ist es vorbei.
+ */
+function watchDetached(): void {
+  const done = (): void => clear();
+  for (const type of ['mousemove', 'pointerdown', 'keydown']) {
+    document.addEventListener(type, done, { capture: true, once: true });
+  }
+  const off = useDrag.subscribe((s) => {
+    if (s.drag) return;
+    for (const type of ['mousemove', 'pointerdown', 'keydown']) {
+      document.removeEventListener(type, done, { capture: true });
+    }
+    off();
+  });
+}
+
 function scrollStep(): void {
+  springStep();
   const main = document.querySelector<HTMLElement>('.main');
   if (main && pointerY !== null) {
     const box = main.getBoundingClientRect();
@@ -123,7 +181,9 @@ useDrag.subscribe((s, prev) => {
   } else {
     document.removeEventListener('dragover', track, true);
     cancelAnimationFrame(frame);
+    pointerX = null;
     pointerY = null;
+    tabHover = null;
   }
 });
 
@@ -187,6 +247,7 @@ export function dropTarget(target: Target) {
       if (!drag) return;
       const zone = zoneFor(drag, target, e);
       if (!zone) return;
+      if (target.type === 'tab') hoverTab(target.view, e.currentTarget as HTMLElement);
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
