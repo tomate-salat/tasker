@@ -26,9 +26,11 @@ export async function addAndEdit(input: Record<string, unknown>): Promise<void> 
 export async function addSibling(ws: Workspace, t: Task): Promise<void> {
   const store = useStore.getState();
   const at = siblings(ws, t).indexOf(t) + 1;
-  const id = await store.addTask({ title: '', projectId: t.projectId, ...container(t) });
+  // Neben einer Doku-Seite der obersten Ebene entsteht wieder eine Seite, keine Aufgabe.
+  const place = { ...container(t), ...(t.doc && !t.parentId ? { doc: true } : {}) };
+  const id = await store.addTask({ title: '', projectId: t.projectId, ...place });
   if (!id) return;
-  await store.moveTask(id, { ...container(t), index: at });
+  await store.moveTask(id, { ...place, index: at });
   store.edit(id, true);
 }
 

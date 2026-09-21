@@ -57,7 +57,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
           title="Weitere Aktionen"
           aria-label="Weitere Aktionen"
           aria-haspopup="menu"
-          onClick={(e) => menu.openAt(e.currentTarget, moreMenu(ws, kind, item))}
+          onClick={(e) => menu.openAt(e.currentTarget, moreMenu(ws, kind, item), e.detail === 0)}
         >
           ⋯
         </button>

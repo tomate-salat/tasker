@@ -423,12 +423,29 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
 - ~~Status auf Englisch~~ **Erledigt** (Tooltip und Vorschau der Schnell-Erfassung).
 
 **Tastatur**
-- Milestones: `S`, `P`, `B`, `F2`/`E`, `Alt ↑/↓` fehlen. Aufgaben: `M` (Verschieben nach …),
-  `Kontextmenü`/`⇧ F10` fehlen.
-- `S` schaltet in anderer Reihenfolge (Prototyp: Offen → Unklar → In Progress → Blockiert → Erledigt).
-- Leertaste und `S` wirken auch auf Dokumentationsseiten; im Prototyp nicht.
-- `Esc` schließt im Prototyp den Inspektor nur auf schmalen Bildschirmen, hier immer.
-- Menüs lassen sich nicht mit den Pfeiltasten bedienen.
+- ~~Milestone-Tasten fehlen~~ **Erledigt.** `S` (Offen → In Progress → Done), `P` (Plan ↔ Backlog),
+  `B` (in den Backlog, sonst „Liegt schon im Backlog“), `F2`/`E`, `Alt ↑/↓`. Wie im Prototyp
+  (`item(u.sel)`) gelten die Tasten dem Ausgewählten auch, wenn es gerade aus der Ansicht gefallen
+  ist – sonst holte `P` einen eben herausgenommenen Milestone nicht zurück.
+- ~~`M` und `Kontextmenü`/`⇧ F10` fehlen~~ **Erledigt.** `M` öffnet unter der Zeile das Ortsmenü
+  (`propMenu(x, 'loc')`: Behälter, „Unter einen Task“, „In anderes Projekt“), die Kontextmenü-Taste
+  das Zeilenmenü; der Fokus steht jeweils auf dem ersten Eintrag.
+- ~~`S`-Reihenfolge~~ **Erledigt:** Offen → Unklar → In Progress → Blockiert → Erledigt.
+- ~~Leertaste und `S` auf Dokumentationsseiten~~ **Erledigt:** wirken dort nicht mehr.
+- ~~`Esc` schließt immer~~ **Erledigt:** den Inspektor nur bis 1240 px Breite.
+- ~~Menüs ohne Pfeiltasten~~ **Erledigt** (`ctxKey`): ↑/↓ reihum, → bzw. `Enter` öffnet ein
+  Untermenü, ← schließt es, `Esc`/`Tab` schließt das Menü. Solange es offen ist, gehören ihm alle
+  Tasten – vorher wanderte mit ↓ zugleich die Auswahl in der Liste. Per Tastatur geöffnete Knopf-
+  Menüs (Inspektor, Mehrfachauswahl, „⋯“ am Projekt) setzen den Fokus ebenfalls hinein.
+- Dabei gefunden und behoben: Die Listentasten griffen auch, wenn der Fokus auf einem Knopf in
+  Seitenleiste oder Inspektor lag – `Enter` auf „⋯“ legte eine Aufgabe an, statt das Menü zu
+  öffnen. Jetzt wie im Prototyp (`inList`) nur bei Fokus in der Liste oder auf der Seite selbst.
+- Dabei gefunden und behoben: `Enter` auf einer Doku-Seite der obersten Ebene (und „Neue Seite
+  darunter“) legte eine Backlog-Aufgabe an statt einer Seite.
+- Offen: Ein Milestone, der per `P` (oder Menü) in den Plan kommt, behält seinen Platz; im
+  Prototyp rückt er ans Ende (`qorder = 1e6`). Die Meldungen des Prototyps zu `S`/`P` am Milestone
+  („◆ Alpha: In Progress · Start …“, „ist im Plan · fertig ca. …“ mit „Anzeigen“) fehlen – gehört zu
+  „Meldungen und Hilfe“.
 
 **Kopf und Seitenleiste**
 - Zusätzlicher Knopf „+ Aufgabe“ in Plan und Backlog (gibt es im Prototyp nicht); „+ Milestone“

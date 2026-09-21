@@ -32,13 +32,16 @@ export type MenuItem =
  * Speicher neu – so wandern die Häkchen mit, solange es offen bleibt.
  */
 type Items = MenuItem[] | (() => MenuItem[]);
-type Placed = { items: Items; x: number; y: number };
+type Placed = { items: Items; x: number; y: number; keyboard: boolean };
 
 export type Menu = {
-  /** Öffnet unter dem Knopf; ein zweiter Klick auf denselben schließt wieder. */
-  openAt: (el: HTMLElement, items: Items) => void;
-  /** Öffnet an einem Punkt – für den Rechtsklick. */
-  openAtPoint: (x: number, y: number, items: MenuItem[]) => void;
+  /**
+   * Öffnet unter dem Knopf; ein zweiter Klick auf denselben schließt wieder.
+   * `keyboard`: per Taste geöffnet – dann steht der Fokus gleich auf dem ersten Eintrag.
+   */
+  openAt: (el: HTMLElement, items: Items, keyboard?: boolean) => void;
+  /** Öffnet an einem Punkt – für den Rechtsklick und die Kontextmenü-Taste. */
+  openAtPoint: (x: number, y: number, items: MenuItem[], keyboard?: boolean) => void;
   close: () => void;
   node: React.ReactNode;
 };
@@ -47,32 +50,58 @@ export function useMenu(): Menu {
   const [open, setOpen] = useState<Placed | null>(null);
   const close = useCallback(() => setOpen(null), []);
 
-  const openAtPoint = useCallback((x: number, y: number, items: MenuItem[]) => {
-    setOpen({ items, x, y });
+  const openAtPoint = useCallback((x: number, y: number, items: MenuItem[], keyboard = false) => {
+    setOpen({ items, x, y, keyboard });
   }, []);
 
-  const openAt = useCallback((el: HTMLElement, items: Items) => {
+  const openAt = useCallback((el: HTMLElement, items: Items, keyboard = false) => {
     const r = el.getBoundingClientRect();
     // Derselbe Knopf noch einmal: das offene Menü ist gemeint, nicht ein neues.
-    setOpen((cur) => (cur && cur.x === r.left && cur.y === r.bottom + 4 ? null : { items, x: r.left, y: r.bottom + 4 }));
+    setOpen((cur) =>
+      cur && cur.x === r.left && cur.y === r.bottom + 4
+        ? null
+        : { items, x: r.left, y: r.bottom + 4, keyboard },
+    );
   }, []);
 
   const node = open
-    ? createPortal(<Panel items={open.items} x={open.x} y={open.y} onClose={close} />, document.body)
+    ? createPortal(
+        <Panel items={open.items} x={open.x} y={open.y} keyboard={open.keyboard} onClose={close} />,
+        document.body,
+      )
     : null;
 
   return { openAt, openAtPoint, close, node };
 }
 
+/** Die bedienbaren Knöpfe einer Menüebene, ohne die der Untermenüs darin. */
+const buttonsOf = (level: HTMLElement): HTMLButtonElement[] =>
+  [
+    ...level.querySelectorAll<HTMLButtonElement>(
+      ':scope > .ctx-i, :scope > .ctx-wrap > .ctx-i, :scope > .ctx-chips > button',
+    ),
+  ].filter((b) => !b.disabled);
+
+/** Klappt das Untermenü eines Eintrags auf und setzt den Fokus hinein. */
+const enterSub = (button: HTMLElement): void => {
+  button.click();
+  requestAnimationFrame(() => {
+    const sub = button.parentElement?.querySelector<HTMLElement>(':scope > .ctx-sub');
+    if (sub) buttonsOf(sub)[0]?.focus();
+  });
+};
+
 function Panel({
   items: source,
   x,
   y,
+  keyboard,
   onClose,
 }: {
   items: Items;
   x: number;
   y: number;
+  keyboard: boolean;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -89,19 +118,49 @@ function Panel({
       left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
     });
-    el.focus();
-  }, [x, y]);
+    (keyboard ? (buttonsOf(el)[0] ?? el) : el).focus();
+  }, [x, y, keyboard]);
 
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
       if (!ref.current?.contains(e.target as Node)) onClose();
     };
+    /**
+     * Wie `ctxKey` im Prototyp: Solange das Menü offen ist, gehören ihm alle
+     * Tasten – sonst wanderte mit ↓ zugleich die Auswahl in der Liste, und
+     * `Enter` legte dort eine Aufgabe an.
+     */
     const onKey = (e: KeyboardEvent): void => {
+      const root = ref.current;
+      if (!root) return;
+      e.stopPropagation();
+      const active = document.activeElement as HTMLElement | null;
+      const level =
+        active && root.contains(active) ? (active.closest<HTMLElement>('.ctx') ?? root) : root;
+      const buttons = buttonsOf(level);
+      const i = buttons.indexOf(active as HTMLButtonElement);
+      const isSub = !!active?.parentElement?.classList.contains('ctx-wrap') && active.classList.contains('ctx-i');
+
       if (e.key === 'Escape' || e.key === 'Tab') {
-        // Escape gilt jetzt dem Menü – der Inspektor soll nicht mitschließen.
         e.preventDefault();
-        e.stopPropagation();
         onClose();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        buttons[(i + 1) % buttons.length]?.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        buttons[(i - 1 + buttons.length) % buttons.length]?.focus();
+      } else if (e.key === 'ArrowRight' && active && isSub) {
+        e.preventDefault();
+        enterSub(active);
+      } else if (e.key === 'ArrowLeft' && level !== root) {
+        e.preventDefault();
+        // Der Fokus geht zurück auf den Eintrag; das schließt das Untermenü (siehe `onFocus`).
+        level.parentElement?.querySelector<HTMLElement>(':scope > .ctx-i')?.focus();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (active && isSub) enterSub(active);
+        else if (active?.matches('button')) active.click();
       }
     };
     // Erst im nächsten Zug lauschen, sonst schließt der öffnende Klick gleich wieder.
@@ -115,7 +174,15 @@ function Panel({
   }, [onClose]);
 
   return (
-    <div ref={ref} className="ctx" role="menu" tabIndex={-1} style={{ left: pos.left, top: pos.top }}>
+    <div
+      ref={ref}
+      className="ctx"
+      role="menu"
+      tabIndex={-1}
+      style={{ left: pos.left, top: pos.top }}
+      // Die Kontextmenü-Taste löst nach dem Öffnen noch das Browsermenü aus – nicht hier.
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <Items items={items} onClose={onClose} />
     </div>
   );
@@ -175,6 +242,11 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
                 // Ein Klick öffnet, er schließt nicht wieder: sonst macht er das
                 // zu, was das Überfahren gerade aufgeklappt hat.
                 onClick={() => setOpenSub(i)}
+                // Kommt der Fokus mit ← aus dem Untermenü zurück, klappt es zu.
+                onFocus={(e) => {
+                  const sub = e.currentTarget.nextElementSibling;
+                  if (e.relatedTarget && sub?.contains(e.relatedTarget)) setOpenSub(null);
+                }}
               >
                 <span className="lab">{item.label}</span>
                 <span className="arrow" aria-hidden="true">
@@ -231,7 +303,7 @@ export function PropButton({
       className={`prop ${empty ? 'empty' : ''} ${className}`}
       title={title}
       aria-haspopup="menu"
-      onClick={(e) => menu.openAt(e.currentTarget, typeof items === 'function' ? items() : items)}
+      onClick={(e) => menu.openAt(e.currentTarget, typeof items === 'function' ? items() : items, e.detail === 0)}
     >
       {children}
     </button>

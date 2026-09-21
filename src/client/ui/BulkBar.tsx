@@ -147,7 +147,7 @@ function Btn({
     <button
       className="bulk-btn"
       aria-haspopup="menu"
-      onClick={(e) => menu.openAt(e.currentTarget, items())}
+      onClick={(e) => menu.openAt(e.currentTarget, items(), e.detail === 0)}
     >
       {children}
     </button>

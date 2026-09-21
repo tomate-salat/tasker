@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
-import { TASK_STATUS, isDone, type Status, type Task } from '@shared/model.js';
+import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { container, isLooseRoot, siblings, type OutlineRow } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
-import { addAndEdit, addChild, addSibling, indent, outdent, toBacklog } from './actions.js';
+import { addAndEdit, addChild, addSibling, indent, moveRowBy, outdent, toBacklog } from './actions.js';
+import type { Menu } from './Menu.js';
 import { focusQuickAdd } from './QuickAdd.js';
+import { locationMenu, rowMenu } from './rowMenu.js';
 
 /**
  * Die Tastaturbedienung aus dem Prototyp. Sie arbeitet auf derselben
@@ -14,7 +16,7 @@ import { focusQuickAdd } from './QuickAdd.js';
  * Während in einem Feld getippt wird, greift hier nichts – die Erfassungszeile
  * und die Titelbearbeitung haben ihre eigenen Tasten.
  */
-export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
+export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
   const store = useStore();
 
   useEffect(() => {
@@ -28,7 +30,9 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
         if (typing) target?.blur();
         // Escape hebt zuerst die Mehrfachauswahl auf, erst danach die Anzeige.
         else if (store.multi.size) store.clearMulti();
-        else if (store.selected) store.select(null);
+        // Wie im Prototyp schließt der Inspektor nur, wenn er über der Liste liegt;
+        // daneben stört er nicht, und Escape soll nichts Unsichtbares tun.
+        else if (store.selected && window.matchMedia('(max-width: 1240px)').matches) store.select(null);
         return;
       }
 
@@ -38,14 +42,28 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
         void store.undo();
         return;
       }
+      /**
+       * Wie im Prototyp (`inList`) gehören die Listentasten nur der Liste: Liegt
+       * der Fokus auf einem Knopf in Seitenleiste oder Inspektor, soll `Enter`
+       * den Knopf drücken und keine Aufgabe anlegen.
+       */
+      const inList = !target || target === document.body || !!target.closest('.list');
+
       // Strg+A wählt alles Sichtbare aus – die einzige Strg-Taste, die uns gehört.
-      if (!typing && (e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      if (inList && (e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
         store.selectAllVisible();
         return;
       }
       // Sonst gehören Strg und Meta dem Browser; Alt-Kombinationen kommen weiter unten.
       if (typing || e.ctrlKey || e.metaKey) return;
+
+      if (e.key === 'n' || e.key === 'N' || e.key === '/') {
+        e.preventDefault();
+        focusQuickAdd();
+        return;
+      }
+      if (!inList) return;
 
       // Umschalt plus Pfeiltaste erweitert die Auswahl, statt zu wandern.
       if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -71,14 +89,11 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
         }
       }
 
-      if (e.key === 'n' || e.key === 'N' || e.key === '/') {
-        e.preventDefault();
-        focusQuickAdd();
-        return;
-      }
-
       const index = rows.findIndex((r) => r.id === store.selected);
-      const row = rows[index];
+      // Wie im Prototyp (`item(u.sel)`) gelten die Tasten dem Ausgewählten, auch
+      // wenn es gerade aus der Ansicht gefallen ist – `P` holt einen Milestone
+      // sonst nicht mehr in den Plan zurück, den es eben herausgenommen hat.
+      const row = rows[index] ?? hidden(ws, store.selected);
 
       // Mit Alt verschieben die Pfeiltasten die Zeile, sie wandern nicht.
       if (!e.altKey && (e.key === 'ArrowDown' || e.key === 'j')) {
@@ -92,6 +107,17 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
         return;
       }
       if (!row) return;
+
+      // Kontextmenü-Taste und ⇧ F10 öffnen das Menü unter der Zeile, den Fokus darin.
+      if (
+        (row.type === 'task' || row.type === 'milestone') &&
+        (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))
+      ) {
+        e.preventDefault();
+        const r = rowEl(row.id)?.getBoundingClientRect();
+        if (r) menu.openAtPoint(r.left + 40, r.bottom, rowMenu(ws, row), true);
+        return;
+      }
 
       if (e.key === 'ArrowRight' && !e.altKey) {
         e.preventDefault();
@@ -110,20 +136,55 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
       }
 
       if (row.type === 'milestone') {
-        if (e.key === 'Enter') {
+        const m = row.milestone;
+        if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
           e.preventDefault();
-          void addAndEdit({ projectId: row.milestone.projectId, milestoneId: row.id });
-        } else if (e.key === 'a' || e.key === 'A') {
-          void store.archiveItem('milestone', row.id);
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          e.preventDefault();
-          void store.remove('milestone', row.id);
+          void moveRowBy(ws, m, e.key === 'ArrowDown' ? 1 : -1);
+          return;
         }
-        return;
+        if (e.altKey) return;
+        switch (e.key) {
+          case 'Enter':
+            e.preventDefault();
+            void addAndEdit({ projectId: m.projectId, milestoneId: m.id });
+            return;
+          case 'e':
+          case 'E':
+          case 'F2':
+            e.preventDefault();
+            store.edit(m.id);
+            return;
+          case 's':
+          case 'S':
+            void store.patch('milestone', m.id, { status: nextMsStatus(m.status) });
+            return;
+          case 'p':
+          case 'P':
+            void store.patch('milestone', m.id, { planned: !m.planned });
+            return;
+          case 'b':
+          case 'B':
+            if (!m.planned) store.say('Liegt schon im Backlog');
+            else void store.patch('milestone', m.id, { planned: false });
+            return;
+          case 'a':
+          case 'A':
+            void store.archiveItem('milestone', m.id);
+            return;
+          case 'Delete':
+          case 'Backspace':
+            e.preventDefault();
+            void store.remove('milestone', m.id);
+            return;
+          default:
+            return;
+        }
       }
       if (row.type !== 'task') return;
 
       const t = row.task;
+      // Dokumentationsseiten haben keinen Status – Leertaste und `S` gehen ins Leere.
+      const doc = ws.isDoc(t);
 
       if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
@@ -143,8 +204,14 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
           return;
         case ' ':
           e.preventDefault();
-          void store.patch('task', t.id, { status: isDone(t) ? 'open' : 'done' });
+          if (!doc) void store.patch('task', t.id, { status: isDone(t) ? 'open' : 'done' });
           return;
+        case 'm':
+        case 'M': {
+          const el = rowEl(t.id);
+          if (el) menu.openAt(el, locationMenu(ws, t), true);
+          return;
+        }
         case 'e':
         case 'E':
         case 'F2':
@@ -153,7 +220,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
           return;
         case 's':
         case 'S':
-          void store.patch('task', t.id, { status: nextStatus(t.status) });
+          if (!doc) void store.patch('task', t.id, { status: nextStatus(t.status) });
           return;
         case 'a':
         case 'A':
@@ -189,8 +256,25 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ws, rows, store]);
+  }, [ws, rows, store, menu]);
 }
 
+const hidden = (ws: Workspace, id: string | null): OutlineRow | undefined => {
+  const m = ws.milestone(id);
+  if (m) return { type: 'milestone', id: m.id, milestone: m };
+  const t = ws.task(id);
+  return t ? { type: 'task', id: t.id, task: t, depth: 0 } : undefined;
+};
+
+const rowEl = (id: string): HTMLElement | null => document.querySelector(`[data-row="${id}"]`);
+
+/** Die Reihenfolge von `S` im Prototyp – nicht die der Datenbank. */
+const STATUS_CYCLE: Status[] = ['open', 'unclear', 'progress', 'blocked', 'done'];
+
 const nextStatus = (s: Status): Status =>
-  TASK_STATUS[(TASK_STATUS.indexOf(s) + 1) % TASK_STATUS.length] as Status;
+  STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length] ?? 'open';
+
+const MS_CYCLE: Milestone['status'][] = ['open', 'progress', 'done'];
+
+const nextMsStatus = (s: Milestone['status']): Milestone['status'] =>
+  MS_CYCLE[(MS_CYCLE.indexOf(s) + 1) % MS_CYCLE.length] ?? 'open';

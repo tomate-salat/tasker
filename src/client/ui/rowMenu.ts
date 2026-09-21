@@ -404,6 +404,42 @@ function moveSub(ws: Workspace, t: Task): MenuItem[] {
   return items;
 }
 
+/** `M` an einer Aufgabe – `propMenu(x, 'loc')` im Prototyp. */
+export function locationMenu(ws: Workspace, t: Task): MenuItem[] {
+  return [
+    ...moveSub(ws, t),
+    { sep: true },
+    { label: 'Unter einen Task', sub: underSub(ws, t) },
+    { label: 'In anderes Projekt', sub: taskProjectSub(ws, t) },
+  ];
+}
+
+/**
+ * Alle Aufgaben des Projekts als Baum, eingerückt nach Tiefe. Die Aufgabe
+ * selbst fehlt und mit ihr ihr ganzer Unterbaum – dort hinein ginge es nicht.
+ */
+function underSub(ws: Workspace, t: Task): MenuItem[] {
+  const store = useStore.getState();
+  const out: MenuItem[] = [];
+  const walk = (x: Task, depth: number): void => {
+    if (x.id === t.id) return;
+    out.push({
+      label: '   '.repeat(depth) + (x.title || 'Ohne Titel'),
+      check: t.parentId === x.id,
+      onSelect: () => {
+        if (t.parentId === x.id) return;
+        store.setCollapsed(x.id, false);
+        void store.moveTask(t.id, { parentId: x.id, index: Number.MAX_SAFE_INTEGER });
+      },
+    });
+    for (const k of ws.kids(x.id)) walk(k, depth + 1);
+  };
+  for (const r of ws.tasks) {
+    if (r.projectId === t.projectId && !r.parentId && ws.isActive(r)) walk(r, 0);
+  }
+  return out.length ? out : [{ label: 'Keine passenden Tasks', disabled: true }];
+}
+
 /** „In anderes Projekt“: die Aufgabe landet dort im Backlog, eine Seite in der Doku. */
 function taskProjectSub(ws: Workspace, t: Task, o: { doc?: boolean } = {}): MenuItem[] {
   const store = useStore.getState();

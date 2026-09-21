@@ -133,7 +133,7 @@ export function Sidebar({
                 title="Projekt bearbeiten"
                 aria-label={`Projekt ${p.name} bearbeiten`}
                 aria-haspopup="menu"
-                onClick={(e) => menu.openAt(e.currentTarget, () => projectMenu(ws, p))}
+                onClick={(e) => menu.openAt(e.currentTarget, () => projectMenu(ws, p), e.detail === 0)}
               >
                 ⋯
               </button>

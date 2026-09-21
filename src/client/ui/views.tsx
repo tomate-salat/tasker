@@ -26,7 +26,7 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
   const dnd = useDnd(ws);
   const menu = useMenu();
-  useKeys(ws, rows);
+  useKeys(ws, rows, menu);
 
   // Auswahl und Tastatur brauchen dieselbe Reihenfolge, die hier gezeichnet wird.
   const { setVisible } = state;
