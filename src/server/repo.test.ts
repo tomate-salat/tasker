@@ -17,8 +17,10 @@ import {
   hiddenMismatches,
   loadArchive,
   loadBootstrap,
+  loadTrash,
   move,
   patch,
+  purgeTrash,
   remove,
   restore,
   restoreTrash,
@@ -155,7 +157,27 @@ describe('Archiv', () => {
     // Nur der angeklickte Eintrag gilt als archiviert – das Archiv listet einen, nicht drei.
     assert.equal(row(kind.id).archived_at, null);
     assert.equal(loadArchive(ctx, { limit: 50, offset: 0 }).total, 1);
-    assert.equal(loadArchive(ctx, { limit: 50, offset: 0 }).entries[0]?.hiddenCount, 2);
+    // Der Unterbaum kommt zum Aufklappen mit.
+    assert.deepEqual(
+      loadArchive(ctx, { limit: 50, offset: 0 }).tasks.map((t) => t.id).sort(),
+      [parent.id, kind.id, enkel.id].sort(),
+    );
+  });
+
+  // Prototyp `restore`: liegt der alte Ort im Archiv, kommt die Aufgabe lose in den Backlog.
+  it('einzeln Archiviertes in einem archivierten Eltern kommt lose zurück', () => {
+    const p = mkProject();
+    const parent = mkTask({ projectId: p.id, title: 'Eltern' });
+    const kind = mkTask({ projectId: p.id, title: 'Kind', parentId: parent.id });
+    const enkel = mkTask({ projectId: p.id, title: 'Enkel', parentId: kind.id });
+    archive(ctx, 'task', kind.id);
+    archive(ctx, 'task', parent.id);
+
+    const r = restore(ctx, 'task', kind.id, { toEnd: true });
+    assert.equal(r.moved, true);
+    assert.equal(one(kind.id).parentId, null);
+    assert.deepEqual(active(), [kind.id, enkel.id].sort());
+    assert.deepEqual(hiddenMismatches(ctx), []);
   });
 
   it('ein archivierter Milestone verdeckt auch seine Wurzelaufgaben', () => {
@@ -459,17 +481,85 @@ describe('Löschen', () => {
     assert.equal(one(a.id).groupId, null);
   });
 
-  it('die Aufgaben eines archivierten Milestones werden wieder sichtbar, wenn er gelöscht wird', () => {
+  // Wie im Prototyp (`trashItem`): im Archiv gehören die Aufgaben zum Milestone.
+  it('ein archivierter Milestone nimmt seine Aufgaben mit in den Papierkorb', () => {
     const p = mkProject();
     const m = mkMilestone({ projectId: p.id, title: 'M' });
     const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    const kind = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
     archive(ctx, 'milestone', m.id);
+
+    const { trashId } = remove(ctx, 'milestone', m.id);
     assert.deepEqual(active(), []);
+    assert.equal(loadArchive(ctx, { limit: 50, offset: 0 }).total, 0);
+    assert.equal(loadTrash(ctx)[0]?.taskCount, 2);
+    assert.equal(loadTrash(ctx)[0]?.where, 'aus dem Archiv');
 
-    remove(ctx, 'milestone', m.id);
-
-    assert.deepEqual(active(), [a.id]);
+    restoreTrash(ctx, trashId, { toEnd: true });
+    assert.deepEqual(active(), []);
+    assert.equal(row(kind.id).parent_id, a.id);
+    assert.equal(row(a.id).hidden_by, m.id);
+    assert.deepEqual(loadArchive(ctx, { limit: 50, offset: 0 }).entries.map((e) => e.id), [m.id]);
     assert.deepEqual(hiddenMismatches(ctx), []);
+  });
+
+  it('ein wiederhergestellter Milestone holt seine Aufgaben zurück und reiht sich hinten ein', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M', planned: true });
+    const n = mkMilestone({ projectId: p.id, title: 'N', planned: true });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    const b = mkTask({ projectId: p.id, title: 'B', milestoneId: m.id });
+
+    const { trashId } = remove(ctx, 'milestone', m.id);
+    // B ist inzwischen woanders hin – das bleibt so.
+    move(ctx, b.id, one(b.id).version, { parentId: a.id });
+
+    const r = restoreTrash(ctx, trashId, { toEnd: true });
+    assert.equal(r.label, 'im Plan');
+    assert.equal(one(a.id).milestoneId, m.id);
+    assert.equal(one(b.id).parentId, a.id);
+    const ms = loadBootstrap(ctx).milestones.sort((x, y) => x.qorder - y.qorder);
+    assert.deepEqual(ms.map((x) => x.id), [n.id, m.id]);
+  });
+
+  it('eine Aufgabe, deren Eltern weg sind, kommt lose in den Backlog zurück', () => {
+    const p = mkProject();
+    const parent = mkTask({ projectId: p.id, title: 'Eltern' });
+    const kind = mkTask({ projectId: p.id, title: 'Kind', parentId: parent.id });
+    const { trashId } = remove(ctx, 'task', kind.id);
+    remove(ctx, 'task', parent.id);
+
+    const r = restoreTrash(ctx, trashId, { toEnd: true });
+    assert.equal(one(kind.id).parentId, null);
+    assert.equal(r.label, 'im Backlog › Unsortiert · Spiel');
+    assert.equal(loadTrash(ctx).find((e) => e.title === 'Eltern')?.where, 'im Backlog › Unsortiert · Spiel');
+  });
+
+  it('ohne sein Projekt lässt sich ein Eintrag nicht wiederherstellen', () => {
+    const p = mkProject();
+    create(ctx, 'project', { name: 'Anderes' });
+    const t = mkTask({ projectId: p.id, title: 'T' });
+    const { trashId } = remove(ctx, 'task', t.id);
+    remove(ctx, 'project', p.id);
+
+    assert.throws(() => restoreTrash(ctx, trashId), /stell zuerst das Projekt wieder her/);
+  });
+
+  it('endgültig Gelöschtes kommt mit Rückgängig zurück in den Papierkorb', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const b = mkTask({ projectId: p.id, title: 'B' });
+    const x = remove(ctx, 'task', a.id).trashId;
+    const y = remove(ctx, 'task', b.id).trashId;
+
+    const { count, undo } = purgeTrash(ctx, [x, y]);
+    assert.equal(count, 2);
+    assert.deepEqual(loadTrash(ctx), []);
+
+    applySteps(ctx, undo);
+    assert.deepEqual(loadTrash(ctx).map((e) => e.title).sort(), ['A', 'B']);
+    restoreTrash(ctx, x);
+    assert.equal(one(a.id).title, 'A');
   });
 
   /**
@@ -742,6 +832,7 @@ const row = (id: string) =>
   ctx.sqlite.prepare('SELECT * FROM task WHERE id = ?').get(id) as {
     hidden_by: string | null;
     archived_at: string | null;
+    parent_id: string | null;
   };
 
 const read = (id: string) =>

@@ -9,6 +9,7 @@ import {
   duplicateBody,
   kindSchema,
   moveBody,
+  purgeBody,
   settingsBody,
   stepsBody,
   patchBody,
@@ -27,6 +28,7 @@ import {
   bulk,
   create,
   duplicate,
+  inBootstrap,
   loadArchive,
   loadBootstrap,
   move,
@@ -108,15 +110,24 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   });
 
   app.post('/trash/:id/restore', (c) =>
-    run(c, bus, () => restoreTrash(ctx, c.req.param('id')), {
+    run(c, bus, () => restoreTrash(ctx, c.req.param('id'), { toEnd: true }), {
       event: () => ({ type: 'reload', reason: 'Aus dem Papierkorb geholt' }),
     }),
   );
 
-  app.delete('/trash/:id', (c) => {
-    purgeTrash(ctx, c.req.param('id'));
-    publish(c, bus, { type: 'reload', reason: 'Papierkorb geleert' });
-    return c.json({ ok: true });
+  app.delete('/trash/:id', (c) =>
+    run(c, bus, () => purgeTrash(ctx, [c.req.param('id')]), {
+      event: () => ({ type: 'reload', reason: 'Endgültig gelöscht' }),
+    }),
+  );
+
+  // „Papierkorb leeren“: der Client nennt, was er gerade zeigt.
+  app.post('/trash/purge', async (c) => {
+    const body = purgeBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return run(c, bus, () => purgeTrash(ctx, body.data.ids), {
+      event: () => ({ type: 'reload', reason: 'Papierkorb geleert' }),
+    });
   });
 
   app.post('/move', async (c) => {
@@ -224,7 +235,13 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       c,
       bus,
       () => patch(ctx, kind, c.req.param('id'), body.data.version, changes.data as Record<string, unknown>),
-      { event: (object) => ({ type: 'upsert', kind, object }) },
+      {
+        // Archiviertes gehört nicht in den aktiven Bestand der anderen Tabs – sie laden nur neu.
+        event: (object) =>
+          inBootstrap(ctx, kind, c.req.param('id'))
+            ? { type: 'upsert', kind, object }
+            : { type: 'reload', reason: 'Im Archiv geändert' },
+      },
     );
   });
 
@@ -248,7 +265,7 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   app.post('/kind/:kind/:id/restore', (c) => {
     const kind = archivable(c.req.param('kind'));
     if (!kind) return c.json({ error: 'Nur Aufgaben und Milestones.' }, 400);
-    return run(c, bus, () => restore(ctx, kind, c.req.param('id')), {
+    return run(c, bus, () => restore(ctx, kind, c.req.param('id'), { toEnd: true }), {
       event: () => ({ type: 'reload', reason: 'Aus dem Archiv geholt' }),
     });
   });

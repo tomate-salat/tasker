@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { BulkAction, Kind, Step } from '@shared/api.js';
 import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
-import { doneCandidates, type OutlineFilter } from '@shared/outline.js';
+import { doneCandidates, placeLabel, type OutlineFilter } from '@shared/outline.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -153,7 +153,8 @@ type State = {
   duplicateTask: (id: string) => Promise<void>;
   moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
-  remove: (kind: Kind, id: string) => Promise<void>;
+  /** `message` ersetzt die übliche Meldung – etwa „In den Papierkorb verschoben“ im Archiv. */
+  remove: (kind: Kind, id: string, message?: string) => Promise<void>;
   /** Nimmt auch die Einbettung aus der Beschreibung, mit „Rückgängig“. */
   removeDrawing: (id: string, name: string) => Promise<void>;
 
@@ -163,17 +164,28 @@ type State = {
   live: boolean;
   setLive: (live: boolean) => void;
 
-  loadArchive: () => Promise<void>;
+  /** `more`: die nächste Seite anhängen statt neu zu laden. */
+  loadArchive: (more?: boolean) => Promise<void>;
+  /** Für welche Auswahl und Suche die geladene Archivseite gilt. */
+  archiveFor: string;
   setArchiveQuery: (q: string) => void;
+  /** Aufgeklappte Einträge im Archiv – pro Gerät, wie `archOpen` im Prototyp. */
+  archOpen: Record<string, boolean>;
+  setArchOpen: (id: string, open: boolean) => void;
   unarchive: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   loadTrash: () => Promise<void>;
   restoreTrash: (id: string) => Promise<void>;
   purgeTrash: (id: string) => Promise<void>;
+  /** „Papierkorb leeren“ fragt erst nach – in der Kopfzeile, wie im Prototyp. */
+  trashConfirm: boolean;
+  setTrashConfirm: (value: boolean) => void;
+  emptyTrash: (ids: string[]) => Promise<void>;
 };
 
 const COLLAPSED_KEY = 'tasker.collapsed';
 const SCOPE_KEY = 'tasker.scope';
 const SIDE_KEY = 'tasker.side';
+const ARCH_OPEN_KEY = 'tasker.archOpen';
 
 const readLocal = <T>(key: string, fallback: T): T => {
   try {
@@ -229,6 +241,14 @@ export const useStore = create<State>((set, get) => ({
       // Was inzwischen weg ist – archiviert, gelöscht, woanders hin – fällt aus der Auswahl.
       const multi = new Set([...get().multi].filter((id) => ws.task(id)));
       set({ boot, ws, settings, scope, lastProject, loading: false, multi });
+      /**
+       * Archiv und Papierkorb ziehen mit: offen neu geholt, sonst verworfen und
+       * beim nächsten Öffnen geladen. So zeigt keine Ansicht einen alten Stand.
+       */
+      await Promise.all([
+        get().view === 'archive' ? get().loadArchive() : set({ archive: null }),
+        get().view === 'trash' || get().trash ? get().loadTrash() : null,
+      ]);
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Laden fehlgeschlagen', loading: false });
     }
@@ -403,8 +423,6 @@ export const useStore = create<State>((set, get) => ({
       remember(message(count), undo);
       set({
         ...(gone ? { multi: new Set<string>(), anchor: null, selected: null } : {}),
-        ...(action.type === 'archive' ? { archive: null } : {}),
-        ...(action.type === 'trash' ? { trash: null } : {}),
       });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -433,7 +451,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       await api.steps(entry.steps);
       await get().load();
-      set({ toast: 'Rückgängig gemacht', toastUndo: false, archive: null, trash: null });
+      set({ toast: 'Rückgängig gemacht', toastUndo: false });
     } catch (e) {
       await get().load();
       const stale = e instanceof ApiError && e.status === 409;
@@ -454,7 +472,6 @@ export const useStore = create<State>((set, get) => ({
       const { count, undo } = await api.steps(steps);
       await get().load();
       remember(message(count), undo);
-      set({ archive: null, trash: null });
     } catch (e) {
       const stale = e instanceof ApiError && e.status === 409;
       if (stale) await get().load();
@@ -505,7 +522,11 @@ export const useStore = create<State>((set, get) => ({
     const boot = get().boot;
     if (!boot) return;
     const current = find(boot, kind, id);
-    if (!current) return;
+    if (!current) {
+      // Nicht im aktiven Bestand: vielleicht im Archiv, das der Inspektor gerade zeigt.
+      await patchArchived(kind, id, changes);
+      return;
+    }
 
     set(replace(boot, kind, { ...current, ...changes } as Entity));
 
@@ -593,7 +614,6 @@ export const useStore = create<State>((set, get) => ({
       if (get().selected && !get().ws?.task(get().selected) && !get().ws?.milestone(get().selected)) {
         set({ selected: null });
       }
-      set({ trash: null });
       const n = entry?.taskCount ?? 0;
       remember(`Projekt „${p.name}“ mit ${n} ${n === 1 ? 'Task' : 'Tasks'} im Papierkorb`, [
         { op: 'untrash', trashId },
@@ -687,20 +707,18 @@ export const useStore = create<State>((set, get) => ({
       await api.archive(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      set({ archive: null });
       remember('Archiviert', [{ op: 'unarchive', kind, id }]);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen' });
     }
   },
 
-  remove: async (kind, id) => {
+  remove: async (kind, id, message) => {
     try {
       const { trashId } = await api.remove(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      set({ trash: null });
-      remember(REMOVED[kind] ?? 'In den Papierkorb gelegt', [{ op: 'untrash', trashId }]);
+      remember(message ?? REMOVED[kind] ?? 'In den Papierkorb gelegt', [{ op: 'untrash', trashId }]);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
@@ -745,29 +763,60 @@ export const useStore = create<State>((set, get) => ({
 
   /* -------------------------------------------------- Archiv & Papierkorb */
 
-  loadArchive: async () => {
+  loadArchive: async (more = false) => {
+    const q = get().archiveQuery.trim();
+    const scope = get().scope;
+    const key = `${scope}|${q}`;
+    const cur = get().archive;
+    const offset = more && cur && get().archiveFor === key ? cur.entries.length : 0;
     try {
-      const q = get().archiveQuery.trim();
-      const scope = get().scope;
+      const page = await api.archivePage({
+        ...(scope === 'all' ? {} : { projectId: scope }),
+        ...(q ? { q } : {}),
+        offset,
+      });
+      // Kam inzwischen eine andere Suche dazwischen, gilt deren Antwort.
+      if (`${get().scope}|${get().archiveQuery.trim()}` !== key) return;
+      const prev = offset ? get().archive : null;
       set({
-        archive: await api.archivePage({
-          ...(scope === 'all' ? {} : { projectId: scope }),
-          ...(q ? { q } : {}),
-        }),
+        archiveFor: key,
+        archive: prev
+          ? {
+              total: page.total,
+              entries: [...prev.entries, ...page.entries],
+              tasks: [...prev.tasks, ...page.tasks],
+              milestones: [...prev.milestones, ...page.milestones],
+            }
+          : page,
       });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archiv konnte nicht geladen werden' });
     }
   },
 
+  archiveFor: '',
   setArchiveQuery: (archiveQuery) => set({ archiveQuery }),
+
+  archOpen: readLocal<Record<string, boolean>>(ARCH_OPEN_KEY, {}),
+  setArchOpen: (id, open) => {
+    const archOpen = { ...get().archOpen, [id]: open };
+    writeLocal(ARCH_OPEN_KEY, archOpen);
+    set({ archOpen });
+  },
 
   unarchive: async (kind, id) => {
     try {
-      await api.restore(kind, id);
+      const r = await api.restore<Task | Milestone>(kind, id);
       await get().load();
-      await get().loadArchive();
-      set({ toast: 'Wiederhergestellt' });
+      // Die Meldung des Prototyps: wohin es zurückkam, und warum, wenn es woanders liegt.
+      const ws = get().ws;
+      const m = kind === 'milestone' ? ws?.milestone(id) : null;
+      const t = kind === 'task' ? ws?.task(id) : null;
+      const where = m ? (m.planned ? 'im Plan' : 'im Backlog') : ws && t ? whereLabel(ws, t) : '';
+      set({
+        toast: `Wiederhergestellt ${where}${r.moved ? ' (der ursprüngliche Ort ist archiviert)' : ''}`,
+        toastUndo: false,
+      });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen' });
     }
@@ -783,26 +832,77 @@ export const useStore = create<State>((set, get) => ({
   },
 
   restoreTrash: async (id) => {
+    const entry = get().trash?.find((e) => e.id === id);
     try {
-      await api.restoreTrash(id);
+      const r = await api.restoreTrash(id);
       await get().load();
-      await get().loadTrash();
-      set({ toast: 'Wiederhergestellt' });
+      const title = entry?.title ?? '';
+      set({
+        toast:
+          r.kind === 'project'
+            ? `Projekt „${title}“ ${r.label} wiederhergestellt`
+            : `„${title || 'Ohne Titel'}“ wiederhergestellt ${r.label}`.trim(),
+        toastUndo: false,
+      });
     } catch (e) {
-      set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen' });
+      set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen', toastUndo: false });
     }
   },
 
   purgeTrash: async (id) => {
     try {
-      await api.purgeTrash(id);
+      const { undo } = await api.purgeTrash(id);
       await get().loadTrash();
-      set({ toast: 'Endgültig gelöscht' });
+      remember('Endgültig gelöscht', undo);
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  trashConfirm: false,
+  setTrashConfirm: (trashConfirm) => set({ trashConfirm }),
+
+  emptyTrash: async (ids) => {
+    if (!ids.length) return;
+    try {
+      const { count, undo } = await api.emptyTrash(ids);
+      set({ trashConfirm: false });
+      await get().loadTrash();
+      remember(`${count} ${count === 1 ? 'Eintrag' : 'Einträge'} endgültig gelöscht`, undo);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
   },
 }));
+
+/** Wo etwas liegt, in Worten – `whereLabel` aus dem Prototyp. */
+export function whereLabel(ws: Workspace, t: Task): string {
+  const project = ws.project(t.projectId)?.name ?? '';
+  if (t.parentId) return `unter „${ws.task(t.parentId)?.title ?? ''}“`;
+  const m = ws.milestone(t.milestoneId);
+  if (m) return `in ◆ ${m.title}${m.planned ? '' : ' (Backlog)'}`;
+  if (t.doc) return `in Dokumentation · ${project}`;
+  return `im Backlog › ${placeLabel(ws, t)} · ${project}`;
+}
+
+/**
+ * Der Arbeitsstand samt der geladenen Archivseite – für Archivansicht und
+ * Inspektor, die auch Archiviertes zeigen. Einmal gebaut je Paar aus Stand
+ * und Seite, nicht bei jedem Zeichnen.
+ */
+let archiveWsCache: { boot: Bootstrap; page: ArchivePage; ws: Workspace } | null = null;
+export function archiveWorkspace(s: State): Workspace | null {
+  if (!s.boot || !s.archive) return null;
+  if (archiveWsCache?.boot === s.boot && archiveWsCache.page === s.archive) return archiveWsCache.ws;
+  const known = new Set(s.boot.tasks.map((t) => t.id));
+  const ws = new Workspace({
+    ...s.boot,
+    tasks: [...s.boot.tasks, ...s.archive.tasks.filter((t) => !known.has(t.id))],
+    milestones: [...s.boot.milestones, ...s.archive.milestones],
+  });
+  archiveWsCache = { boot: s.boot, page: s.archive, ws };
+  return ws;
+}
 
 /**
  * Milestone und Gruppe sind nur eine Ablage: gelöscht bleiben ihre Aufgaben
@@ -891,6 +991,57 @@ function replace(boot: Bootstrap, kind: Kind, updated: Entity): { boot: Bootstra
     [key]: (boot[key] as Entity[]).map((x) => (x.id === updated.id ? updated : x)),
   };
   return { boot: next, ws: new Workspace(next) };
+}
+
+/**
+ * Ändern im Archiv – wie im Prototyp bleibt der Inspektor dort bearbeitbar.
+ * Geändert wird die geladene Archivseite, mit demselben Vorgriff wie `patch`.
+ */
+async function patchArchived(kind: Kind, id: string, changes: Record<string, unknown>): Promise<void> {
+  if (kind !== 'task' && kind !== 'milestone') return;
+  const key = kind === 'task' ? 'tasks' : 'milestones';
+  const put = (object: Task | Milestone): void => {
+    const page = useStore.getState().archive;
+    if (!page) return;
+    useStore.setState({
+      archive: {
+        ...page,
+        [key]: (page[key] as (Task | Milestone)[]).map((x) => (x.id === object.id ? object : x)),
+      },
+    });
+  };
+  const current = (useStore.getState().archive?.[key] as (Task | Milestone)[] | undefined)?.find(
+    (x) => x.id === id,
+  );
+  if (!current) return;
+
+  put({ ...current, ...changes } as Task | Milestone);
+  try {
+    const updated = await api.patch<Task | Milestone>(kind, id, current.version, changes);
+    put(updated);
+    pushUndo([
+      {
+        op: 'patch',
+        kind,
+        id,
+        version: updated.version,
+        changes: Object.fromEntries(
+          Object.keys(changes).map((k) => [k, (current as Record<string, unknown>)[k]]),
+        ),
+      },
+    ]);
+  } catch (e) {
+    put(e instanceof ApiError && e.status === 409 && e.current ? (e.current as Task) : current);
+    useStore.setState({
+      toast:
+        e instanceof ApiError && e.status === 409
+          ? 'Inzwischen woanders geändert – neuer Stand übernommen.'
+          : e instanceof Error
+            ? e.message
+            : 'Änderung fehlgeschlagen',
+      toastUndo: false,
+    });
+  }
 }
 
 /** Wie `replace`, hängt das Objekt aber an, wenn es noch fehlt (fremdes Anlegen). */

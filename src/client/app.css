@@ -909,6 +909,7 @@
 /* Doku, Archiv und Papierkorb kommen ohne die beiden Spalten aus. */
 .list .doc-row,
 .list .arch-row,
+.list .arch-child,
 .list .trash-row {
   padding-left: calc(10px + var(--d, 0) * 26px);
 }
@@ -2460,9 +2461,9 @@ button.prop:hover {
 /* -------------------------------------------- Prognose und Archivzeilen */
 
 .eta {
-  font-size: 12px;
+  font: 12px var(--mono);
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .eta.late,
@@ -2475,36 +2476,110 @@ button.prop:hover {
   font-style: italic;
 }
 
-.list.pad {
-  padding: 12px 16px;
+/* Archiv und Papierkorb – die Regeln aus dem Prototyp. */
+.toolbar .sum {
+  font: 12px var(--mono);
+  color: var(--muted);
 }
 
-.searchbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+.toolbar .sum kbd {
+  font-size: 10px;
+  padding: 2px 4px;
 }
 
-.searchbar input {
-  flex: 1;
-  max-width: 320px;
-  padding: 7px 10px;
+#f-arch {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 4px 8px;
+  width: 220px;
+  max-width: 50vw;
   color: var(--ink);
   font: inherit;
 }
 
-.arch-row {
-  gap: 10px;
-  padding: 6px 4px;
+.from {
+  font-size: 12px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 38%;
+}
+
+.check.static {
   cursor: default;
 }
 
+.check.static:hover {
+  border-color: var(--faint);
+}
+
+/* Im Prototyp gewinnt hier die allgemeine Titelregel: der Titel füllt die Zeile nicht. */
+.list .row.arch-row .title,
+.list .row.arch-child .title,
+.list .row.trash-row .title {
+  flex: 0 1 auto;
+}
+
 .arch-row .title {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.arch-row.ms-row {
+  margin-top: 2px;
+  min-height: 38px;
+}
+
+.arch-row .ico.ms,
+.row.done.arch-row .ico.ms {
+  color: var(--faint);
+}
+
+/* Erledigt: nicht durchgestrichen. Aufgaben blass, Milestones in voller Farbe (wie im Prototyp). */
+.list .arch-row.done .title,
+.list .arch-child.done .title {
+  text-decoration: none;
+  color: var(--faint);
+}
+
+.list .arch-row.ms-row.done .title {
+  color: var(--ink);
+}
+
+.list .arch-child .title {
+  color: var(--muted);
+}
+
+.trash-row {
+  margin-top: 2px;
+}
+
+.trash-row .from {
   flex: 1;
+}
+
+.trash-row .ico {
+  color: var(--faint);
+}
+
+.trash-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.btn.danger-solid {
+  background: var(--p1);
+  border-color: var(--p1);
+  color: var(--surface);
+}
+
+.btn.danger-solid:hover {
+  color: var(--surface);
+  opacity: 0.9;
 }
 
 .small {

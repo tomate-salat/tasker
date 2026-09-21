@@ -9,7 +9,15 @@ import type {
   Status,
   Task,
 } from '../shared/model.js';
-import type { BulkAction, BulkItem, Kind, Step, Stub, Undoable } from '../shared/api.js';
+import type {
+  BulkAction,
+  BulkItem,
+  Kind,
+  Step,
+  Stub,
+  TrashRow as TrashRowData,
+  Undoable,
+} from '../shared/api.js';
 import type { DbCtx } from './db.js';
 import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
 import { newId, type IdPrefix } from './ids.js';
@@ -99,21 +107,42 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
   };
 }
 
+/** Ob ein Objekt zum aktiven Bestand gehört, den `loadBootstrap` ausliefert. */
+export function inBootstrap(ctx: DbCtx, kind: Kind, id: string): boolean {
+  const row = readRow(ctx, kind, id);
+  if (!row) return false;
+  if (kind === 'task') return !row['archived_at'] && !row['hidden_by'];
+  if (kind === 'milestone') return !row['archived_at'];
+  return true;
+}
+
 export type ArchiveEntry = {
   kind: 'task' | 'milestone';
   id: string;
   projectId: string;
   title: string;
   archivedAt: string;
-  /** Anzahl mitgegangener Unteraufgaben. */
-  hiddenCount: number;
+  /** Für die Herkunft („aus „Eltern““, „aus ◆ Milestone“) – der Ort kann selbst archiviert sein. */
+  parentTitle: string | null;
+  milestoneTitle: string | null;
+};
+
+export type ArchivePage = {
+  entries: ArchiveEntry[];
+  total: number;
+  /**
+   * Die archivierten Einträge der Seite samt allem, was darunter hängt – für
+   * das Aufklappen und den Inspektor, wie im Prototyp.
+   */
+  tasks: Task[];
+  milestones: Milestone[];
 };
 
 /** Das Archiv, seitenweise – wird erst beim Öffnen der Archivansicht geholt. */
 export function loadArchive(
   ctx: DbCtx,
   o: { q?: string | undefined; projectId?: string | undefined; limit: number; offset: number },
-): { entries: ArchiveEntry[]; total: number } {
+): ArchivePage {
   const like = `%${(o.q ?? '').toLowerCase()}%`;
   const where = `
     WHERE archived_at IS NOT NULL
@@ -142,20 +171,76 @@ export function loadArchive(
     archived_at: string;
   }[];
 
-  const countHidden = ctx.sqlite.prepare<[string], { c: number }>(
-    'SELECT count(*) AS c FROM task WHERE hidden_by = ?',
+  const taskIds = rows.filter((r) => r.kind === 'task').map((r) => r.id);
+  const msIds = rows.filter((r) => r.kind === 'milestone').map((r) => r.id);
+  const all = <T>(sql: string, ...p: unknown[]): T[] => ctx.sqlite.prepare(sql).all(...p) as T[];
+
+  // Die Einträge, bei Milestones ihre Wurzelaufgaben, und darunter alles.
+  const subtree = `
+    WITH RECURSIVE sub(id) AS (
+      SELECT id FROM task
+       WHERE id IN (SELECT value FROM json_each(?))
+          OR (parent_id IS NULL AND milestone_id IN (SELECT value FROM json_each(?)))
+      UNION
+      SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id
+    ) SELECT id FROM sub`;
+  const ids = [JSON.stringify(taskIds), JSON.stringify(msIds)];
+
+  const tasks = all<TaskRow>(`SELECT * FROM task WHERE id IN (${subtree}) ORDER BY sort_order`, ...ids);
+  const tagsOf = groupValues(
+    all<{ task_id: string; tag: string }>(
+      `SELECT task_id, tag FROM task_tag WHERE task_id IN (${subtree}) ORDER BY tag`,
+      ...ids,
+    ),
+    (r) => r.task_id,
+    (r) => r.tag,
   );
+  const depsOfTask = groupValues(
+    all<{ from_id: string; to_id: string }>(
+      `SELECT from_id, to_id FROM dependency WHERE kind = 'task' AND from_id IN (${subtree})`,
+      ...ids,
+    ),
+    (r) => r.from_id,
+    (r) => r.to_id,
+  );
+  const milestones = all<MilestoneRow>(
+    'SELECT * FROM milestone WHERE id IN (SELECT value FROM json_each(?))',
+    JSON.stringify(msIds),
+  );
+  const depsOfMs = groupValues(
+    all<{ from_id: string; to_id: string }>(
+      `SELECT from_id, to_id FROM dependency
+        WHERE kind = 'milestone' AND from_id IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(msIds),
+    ),
+    (r) => r.from_id,
+    (r) => r.to_id,
+  );
+
+  const titleOf = (table: string, id: string | null): string | null =>
+    id
+      ? ((ctx.sqlite.prepare(`SELECT title FROM ${table} WHERE id = ?`).get(id) as
+          | { title: string }
+          | undefined)?.title ?? null)
+      : null;
+  const byId = new Map(tasks.map((t) => [t.id, t]));
 
   return {
     total,
-    entries: rows.map((r) => ({
-      kind: r.kind,
-      id: r.id,
-      projectId: r.project_id,
-      title: r.title,
-      archivedAt: r.archived_at,
-      hiddenCount: countHidden.get(r.id)?.c ?? 0,
-    })),
+    entries: rows.map((r) => {
+      const t = r.kind === 'task' ? byId.get(r.id) : undefined;
+      return {
+        kind: r.kind,
+        id: r.id,
+        projectId: r.project_id,
+        title: r.title,
+        archivedAt: r.archived_at,
+        parentTitle: titleOf('task', t?.parent_id ?? null),
+        milestoneTitle: titleOf('milestone', t?.milestone_id ?? null),
+      };
+    }),
+    tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
+    milestones: milestones.map((m) => toMilestone(m, depsOfMs.get(m.id) ?? [])),
   };
 }
 
@@ -344,7 +429,19 @@ export function archive(ctx: DbCtx, kind: 'task' | 'milestone', id: string): unk
   })();
 }
 
-export function restore(ctx: DbCtx, kind: 'task' | 'milestone', id: string): unknown {
+/**
+ * Holt aus dem Archiv zurück. Wie im Prototyp (`restore`):
+ * - Liegt der alte Ort selbst im Archiv, kommt die Aufgabe lose in den Backlog
+ *   („Unsortiert“, ans Ende) – sonst bliebe sie unsichtbar. `moved` sagt das.
+ * - `toEnd`: ein Milestone reiht sich hinten ein. Das gilt beim Zurückholen
+ *   aus der Archivansicht, nicht beim Rückgängigmachen eines Archivierens.
+ */
+export function restore(
+  ctx: DbCtx,
+  kind: 'task' | 'milestone',
+  id: string,
+  o: { toEnd?: boolean } = {},
+): Record<string, unknown> & { moved?: true } {
   return ctx.sqlite.transaction(() => {
     const row = readRow(ctx, kind, id);
     if (!row) throw new NotFound();
@@ -356,7 +453,22 @@ export function restore(ctx: DbCtx, kind: 'task' | 'milestone', id: string): unk
     // Alles, was nur wegen dieses Eintrags verdeckt war, wird wieder sichtbar.
     ctx.sqlite.prepare('UPDATE task SET hidden_by = NULL WHERE hidden_by = ?').run(id);
 
-    return read(ctx, kind, id);
+    if (kind === 'milestone' && o.toEnd) milestoneToEnd(ctx, id);
+
+    let moved = false;
+    if (kind === 'task' && row['hidden_by']) {
+      const order = nextOrder(ctx, 'task', { projectId: row['project_id'] });
+      ctx.sqlite
+        .prepare(
+          `UPDATE task SET parent_id = NULL, milestone_id = NULL, group_id = NULL, hidden_by = NULL,
+                           sort_order = ? WHERE id = ?`,
+        )
+        .run(order, id);
+      moved = true;
+    }
+
+    const result = read(ctx, kind, id) as Record<string, unknown>;
+    return moved ? { ...result, moved: true as const } : result;
   })();
 }
 
@@ -706,6 +818,9 @@ export function applySteps(ctx: DbCtx, steps: Step[]): Undoable {
           // Gegenstück gibt es dafür nicht, also endet die Kette hier.
           restoreTrash(ctx, s.trashId);
           break;
+        case 'unpurge':
+          unpurge(ctx, s.rows);
+          break;
       }
     }
 
@@ -786,8 +901,12 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
      * Papierkorb: sie sind eine Ablage, kein Besitzer. Die Wurzelaufgaben lösen
      * sich und liegen danach unter „Unsortiert“.
      */
+    // Ein archivierter Milestone nimmt seine Aufgaben dagegen mit: sie liegen mit ihm im Archiv.
+    const archivedMs = kind === 'milestone' && !!row['archived_at'];
+    // Vor dem Lösen, sonst stimmt die Herkunft nicht mehr.
+    const where = whereOf(ctx, kind, row);
     const detached =
-      kind === 'milestone'
+      kind === 'milestone' && !archivedMs
         ? detachRoots(ctx, 'milestone_id', id)
         : kind === 'group'
           ? detachRoots(ctx, 'group_id', id)
@@ -798,7 +917,9 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
         ? [id, ...descendantIds(ctx, id)]
         : kind === 'project'
           ? projectTaskIds(ctx, id)
-          : [];
+          : archivedMs
+            ? milestoneRoots(ctx, id).flatMap((r) => [r, ...descendantIds(ctx, r)])
+            : [];
 
     // Ein Projekt besitzt Kategorien, Gruppen und Milestones; die Datenbank
     // löscht sie mit, also müssen sie mit in den Eintrag.
@@ -812,6 +933,9 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
     const payload = {
       kind,
       row,
+      where,
+      /** Die gelösten Wurzelaufgaben – beim Wiederherstellen kehren sie zurück. */
+      moved: detached,
       categories,
       groups,
       milestones,
@@ -860,30 +984,56 @@ export type TrashEntry = {
   deletedAt: string;
   /** Wie viele Aufgaben mit im Eintrag stecken. */
   taskCount: number;
+  /** Woher der Eintrag kam – beim Löschen festgehalten, wie im Prototyp. */
+  where: string;
+  drawingCount: number;
+  /** Nur bei einem Projekt. */
+  milestoneCount: number;
+  color: string | null;
 };
 
 /** Nach dieser Frist räumt sich der Papierkorb selbst auf. */
 export const TRASH_DAYS = 30;
 
+type TrashRow = {
+  id: string;
+  kind: string;
+  title: string;
+  project_id: string | null;
+  deleted_at: string;
+  payload: string;
+};
+
 export function loadTrash(ctx: DbCtx): TrashEntry[] {
   const rows = ctx.sqlite
     // Gelöschte Zeichnungen liegen nur für „Rückgängig“ hier (siehe removeDrawing).
     .prepare("SELECT * FROM trash WHERE kind != 'drawing' ORDER BY deleted_at DESC")
-    .all() as { id: string; kind: string; title: string; project_id: string | null; deleted_at: string; payload: string }[];
+    .all() as TrashRow[];
 
-  return rows.map((r) => ({
-    id: r.id,
-    kind: r.kind,
-    title: r.title,
-    projectId: r.project_id,
-    deletedAt: r.deleted_at,
-    taskCount: (JSON.parse(r.payload) as { tasks: unknown[] }).tasks.length,
-  }));
+  return rows.map((r) => {
+    const p = JSON.parse(r.payload) as TrashPayload;
+    return {
+      id: r.id,
+      kind: r.kind,
+      title: r.title,
+      projectId: r.project_id,
+      deletedAt: r.deleted_at,
+      taskCount: p.tasks.length,
+      where: p.where ?? '',
+      drawingCount: p.drawings?.length ?? 0,
+      milestoneCount: p.milestones?.length ?? 0,
+      color: p.kind === 'project' ? ((p.row['color'] as string | undefined) ?? null) : null,
+    };
+  });
 }
 
 type TrashPayload = {
   kind: Kind | 'drawing';
   row: Record<string, unknown>;
+  /** Die Herkunft beim Löschen; ältere Einträge haben sie nicht. */
+  where?: string;
+  /** Wurzelaufgaben, die ein Milestone oder eine Gruppe beim Löschen losgelassen hat. */
+  moved?: string[];
   /** Nur bei einem Projekt; ältere Einträge haben sie nicht. */
   categories?: Record<string, unknown>[];
   groups?: Record<string, unknown>[];
@@ -897,7 +1047,11 @@ type TrashPayload = {
 };
 
 /** Schreibt einen Papierkorb-Eintrag samt allem, was daran hing, zurück. */
-export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } {
+export function restoreTrash(
+  ctx: DbCtx,
+  trashId: string,
+  o: { toEnd?: boolean } = {},
+): { restored: number; kind: string; id: string; label: string } {
   return ctx.sqlite.transaction(() => {
     const entry = ctx.sqlite.prepare('SELECT * FROM trash WHERE id = ?').get(trashId) as
       | { payload: string }
@@ -905,7 +1059,36 @@ export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } 
     if (!entry) throw new NotFound();
 
     const p = JSON.parse(entry.payload) as TrashPayload;
+    const exists = (table: string, id: unknown): boolean =>
+      !!id && !!ctx.sqlite.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id);
+
+    const pid = p.row['project_id'];
+    if (p.kind !== 'project' && p.kind !== 'mark' && pid && !exists('project', pid)) {
+      throw new Error('Das Projekt dazu liegt im Papierkorb – stell zuerst das Projekt wieder her');
+    }
+
+    /**
+     * Wie im Prototyp: Ist der alte Ort inzwischen weg, kommt eine Aufgabe lose
+     * in den Backlog statt an einem Verweis ins Leere zu scheitern.
+     */
+    if (p.kind === 'task') {
+      const root = p.tasks.find((t) => t['id'] === p.row['id']) ?? p.row;
+      for (const r of new Set([root, p.row])) {
+        if (r['parent_id'] && !exists('task', r['parent_id'])) {
+          Object.assign(r, { parent_id: null, milestone_id: null, group_id: null });
+          r['sort_order'] = nextOrder(ctx, 'task', { projectId: pid });
+        } else if (!r['parent_id']) {
+          if (r['milestone_id'] && !exists('milestone', r['milestone_id'])) {
+            Object.assign(r, { milestone_id: null, group_id: null });
+          }
+          if (r['group_id'] && !exists('"group"', r['group_id'])) r['group_id'] = null;
+        }
+      }
+    }
     insertRows(ctx, p.kind === 'drawing' ? 'drawing' : TABLE[p.kind], [p.row]);
+    // Aus dem Papierkorb geholt reiht sich ein Milestone hinten ein (Prototyp:
+    // `qorder = order = 1e6`); „Rückgängig“ stellt dagegen den alten Platz her.
+    if (p.kind === 'milestone' && o.toEnd) milestoneToEnd(ctx, p.row['id'] as string);
     // Erst was das Projekt besitzt, dann die Aufgaben, die darauf zeigen.
     insertRows(ctx, 'category', p.categories ?? []);
     insertRows(ctx, '"group"', p.groups ?? []);
@@ -923,9 +1106,82 @@ export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } 
       if (!t['parent_id']) refreshHidden(ctx, t['id'] as string);
     }
 
+    // Was der Milestone oder die Gruppe losgelassen hat, kehrt zurück – sofern es noch lose liegt.
+    const column = p.kind === 'milestone' ? 'milestone_id' : p.kind === 'group' ? 'group_id' : null;
+    if (column && p.moved?.length) {
+      ctx.sqlite
+        .prepare(
+          `UPDATE task SET ${column} = ?, updated_at = ?, version = version + 1
+            WHERE id IN (SELECT value FROM json_each(?))
+              AND parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL`,
+        )
+        .run(p.row['id'], nowIso(), JSON.stringify(p.moved));
+    }
+
     ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
-    return { restored: p.tasks.length || 1 };
+
+    const id = p.row['id'] as string;
+    const label =
+      p.kind === 'project'
+        ? 'mit allen Tasks'
+        : p.kind === 'task'
+          ? readRow(ctx, 'task', id)?.['archived_at'] || readRow(ctx, 'task', id)?.['hidden_by']
+            ? 'im Archiv'
+            : whereOf(ctx, 'task', readRow(ctx, 'task', id) ?? p.row)
+          : p.kind === 'milestone'
+            ? p.row['archived_at']
+              ? 'im Archiv'
+              : p.row['planned']
+                ? 'im Plan'
+                : 'im Backlog'
+            : '';
+    return { restored: p.tasks.length || 1, kind: p.kind, id, label };
   })();
+}
+
+/** Ein Milestone ans Ende von Plan und Backlog seines Projekts. */
+function milestoneToEnd(ctx: DbCtx, id: string): void {
+  const max = ctx.sqlite
+    .prepare(
+      `SELECT coalesce(max(sort_order), -1) AS o, coalesce(max(queue_order), -1) AS q
+         FROM milestone WHERE project_id = (SELECT project_id FROM milestone WHERE id = ?) AND id != ?`,
+    )
+    .get(id, id) as { o: number; q: number };
+  ctx.sqlite
+    .prepare('UPDATE milestone SET sort_order = ?, queue_order = ? WHERE id = ?')
+    .run(max.o + 1, max.q + 1, id);
+}
+
+/**
+ * Die Herkunft in Worten – `whereLabel` aus dem Prototyp, für die Zeile im
+ * Papierkorb und die Meldung nach dem Wiederherstellen.
+ */
+function whereOf(ctx: DbCtx, kind: Kind, row: Record<string, unknown>): string {
+  const get = (sql: string, id: unknown): Record<string, unknown> | undefined =>
+    id ? (ctx.sqlite.prepare(sql).get(id) as Record<string, unknown> | undefined) : undefined;
+  const project = String(get('SELECT name FROM project WHERE id = ?', row['project_id'])?.['name'] ?? '');
+
+  if (kind === 'milestone') {
+    return row['archived_at'] ? 'aus dem Archiv' : row['planned'] ? 'aus dem Plan' : 'aus dem Backlog';
+  }
+  if (kind === 'group') return `Gruppe · ${project}`;
+  if (kind !== 'task') return '';
+
+  if (row['parent_id']) {
+    return `unter „${String(get('SELECT title FROM task WHERE id = ?', row['parent_id'])?.['title'] ?? '?')}“`;
+  }
+  const m = get('SELECT title, planned FROM milestone WHERE id = ?', row['milestone_id']);
+  if (m) return `in ◆ ${String(m['title'])}${m['planned'] ? '' : ' (Backlog)'}`;
+  if (row['doc']) return `in Dokumentation · ${project}`;
+
+  const g = get('SELECT title FROM "group" WHERE id = ?', row['group_id']);
+  const k = get('SELECT emoji, name FROM mark WHERE id = ?', row['mark_id']);
+  const group = g
+    ? String(g['title']) || 'Neue Gruppe'
+    : k
+      ? `${String(k['emoji'])} ${String(k['name'])}`
+      : 'Unsortiert';
+  return `im Backlog › ${group} · ${project}`;
 }
 
 /**
@@ -949,8 +1205,27 @@ function parentsFirst(rows: Record<string, unknown>[]): Record<string, unknown>[
   return out;
 }
 
-export function purgeTrash(ctx: DbCtx, trashId: string): void {
-  ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
+/** Endgültig löschen – die Zeilen gehen als Gegen-Schritt an den Client zurück. */
+export function purgeTrash(ctx: DbCtx, ids: string[]): Undoable {
+  return ctx.sqlite.transaction(() => {
+    const list = JSON.stringify(ids);
+    const rows = ctx.sqlite
+      .prepare(
+        `SELECT id, kind, title, project_id, payload, deleted_at FROM trash
+          WHERE id IN (SELECT value FROM json_each(?))`,
+      )
+      .all(list) as TrashRowData[];
+    ctx.sqlite.prepare('DELETE FROM trash WHERE id IN (SELECT value FROM json_each(?))').run(list);
+    return { count: rows.length, undo: rows.length ? [{ op: 'unpurge' as const, rows }] : [] };
+  })();
+}
+
+function unpurge(ctx: DbCtx, rows: TrashRowData[]): void {
+  const insert = ctx.sqlite.prepare(
+    `INSERT OR IGNORE INTO trash (id, kind, title, project_id, payload, deleted_at)
+     VALUES (@id, @kind, @title, @project_id, @payload, @deleted_at)`,
+  );
+  for (const r of rows) insert.run(r);
 }
 
 /** Läuft beim Start: alles, was die Frist überschritten hat, ist endgültig weg. */

@@ -1,6 +1,6 @@
 import type { BulkAction, BulkItem, Kind, Step, Stub, Undoable } from '@shared/api.js';
 import { CLIENT_HEADER } from '@shared/events.js';
-import type { Data } from '@shared/model.js';
+import type { Data, Milestone, Task } from '@shared/model.js';
 
 /**
  * Jeder Tab bekommt eine eigene Kennung und schickt sie bei jeder Anfrage mit.
@@ -61,15 +61,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body?: unknown): Promise<T> =>
   request<T>(path, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
-export type ArchivePage = {
-  total: number;
-  entries: { kind: 'task' | 'milestone'; id: string; projectId: string; title: string; archivedAt: string; hiddenCount: number }[];
+export type ArchiveEntry = {
+  kind: 'task' | 'milestone';
+  id: string;
+  projectId: string;
+  title: string;
+  archivedAt: string;
+  parentTitle: string | null;
+  milestoneTitle: string | null;
 };
 
-export type TrashList = {
-  days: number;
-  entries: { id: string; kind: string; title: string; projectId: string | null; deletedAt: string; taskCount: number }[];
+/** Eine Seite des Archivs samt Unterbaum – für Aufklappen und Inspektor. */
+export type ArchivePage = {
+  total: number;
+  entries: ArchiveEntry[];
+  tasks: Task[];
+  milestones: Milestone[];
 };
+
+export type TrashEntry = {
+  id: string;
+  kind: string;
+  title: string;
+  projectId: string | null;
+  deletedAt: string;
+  taskCount: number;
+  where: string;
+  drawingCount: number;
+  milestoneCount: number;
+  color: string | null;
+};
+
+export type TrashList = { days: number; entries: TrashEntry[] };
 
 export type { Settings } from '@shared/model.js';
 import type { Settings } from '@shared/model.js';
@@ -108,7 +131,8 @@ export const api = {
 
   archive: <T>(kind: 'task' | 'milestone', id: string) => post<T>(`/api/kind/${kind}/${id}/archive`),
 
-  restore: <T>(kind: 'task' | 'milestone', id: string) => post<T>(`/api/kind/${kind}/${id}/restore`),
+  restore: <T>(kind: 'task' | 'milestone', id: string) =>
+    post<T & { moved?: true }>(`/api/kind/${kind}/${id}/restore`),
 
   move: <T>(id: string, version: number, target: Record<string, unknown>) =>
     post<T>('/api/move', { id, version, ...target }),
@@ -119,8 +143,9 @@ export const api = {
 
   steps: (steps: Step[]) => post<Undoable>('/api/steps', { steps }),
 
-  archivePage: (params: { q?: string; projectId?: string }) => {
+  archivePage: (params: { q?: string; projectId?: string; offset?: number }) => {
     const q = new URLSearchParams();
+    if (params.offset) q.set('offset', String(params.offset));
     if (params.q) q.set('q', params.q);
     if (params.projectId) q.set('projectId', params.projectId);
     return request<ArchivePage>(`/api/archive?${q}`);
@@ -128,9 +153,13 @@ export const api = {
 
   trash: () => request<TrashList>('/api/trash'),
 
-  restoreTrash: (id: string) => post<{ restored: number }>(`/api/trash/${id}/restore`),
+  restoreTrash: (id: string) =>
+    post<{ restored: number; kind: string; id: string; label: string }>(`/api/trash/${id}/restore`),
 
-  purgeTrash: (id: string) => request<{ ok: true }>(`/api/trash/${id}`, { method: 'DELETE' }),
+  purgeTrash: (id: string) => request<Undoable>(`/api/trash/${id}`, { method: 'DELETE' }),
+
+  /** „Papierkorb leeren“ – nur was die Ansicht gerade zeigt. */
+  emptyTrash: (ids: string[]) => post<Undoable>('/api/trash/purge', { ids }),
 
   drawings: (taskId: string) =>
     request<{ drawings: Drawing[] }>(`/api/drawings?taskId=${encodeURIComponent(taskId)}`),

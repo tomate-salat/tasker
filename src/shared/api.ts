@@ -161,6 +161,21 @@ export type BulkItem = z.infer<typeof bulkBody>['items'][number];
  * sie bei „Rückgängig“ hierher zurück. Der Server führt damit keinen eigenen
  * Verlauf – er weiß nur, wie man etwas rückwärts tut.
  */
+/** Eine Zeile des Papierkorbs, so wie sie in der Datenbank steht. */
+export const trashRow = z.object({
+  id,
+  kind: z.string().max(20),
+  title: z.string().max(2000),
+  project_id: id.nullable(),
+  payload: z.string(),
+  deleted_at: z.string().max(40),
+});
+
+export type TrashRow = z.infer<typeof trashRow>;
+
+/** „Endgültig löschen“ für einen oder mehrere Einträge („Papierkorb leeren“). */
+export const purgeBody = z.object({ ids: z.array(id).min(1).max(10_000) });
+
 export const stepSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('patch'),
@@ -179,6 +194,12 @@ export const stepSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('unarchive'), kind: z.enum(['task', 'milestone']), id }),
   z.object({ op: z.literal('trash'), kind: kindSchema, id }),
   z.object({ op: z.literal('untrash'), trashId: id }),
+  /**
+   * Endgültig Gelöschtes zurück in den Papierkorb – wie im Prototyp, wo auch
+   * „Endgültig löschen“ ein „Rückgängig“ hat. Die Zeilen kennt nur noch der
+   * Client, also schickt er sie mit.
+   */
+  z.object({ op: z.literal('unpurge'), rows: z.array(trashRow).min(1).max(1000) }),
 ]);
 
 export const stepsBody = z.object({ steps: z.array(stepSchema).min(1).max(1000) });

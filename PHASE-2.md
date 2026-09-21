@@ -482,11 +482,35 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   Zeichnung verlässt die Beschreibung und kommt mit Rückgängig wieder`.
 
 **Archiv und Papierkorb**
-- Archiv: keine Monatsüberschriften, keine Herkunft („aus dem Plan · 3 Tasks“), kein Aufklappen der
-  Unteraufgaben, keine Auswahl mit Inspektor, kein „In den Papierkorb“, kein Rechtsklick, keine
-  Tasten `A`/`Entf`. Beim Milestone steht „+3 Unteraufgaben“ statt „3 Tasks“.
-- Papierkorb: ohne Kopfzeile und „Papierkorb leeren“ (mit Rückfrage), ohne Herkunft und „vor n
-  Tagen“, ohne Symbol je Art.
+- ~~Archiv~~ **Erledigt** (`ui/archive.tsx`): Monatsüberschriften, Herkunft („aus dem Plan · 3
+  Tasks“, „aus „Eltern““, „aus ◆ …“, „aus Backlog › …“, bei „Alle Projekte“ mit Projektname),
+  Aufklappen bis in die Unteraufgaben (`archOpen` pro Gerät) mit „einzeln archiviert“, Auswahl mit
+  Inspektor (bearbeitbar wie im Prototyp), ↩/✕ an der Zeile, Rechtsklick und `⇧F10` mit
+  `archMenu`, Tasten ↑↓ `A` `Entf` ←→, Kopfleiste mit „Suche“ und Tastenhinweis. Der Server liefert
+  dafür je Seite den ganzen Unterbaum mit (`loadArchive`: `tasks`, `milestones`); der Client baut
+  daraus einen zweiten Arbeitsstand (`archiveWorkspace`) für Liste und Inspektor.
+  - Zurückholen wie `restore` im Prototyp: Liegt der alte Ort selbst im Archiv, kommt die Aufgabe
+    lose nach „Unsortiert“ („… (der ursprüngliche Ort ist archiviert)“); ein Milestone reiht sich
+    hinten ein. Beim Rückgängigmachen eines Archivierens bleibt der alte Platz.
+  - Doppelte Zeile: Einzeln Archiviertes steht als Eintrag und im aufgeklappten Baum darüber. Die
+    React-Schlüssel tragen deshalb den Pfad, sonst verwechselte React die beiden Zeilen.
+  - **Abweichung, bewusst:** Das Archiv kommt seitenweise (Abschnitt 4). Am Ende steht „n weitere
+    laden“, der Prototyp zeigt immer alles.
+- ~~Papierkorb~~ **Erledigt:** Kopfzeile mit Frist und „Papierkorb leeren“ (Rückfrage in der
+  Leiste, leert nur, was die Ansicht zeigt), Herkunft (beim Löschen festgehalten, `where` im
+  Eintrag), „inkl. n Unteraufgaben · n Zeichnungen“, „vor n Tagen · noch n Tage“, Symbol je Art
+  (Punkt in Projektfarbe, ◆, ·). „Endgültig löschen“ und „Leeren“ haben Rückgängig (`unpurge`: der
+  Client schickt die gelöschten Zeilen zurück). Sichtbar ist, was `trashInView` im Prototyp zeigt.
+  - Wiederherstellen wie im Prototyp: ohne Projekt eine Meldung statt eines Fehlers, fehlende
+    Eltern → lose in den Backlog, ein Milestone holt die losgelassenen Aufgaben zurück und reiht
+    sich hinten ein. Meldung „„Titel“ wiederhergestellt unter „…““ bzw. „im Archiv“.
+  - **Behoben:** Ein archivierter Milestone ließ beim Löschen seine Aufgaben zurück – sie tauchten
+    im Backlog wieder auf. Wie im Prototyp gehen sie jetzt mit in den Papierkorb.
+- Nebenbei: Rückgängig, `Escape` und `N`/`/` gelten jetzt in jeder Ansicht (`useGlobalKeys`),
+  vorher nur in Plan, Backlog und Doku. `.eta` ist wie im Prototyp in Mono gesetzt (auch im Plan).
+  Archiv und Papierkorb laden nach jeder Änderung mit, statt leer stehen zu bleiben.
+- Offen: Die Meldungen nach dem Zurückholen haben noch kein „Anzeigen“ bzw. „Öffnen“ (gehört zu
+  „Meldungen und Hilfe“). Ziehen auf den Reiter „Archiv“ gehört zu Drag & Drop.
 
 **Aus den Notizen des Nutzers (zusätzlich)**
 - ~~Enter legt doppelt an~~ **Erledigt.** Bei allen `NewThing`-Feldern (Projekt, auch beim ersten

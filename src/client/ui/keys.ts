@@ -22,26 +22,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null;
-      const typing =
-        !!target &&
-        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable);
-
-      if (e.key === 'Escape') {
-        if (typing) target?.blur();
-        // Escape hebt zuerst die Mehrfachauswahl auf, erst danach die Anzeige.
-        else if (store.multi.size) store.clearMulti();
-        // Wie im Prototyp schließt der Inspektor nur, wenn er über der Liste liegt;
-        // daneben stört er nicht, und Escape soll nichts Unsichtbares tun.
-        else if (store.selected && window.matchMedia('(max-width: 1240px)').matches) store.select(null);
-        return;
-      }
-
-      // Strg+Z nimmt die letzte Änderung zurück.
-      if (!typing && (e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
-        e.preventDefault();
-        void store.undo();
-        return;
-      }
+      const typing = isTyping(target);
       /**
        * Wie im Prototyp (`inList`) gehören die Listentasten nur der Liste: Liegt
        * der Fokus auf einem Knopf in Seitenleiste oder Inspektor, soll `Enter`
@@ -56,14 +37,9 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
         return;
       }
       // Sonst gehören Strg und Meta dem Browser; Alt-Kombinationen kommen weiter unten.
-      if (typing || e.ctrlKey || e.metaKey) return;
-
-      if (e.key === 'n' || e.key === 'N' || e.key === '/') {
-        e.preventDefault();
-        focusQuickAdd();
-        return;
-      }
-      if (!inList) return;
+      if (typing || e.ctrlKey || e.metaKey || !inList) return;
+      // Die gehören `useGlobalKeys`.
+      if (e.key === 'Escape' || e.key === 'n' || e.key === 'N' || e.key === '/') return;
 
       // Umschalt plus Pfeiltaste erweitert die Auswahl, statt zu wandern.
       if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -257,6 +233,49 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [ws, rows, store, menu]);
+}
+
+const isTyping = (target: HTMLElement | null): boolean =>
+  !!target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable);
+
+/**
+ * Was in jeder Ansicht gilt, auch in Archiv, Papierkorb und Zeitplan – im
+ * Prototyp steht es vor der Weiche nach Ansichten.
+ */
+export function useGlobalKeys(): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const store = useStore.getState();
+      const target = e.target as HTMLElement | null;
+      const typing = isTyping(target);
+
+      if (e.key === 'Escape') {
+        if (typing) target?.blur();
+        // Escape hebt zuerst die Mehrfachauswahl auf, erst danach die Anzeige.
+        else if (store.multi.size) store.clearMulti();
+        // Wie im Prototyp schließt der Inspektor nur, wenn er über der Liste liegt;
+        // daneben stört er nicht, und Escape soll nichts Unsichtbares tun.
+        else if (store.selected && window.matchMedia('(max-width: 1240px)').matches) store.select(null);
+        return;
+      }
+      if (typing) return;
+
+      // Strg+Z nimmt die letzte Änderung zurück.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        void store.undo();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey) return;
+
+      if (e.key === 'n' || e.key === 'N' || e.key === '/') {
+        e.preventDefault();
+        focusQuickAdd();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 }
 
 const hidden = (ws: Workspace, id: string | null): OutlineRow | undefined => {

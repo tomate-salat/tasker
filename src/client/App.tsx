@@ -3,7 +3,7 @@ import { api, type Account } from './api.js';
 import { connectEvents } from './events.js';
 import { Login } from './Login.js';
 import { doneCandidates } from '@shared/outline.js';
-import { currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL } from './store.js';
+import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL } from './store.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { SIDE_ICON } from './ui/icons.js';
 import { Inspector } from './ui/Inspector.js';
@@ -13,7 +13,9 @@ import { BulkBar } from './ui/BulkBar.js';
 import { MultiDetail } from './ui/MultiDetail.js';
 import { Sidebar } from './ui/Sidebar.js';
 import { Timeline } from './ui/Timeline.js';
-import { ArchiveView, Outline, TrashView } from './ui/views.js';
+import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
+import { useGlobalKeys } from './ui/keys.js';
+import { Outline } from './ui/views.js';
 
 export function App() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -62,6 +64,9 @@ function Shell({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Rückgängig, Escape und die Schnellerfassung gelten in jeder Ansicht.
+  useGlobalKeys();
 
   // Änderungen aus anderen Tabs und Geräten kommen über den Strom herein.
   useEffect(() => connectEvents(), []);
@@ -210,11 +215,18 @@ function Shell({
           )}
           {view === 'timeline' && <Timeline ws={ws} />}
           {view === 'archive' && <ArchiveView />}
-          {view === 'trash' && <TrashView />}
+          {view === 'trash' && <TrashView ws={ws} />}
         </main>
 
         {/* Bei mehreren Ausgewählten zeigt der Inspektor sie alle nebeneinander. */}
-        {multi.size > 1 ? <MultiDetail ws={ws} /> : selected && <Inspector ws={ws} id={selected} />}
+        {multi.size > 1 ? (
+          <MultiDetail ws={ws} />
+        ) : (
+          selected && (
+            // Im Archiv sieht der Inspektor auch das Archivierte.
+            <Inspector ws={(view === 'archive' && archiveWorkspace(state)) || ws} id={selected} />
+          )
+        )}
 
         <BulkBar ws={ws} />
 
@@ -283,6 +295,9 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   const category = ws.category(filter.categoryId ?? null);
   const mark = ws.mark(filter.markId ?? null);
   const any = filter.tag || category || mark;
+
+  if (view === 'archive') return <ArchiveBar />;
+  if (view === 'trash') return <TrashBar ws={ws} />;
 
   // Wie im Prototyp: über dem Zeitplan steht allein das Tempo, sonst die Filter.
   if (view === 'timeline') {
