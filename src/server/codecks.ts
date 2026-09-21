@@ -291,8 +291,11 @@ const convertedKey = (projectId: string): string => `codecks.refs.${projectId}`;
  * gibt es die Karte in Tasker eindeutig (gleiches Projekt, gleicher Titel),
  * wird daraus `$142`, sonst ein Link auf die Karte in Codecks.
  *
- * Kürzel aus reinen Ziffern sehen aus wie Tasker-Nummern. Umgewandelt werden sie
- * nur, wenn der Export die Karte kennt – und jedes Projekt nur einmal, denn
+ * Kürzel aus reinen Ziffern sehen aus wie Tasker-Nummern. Umgewandelt werden sie,
+ * wenn der Export die Karte kennt oder die Zahl über der höchsten vergebenen
+ * Tasker-Nummer liegt – sonst zeigten sie später, wenn der Zähler dort ankommt,
+ * auf eine falsche Aufgabe. Was darunter liegt und unbekannt ist, bleibt stehen
+ * und erscheint in der Vorschau als „unklar“. Jedes Projekt nur einmal, denn
  * danach könnten dort echte Tasker-Nummern stehen. Mit `dryRun` wird nur
  * gezeigt, was sich ändern würde.
  */
@@ -314,6 +317,9 @@ export function convertCodecksRefs(
     throw new Error('Im Export fehlt die Spalte „Card link“ – ohne sie sind die Kürzel nicht bekannt.');
   }
   const base = cards.map((c) => /^(https?:\/\/[^/]+)\/card\//.exec(c.link)?.[1]).find(Boolean) ?? null;
+  const maxRef =
+    ((ctx.sqlite.prepare('SELECT next FROM ref_seq WHERE id = 1').get() as { next: number } | undefined)
+      ?.next ?? 1) - 1;
 
   // Projekte aus dem Export, die es in Tasker gibt – und die noch nicht umgewandelt sind.
   const names = [...new Set(cards.map((c) => c.project).filter(Boolean))];
@@ -361,8 +367,19 @@ export function convertCodecksRefs(
     const changes: CodecksRefChange[] = [];
     const replace = (text: string): string =>
       text.replace(CODECKS_REF, (m, lead: string, code: string) => {
-        // Reine Ziffern, die der Export nicht kennt, könnten schon Tasker-Nummern sein.
-        if (/^\d+$/.test(code) && !byCode.has(code)) return m;
+        // Reine Ziffern, die der Export nicht kennt: über der höchsten vergebenen
+        // Tasker-Nummer ist es sicher ein Codecks-Kürzel – und muss weg, bevor der
+        // Zähler dort ankommt. Darunter könnte es schon ein Tasker-Verweis sein.
+        if (/^\d+$/.test(code) && !byCode.has(code) && Number(code) <= maxRef) {
+          changes.push({
+            code,
+            ref: null,
+            target: null,
+            link: null,
+            reason: `unklar – $${code} gibt es auch in Tasker, bleibt stehen`,
+          });
+          return m;
+        }
         const change = resolve(code);
         changes.push(change);
         if (change.ref !== null) return `${lead}$${change.ref}`;

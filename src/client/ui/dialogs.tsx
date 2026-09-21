@@ -507,7 +507,8 @@ function CodecksRefs({ onDone }: { onDone: () => void }) {
   }
 
   const changes = preview?.texts.flatMap((t) => t.changes) ?? [];
-  const linked = changes.filter((c) => c.ref === null).length;
+  const linked = changes.filter((c) => c.link !== null).length;
+  const unclear = changes.filter((c) => c.ref === null && c.link === null).length;
 
   return (
     <>
@@ -531,9 +532,10 @@ function CodecksRefs({ onDone }: { onDone: () => void }) {
       {preview && (
         <>
           <p className="pf-hint">
-            {count(changes.length - linked, 'Verweis wird', 'Verweise werden')} zum Tasker-Verweis,{' '}
-            {count(linked, 'Verweis wird', 'Verweise werden')} zum Codecks-Link – in{' '}
+            {count(changes.length - linked - unclear, 'Verweis wird', 'Verweise werden')} zum
+            Tasker-Verweis, {count(linked, 'Verweis wird', 'Verweise werden')} zum Codecks-Link – in{' '}
             {count(preview.texts.length, 'Text', 'Texten')}.
+            {unclear > 0 && <> {count(unclear, 'Verweis ist', 'Verweise sind')} unklar und bleiben stehen.</>}
             {preview.skipped.length > 0 && <> Schon umgewandelt: {preview.skipped.join(', ')}.</>}
             {preview.unknownProjects.length > 0 && (
               <> Nicht in Tasker: {preview.unknownProjects.join(', ')}.</>
@@ -547,7 +549,11 @@ function CodecksRefs({ onDone }: { onDone: () => void }) {
                   {t.changes.map((c, i) => (
                     <div key={i} className={c.ref === null ? 'muted' : ''}>
                       ${c.code} →{' '}
-                      {c.ref !== null ? `$${c.ref} „${c.target}“` : `Codecks-Link (${c.reason})`}
+                      {c.ref !== null
+                        ? `$${c.ref} „${c.target}“`
+                        : c.link
+                          ? `Codecks-Link (${c.reason})`
+                          : `bleibt (${c.reason})`}
                     </div>
                   ))}
                 </li>

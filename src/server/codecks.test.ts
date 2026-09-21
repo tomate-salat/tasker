@@ -154,7 +154,7 @@ describe('Codecks-Verweise umwandeln', () => {
     HEAD,
     row({ id: 'c1', code: '3yw', title: 'Absturz', content: 'Absturz\n\nBehebt $3z6 und $3sv, siehe `$3yw`.' }),
     row({ id: 'c2', code: '3z6', title: 'Ausgang öffnen', content: 'Ausgang öffnen\n\nBehebt auch $3yw' }),
-    row({ id: 'c3', code: '345', title: 'Alte Idee', content: 'Alte Idee\n\nVon $345 und $12, kostet 5$.' }),
+    row({ id: 'c3', code: '345', title: 'Alte Idee', content: 'Alte Idee\n\nVon $345, $150 und $12, kostet 5$.' }),
   ].join('\r\n');
 
   const setup = () => {
@@ -187,11 +187,21 @@ describe('Codecks-Verweise umwandeln', () => {
     assert.equal(descOf('Ausgang öffnen'), `Behebt auch $${ref('Absturz')}`);
   });
 
-  it('Ziffern-Kürzel nur, wenn der Export die Karte kennt – und jedes Projekt nur einmal', () => {
+  it('Ziffern-Kürzel: bekannt oder über der höchsten Nummer umwandeln – und jedes Projekt nur einmal', () => {
     const { ref } = setup();
+    // Als wären schon 99 Nummern vergeben.
+    ctx.sqlite.prepare('UPDATE ref_seq SET next = 100').run();
+    const preview = convertCodecksRefs(ctx, [CARDS], { dryRun: true });
+    const unclear = preview.texts.flatMap((t) => t.changes).filter((c) => !c.ref && !c.link);
+    assert.deepEqual(unclear.map((c) => c.code), ['12']);
+
     convertCodecksRefs(ctx, [CARDS]);
-    // $345 ist eine bekannte Karte, $12 nicht – das könnte schon eine Tasker-Nummer sein.
-    assert.equal(descOf('Alte Idee'), `Von $${ref('Alte Idee')} und $12, kostet 5$.`);
+    // $345 kennt der Export. $150 nicht, liegt aber über der höchsten Nummer und muss
+    // weg, bevor der Zähler dort ankommt. $12 könnte schon ein Tasker-Verweis sein.
+    assert.equal(
+      descOf('Alte Idee'),
+      `Von $${ref('Alte Idee')}, [$150](https://x.codecks.io/card/150) und $12, kostet 5$.`,
+    );
 
     const again = convertCodecksRefs(ctx, [CARDS], { dryRun: true });
     assert.deepEqual(again.skipped, ['Spiel']);
