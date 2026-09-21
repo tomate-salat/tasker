@@ -12,6 +12,7 @@ export class Builder {
     tasks: [],
   };
   private n = 0;
+  private ref = 1;
 
   project(id: string, name = id): this {
     this.data.projects.push({ id,
@@ -39,6 +40,7 @@ export class Builder {
   milestone(id: string, projectId: string, o: Partial<Milestone> = {}): this {
     this.data.milestones.push({
       id,
+      ref: this.ref++,
       version: 1,
       projectId,
       title: id,
@@ -60,6 +62,7 @@ export class Builder {
   task(id: string, projectId: string, o: Partial<Task> = {}): this {
     this.data.tasks.push({
       id,
+      ref: this.ref++,
       version: 1,
       projectId,
       parentId: null,

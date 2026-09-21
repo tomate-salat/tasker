@@ -2505,6 +2505,99 @@ button.prop:hover {
   display: block;
 }
 
+/* ------------------------------------------------ Verweise im Text ($142) */
+
+.md .ref-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+}
+
+.md .ref-link:hover {
+  border-bottom-style: solid;
+}
+
+.md .ref-link.done {
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
+.md .ref-link.archived {
+  color: var(--muted);
+}
+
+.md .ref-link.missing {
+  color: var(--faint);
+  border-bottom: 0;
+  cursor: help;
+}
+
+.ref-no {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  font: 11px var(--mono);
+  cursor: pointer;
+}
+
+.ref-no:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.ref-pick {
+  position: fixed;
+  z-index: 90;
+  width: 320px;
+  max-width: calc(100vw - 16px);
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+
+.ref-pick-i {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ref-pick-i.on,
+.ref-pick-i:hover {
+  background: var(--hover);
+}
+
+.ref-pick-i .lab {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref-pick-i.done .lab {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.ref-pick-i .no {
+  color: var(--faint);
+  font: 11px var(--mono);
+}
+
 /* -------------------------------------------- Prognose und Archivzeilen */
 
 .eta {

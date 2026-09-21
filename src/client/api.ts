@@ -10,6 +10,7 @@ import type {
 import type { LogEntry } from '@shared/burnup.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data, Milestone, Task } from '@shared/model.js';
+import type { RefStub } from '@shared/refs.js';
 
 /**
  * Jeder Tab bekommt eine eigene Kennung und schickt sie bei jeder Anfrage mit.
@@ -46,6 +47,7 @@ export const drawingsOf = (metas: DrawingMeta[] | undefined, ownerId: string): D
 
 export type Bootstrap = Data & {
   stubs: Stub[];
+  refStubs: RefStub[];
   archiveCounts: Record<string, number>;
   /** Nur die Namen – die Szenen holt der Editor einzeln. */
   drawings: DrawingMeta[];

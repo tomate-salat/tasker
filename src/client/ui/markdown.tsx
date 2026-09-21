@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { toggleChecklistItem } from '@shared/checklist.js';
 import type { Drawing } from '../api.js';
+import { linkRefs, type RefResolver } from './refs.js';
 
 /**
  * Die Beschreibung als Markdown, wie im Prototyp: Checklisten sind anklickbar
@@ -14,10 +15,14 @@ import type { Drawing } from '../api.js';
 const TOKEN = /!\[\[zeichnung:([^\]]+)\]\]/g;
 const PLACEHOLDER = /<p>DRAWEMBED([A-Za-z0-9_-]+)END<\/p>/;
 
-/** Markdown zu bereinigtem HTML; Checkboxen bekommen ihre laufende Nummer. */
-export function markdownHtml(src: string): string {
+/**
+ * Markdown zu bereinigtem HTML; Checkboxen bekommen ihre laufende Nummer, und
+ * mit `resolve` werden Verweise ($142) zu Links.
+ */
+export function markdownHtml(src: string, resolve?: RefResolver): string {
   const raw = marked.parse(src ?? '', { async: false, gfm: true }) as string;
-  const clean = DOMPurify.sanitize(raw);
+  const sanitized = DOMPurify.sanitize(raw);
+  const clean = resolve ? linkRefs(sanitized, resolve) : sanitized;
   let n = 0;
   return clean.replace(
     /<input[^>]*type="checkbox"[^>]*>/g,
@@ -34,6 +39,7 @@ export type MarkdownPart =
 export function markdownParts(
   desc: string,
   drawings: Drawing[],
+  resolve?: RefResolver,
 ): { parts: MarkdownPart[]; embedded: Set<string> } {
   const embedded = new Set<string>();
   const src = (desc || '').replace(TOKEN, (m, name: string) => {
@@ -43,7 +49,7 @@ export function markdownParts(
     return `\n\nDRAWEMBED${d.id}END\n\n`;
   });
 
-  const pieces = markdownHtml(src).split(new RegExp(PLACEHOLDER.source, 'g'));
+  const pieces = markdownHtml(src, resolve).split(new RegExp(PLACEHOLDER.source, 'g'));
   const parts: MarkdownPart[] = [];
   pieces.forEach((piece, i) => {
     if (i % 2 === 1) {

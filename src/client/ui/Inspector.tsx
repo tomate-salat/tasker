@@ -22,6 +22,7 @@ import {
   StatusIcon,
 } from './icons.js';
 import { markdownParts, checkboxClick } from './markdown.js';
+import { refClick, useRefPicker, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
 
@@ -150,7 +151,28 @@ function Crumbs({
           <span aria-hidden="true">›</span> {node}
         </span>
       ))}
+      {(task ?? milestone) && <RefNo item={(task ?? milestone) as Task | Milestone} />}
     </div>
+  );
+}
+
+/** Die Verweis-Nummer; ein Klick kopiert `$142` zum Einfügen in einen anderen Text. */
+function RefNo({ item }: { item: Task | Milestone }) {
+  const say = useStore((s) => s.say);
+  const text = `$${item.ref}`;
+  return (
+    <button
+      className="ref-no"
+      title={`Verweis-Nummer – ${text} in einem Text verlinkt hierher. Klicken zum Kopieren.`}
+      onClick={() =>
+        void navigator.clipboard
+          .writeText(text)
+          .then(() => say(`${text} kopiert`))
+          .catch(() => say(`Kopieren nicht möglich – die Nummer ist ${text}`))
+      }
+    >
+      {text}
+    </button>
   );
 }
 
@@ -493,8 +515,10 @@ function Content({
   const mark = kind === 'task' ? ws.mark((item as Task).markId) : null;
   const drawings = useDrawings({ kind, id: item.id }, item.desc);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const resolve = useRefResolver();
+  const picker = useRefPicker(ws, ref, { projectId: item.projectId, self: item.id });
 
-  const { parts, embedded } = markdownParts(item.desc, drawings.list);
+  const { parts, embedded } = markdownParts(item.desc, drawings.list, resolve);
   const loose = drawings.list.filter((d) => !embedded.has(d.id));
 
   useEffect(() => {
@@ -518,13 +542,18 @@ function Content({
           spellCheck
           aria-label="Inhalt: erste Zeile ist der Titel"
           defaultValue={item.title + (item.desc ? `\n\n${item.desc}` : '')}
+          onInput={picker.onInput}
+          onSelect={picker.onSelect}
+          onBlur={picker.onBlur}
           onKeyDown={(e) => {
+            if (picker.onKeyDown(e)) return;
             if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
               e.preventDefault();
               commit(e.currentTarget.value);
             }
           }}
         />
+        {picker.node}
         <div className="d-editbar">
           <button className="btn tiny ghost" onClick={() => setEditing(false)} title="Änderungen verwerfen">
             Abbrechen
@@ -551,6 +580,7 @@ function Content({
         aria-label="Inhalt bearbeiten"
         title="Klicken zum Bearbeiten"
         onClick={(e) => {
+          if (refClick(e)) return;
           const next = checkboxClick(e, item.desc);
           if (next !== null) {
             void patch(kind, item.id, { desc: next });

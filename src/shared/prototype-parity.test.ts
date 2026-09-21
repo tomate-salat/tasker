@@ -63,8 +63,9 @@ function toData(d: Dump['data']): Data {
     ),
     marks: d.marks.map((k, i) => ({ ...k, version: 1, order: i })),
     groups: d.groups.map((g) => ({ id: g.id, version: 1, projectId: g.project, title: g.title, order: g.order })),
-    milestones: d.milestones.map((m) => ({
+    milestones: d.milestones.map((m, i) => ({
       id: m['id'] as string,
+      ref: i + 1,
       version: 1,
       projectId: m['project'] as string,
       title: m['title'] as string,
@@ -79,8 +80,9 @@ function toData(d: Dump['data']): Data {
       archivedAt: (m['archived'] as string | null) ?? null,
       deps: m['deps'] as string[],
     })),
-    tasks: d.tasks.map((t) => ({
+    tasks: d.tasks.map((t, i) => ({
       id: t['id'] as string,
+      ref: d.milestones.length + i + 1,
       version: 1,
       projectId: t['project'] as string,
       parentId: (t['parent'] as string | null) ?? null,

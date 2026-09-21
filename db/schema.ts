@@ -20,6 +20,7 @@ import {
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
 /** Fortschrittskette plus die beiden Sonderstatus. */
@@ -78,6 +79,8 @@ export const milestones = sqliteTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    /** Kurze, feste Nummer für Verweise im Text – siehe `refSeq`. */
+    ref: integer('ref'),
     title: text('title').notNull(),
     desc: text('desc').notNull().default(''),
     /** Eingeplant (mit Zeitraum) oder nur gesammelt. */
@@ -93,7 +96,10 @@ export const milestones = sqliteTable(
     archivedAt: text('archived_at'),
     ...tracked,
   },
-  (t) => [index('milestone_project_idx').on(t.projectId)],
+  (t) => [
+    index('milestone_project_idx').on(t.projectId),
+    uniqueIndex('milestone_ref_idx').on(t.ref),
+  ],
 );
 
 /** Gruppen sind die leichte Zwischenebene im Backlog. */
@@ -131,6 +137,8 @@ export const tasks = sqliteTable(
     parentId: text('parent_id').references((): AnySQLiteColumn => tasks.id, { onDelete: 'cascade' }),
     milestoneId: text('milestone_id').references(() => milestones.id, { onDelete: 'set null' }),
     groupId: text('group_id').references(() => groups.id, { onDelete: 'set null' }),
+    /** Kurze, feste Nummer für Verweise im Text – siehe `refSeq`. */
+    ref: integer('ref'),
     /** Dokument statt Aufgabe – eigene Ansicht, eigener Inspektor. */
     doc: integer('doc', { mode: 'boolean' }).notNull().default(false),
     title: text('title').notNull().default(''),
@@ -160,6 +168,7 @@ export const tasks = sqliteTable(
     index('task_group_idx').on(t.groupId),
     index('task_status_idx').on(t.status),
     index('task_active_idx').on(t.hiddenBy, t.archivedAt),
+    uniqueIndex('task_ref_idx').on(t.ref),
   ],
 );
 
@@ -238,6 +247,19 @@ export const milestoneLog = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.milestoneId, t.at] })],
 );
+
+/**
+ * Die nächste freie Verweis-Nummer ($142) – eine einzige Zeile, die nur
+ * hochzählt. Aufgaben und Milestones teilen sich die Folge, damit eine Nummer
+ * eindeutig ist, ohne zu sagen, wovon. Vergeben wird sie von Triggern beim
+ * Einfügen (Migration 0005), so bekommen auch Kopien und Zurückgeholtes aus
+ * alten Papierkorb-Einträgen eine. Nummern werden nie wieder vergeben – ein
+ * Verweis auf Gelöschtes zeigt nie plötzlich auf etwas anderes.
+ */
+export const refSeq = sqliteTable('ref_seq', {
+  id: integer('id').primaryKey(),
+  next: integer('next').notNull(),
+});
 
 /* ------------------------------------------------------- Papierkorb, Konto, Sitzung */
 

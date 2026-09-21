@@ -50,6 +50,8 @@ export type Group = {
 
 export type Milestone = {
   id: string;
+  /** Kurze, feste Nummer für Verweise im Text ($142) – gemeinsame Folge mit den Tasks. */
+  ref: number;
   /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
   version: number;
   projectId: string;
@@ -70,6 +72,8 @@ export type Milestone = {
 
 export type Task = {
   id: string;
+  /** Kurze, feste Nummer für Verweise im Text ($142) – gemeinsame Folge mit den Milestones. */
+  ref: number;
   /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
   version: number;
   projectId: string;

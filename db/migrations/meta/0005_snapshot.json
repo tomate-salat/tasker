@@ -1,8 +1,8 @@
 {
-  "id": "2a8a7dd3-b0cd-4df3-a415-805530884d54",
-  "prevId": "dcdc6be7-fbe3-42a9-8d72-f9732b09b1cf",
   "version": "6",
   "dialect": "sqlite",
+  "id": "7e5024de-8866-4043-98c7-d2b79eff516b",
+  "prevId": "2a8a7dd3-b0cd-4df3-a415-805530884d54",
   "tables": {
     "category": {
       "name": "category",
@@ -74,15 +74,15 @@
         "category_project_id_project_id_fk": {
           "name": "category_project_id_project_id_fk",
           "tableFrom": "category",
+          "tableTo": "project",
           "columnsFrom": [
             "project_id"
           ],
-          "tableTo": "project",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -238,28 +238,28 @@
         "drawing_task_id_task_id_fk": {
           "name": "drawing_task_id_task_id_fk",
           "tableFrom": "drawing",
+          "tableTo": "task",
           "columnsFrom": [
             "task_id"
           ],
-          "tableTo": "task",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "drawing_milestone_id_milestone_id_fk": {
           "name": "drawing_milestone_id_milestone_id_fk",
           "tableFrom": "drawing",
+          "tableTo": "milestone",
           "columnsFrom": [
             "milestone_id"
           ],
-          "tableTo": "milestone",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -341,15 +341,15 @@
         "group_project_id_project_id_fk": {
           "name": "group_project_id_project_id_fk",
           "tableFrom": "group",
+          "tableTo": "project",
           "columnsFrom": [
             "project_id"
           ],
-          "tableTo": "project",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -456,15 +456,15 @@
         "milestone_log_milestone_id_milestone_id_fk": {
           "name": "milestone_log_milestone_id_milestone_id_fk",
           "tableFrom": "milestone_log",
+          "tableTo": "milestone",
           "columnsFrom": [
             "milestone_id"
           ],
-          "tableTo": "milestone",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -494,6 +494,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "ref": {
+          "name": "ref",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "title": {
@@ -604,21 +611,28 @@
             "project_id"
           ],
           "isUnique": false
+        },
+        "milestone_ref_idx": {
+          "name": "milestone_ref_idx",
+          "columns": [
+            "ref"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
         "milestone_project_id_project_id_fk": {
           "name": "milestone_project_id_project_id_fk",
           "tableFrom": "milestone",
+          "tableTo": "project",
           "columnsFrom": [
             "project_id"
           ],
-          "tableTo": "project",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -681,6 +695,30 @@
           "notNull": true,
           "autoincrement": false,
           "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ref_seq": {
+      "name": "ref_seq",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "next": {
+          "name": "next",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -807,15 +845,15 @@
         "task_tag_task_id_task_id_fk": {
           "name": "task_tag_task_id_task_id_fk",
           "tableFrom": "task_tag",
+          "tableTo": "task",
           "columnsFrom": [
             "task_id"
           ],
-          "tableTo": "task",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -864,6 +902,13 @@
         "group_id": {
           "name": "group_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ref": {
+          "name": "ref",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1019,86 +1064,93 @@
             "archived_at"
           ],
           "isUnique": false
+        },
+        "task_ref_idx": {
+          "name": "task_ref_idx",
+          "columns": [
+            "ref"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
         "task_project_id_project_id_fk": {
           "name": "task_project_id_project_id_fk",
           "tableFrom": "task",
+          "tableTo": "project",
           "columnsFrom": [
             "project_id"
           ],
-          "tableTo": "project",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "task_parent_id_task_id_fk": {
           "name": "task_parent_id_task_id_fk",
           "tableFrom": "task",
+          "tableTo": "task",
           "columnsFrom": [
             "parent_id"
           ],
-          "tableTo": "task",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "task_milestone_id_milestone_id_fk": {
           "name": "task_milestone_id_milestone_id_fk",
           "tableFrom": "task",
+          "tableTo": "milestone",
           "columnsFrom": [
             "milestone_id"
           ],
-          "tableTo": "milestone",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "task_group_id_group_id_fk": {
           "name": "task_group_id_group_id_fk",
           "tableFrom": "task",
+          "tableTo": "group",
           "columnsFrom": [
             "group_id"
           ],
-          "tableTo": "group",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "task_category_id_category_id_fk": {
           "name": "task_category_id_category_id_fk",
           "tableFrom": "task",
+          "tableTo": "category",
           "columnsFrom": [
             "category_id"
           ],
-          "tableTo": "category",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "task_mark_id_mark_id_fk": {
           "name": "task_mark_id_mark_id_fk",
           "tableFrom": "task",
+          "tableTo": "mark",
           "columnsFrom": [
             "mark_id"
           ],
-          "tableTo": "mark",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1170,9 +1222,9 @@
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

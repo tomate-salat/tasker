@@ -5,6 +5,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PrioIcon } from './icons.js';
 import { markdownHtml } from './markdown.js';
+import { refClick, useRefPicker, useRefResolver } from './refs.js';
 import { ChecklistBadge, StatusDot } from './rows.js';
 
 /**
@@ -62,6 +63,8 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
   const patch = useStore((s) => s.patch);
   const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const resolve = useRefResolver();
+  const picker = useRefPicker(ws, ref, { projectId: task.projectId, self: task.id });
 
   const implicit =
     !isDone(task) &&
@@ -91,6 +94,7 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
         <span className="mcard-where">{whereShort(ws, task)}</span>
       </header>
 
+      {editing && picker.node}
       {editing ? (
         <textarea
           ref={ref}
@@ -100,8 +104,14 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
           aria-label={`Beschreibung von ${task.title}`}
           defaultValue={task.desc}
           autoFocus
-          onBlur={(e) => commit(e.currentTarget.value)}
+          onInput={picker.onInput}
+          onSelect={picker.onSelect}
+          onBlur={(e) => {
+            picker.onBlur();
+            commit(e.currentTarget.value);
+          }}
           onKeyDown={(e) => {
+            if (picker.onKeyDown(e)) return;
             if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
               e.preventDefault();
               commit(e.currentTarget.value);
@@ -115,12 +125,14 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
           tabIndex={0}
           title="Klicken zum Bearbeiten · Text markieren zum Kopieren"
           aria-label={`Beschreibung von ${task.title} bearbeiten`}
-          onClick={() => setEditing(true)}
+          onClick={(e) => {
+            if (!refClick(e)) setEditing(true);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') setEditing(true);
           }}
           {...(task.desc
-            ? { dangerouslySetInnerHTML: { __html: markdownHtml(task.desc) } }
+            ? { dangerouslySetInnerHTML: { __html: markdownHtml(task.desc, resolve) } }
             : {
                 children: (
                   <p className="hint mcard-empty">Keine Beschreibung – klicken zum Schreiben</p>

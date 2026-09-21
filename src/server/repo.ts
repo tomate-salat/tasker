@@ -18,6 +18,7 @@ import type {
   TrashRow as TrashRowData,
   Undoable,
 } from '../shared/api.js';
+import { refsIn, type RefStub } from '../shared/refs.js';
 import type { DbCtx } from './db.js';
 import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
 import { newId, type IdPrefix } from './ids.js';
@@ -27,6 +28,8 @@ import { newId, type IdPrefix } from './ids.js';
 export type Bootstrap = Data & {
   /** Verweise auf archivierte Objekte, nur Titel – siehe PHASE-2.md, Abschnitt 4. */
   stubs: Stub[];
+  /** Ziele von Verweisen im Text ($142), die nicht im aktiven Bestand sind. */
+  refStubs: RefStub[];
   /** Anzahl archivierter Einträge je Projekt, für die Anzeige am Archiv-Tab. */
   archiveCounts: Record<string, number>;
   /** Nur die Namen der Zeichnungen; die Szenen holt der Editor einzeln. */
@@ -79,6 +82,22 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     ),
   ].map((r) => ({ ...r, archived: true as const }));
 
+  // Verweise im Text ($142) auf Archiviertes: Titel und Kennung kommen mit.
+  const activeRefs = new Set([...tasks.map((t) => t.ref), ...milestones.map((m) => m.ref)]);
+  const missing = [
+    ...new Set([...tasks, ...milestones].flatMap((x) => refsIn(x.desc))),
+  ].filter((r) => !activeRefs.has(r));
+  const inList = missing.map(() => '?').join(',');
+  const refStubs: RefStub[] = missing.length
+    ? all<RefStub>(
+        `SELECT id, ref, title, 'task' AS kind FROM task WHERE ref IN (${inList})
+         UNION ALL
+         SELECT id, ref, title, 'milestone' AS kind FROM milestone WHERE ref IN (${inList})`,
+        ...missing,
+        ...missing,
+      )
+    : [];
+
   const archiveCounts: Record<string, number> = {};
   for (const r of all<{ project_id: string; c: number }>(
     `SELECT project_id, count(*) AS c FROM (
@@ -102,6 +121,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     milestones: milestones.map((m) => toMilestone(m, depsOfMs.get(m.id) ?? [])),
     tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
     stubs,
+    refStubs,
     archiveCounts,
     drawings: loadDrawingMeta(ctx),
   };
@@ -654,8 +674,11 @@ export function duplicate(ctx: DbCtx, id: string): { id: string } {
   })();
 }
 
-/** Spalten, die die Kopie nicht erbt: Kennung, Titel, Zeitstempel, Version. */
-const FRESH_ON_COPY = new Set(['id', 'parent_id', 'title', 'created_at', 'updated_at', 'version']);
+/**
+ * Spalten, die die Kopie nicht erbt: Kennung, Verweis-Nummer (vergibt der
+ * Trigger neu), Titel, Zeitstempel, Version.
+ */
+const FRESH_ON_COPY = new Set(['id', 'ref', 'parent_id', 'title', 'created_at', 'updated_at', 'version']);
 
 const milestoneRoots = (ctx: DbCtx, milestoneId: string): string[] =>
   (
@@ -1500,12 +1523,12 @@ type CategoryRow = { id: string; version: number; project_id: string; name: stri
 type MarkRow = { id: string; version: number; emoji: string; name: string; sort_order: number };
 type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number };
 type MilestoneRow = {
-  id: string; version: number; project_id: string; title: string; desc: string; planned: number; status: string;
+  id: string; ref: number; version: number; project_id: string; title: string; desc: string; planned: number; status: string;
   sort_order: number; queue_order: number; start_date: string | null; end_date: string | null;
   end_auto: number; archived_at: string | null;
 };
 type TaskRow = {
-  id: string; version: number; project_id: string; parent_id: string | null; milestone_id: string | null;
+  id: string; ref: number; version: number; project_id: string; parent_id: string | null; milestone_id: string | null;
   group_id: string | null; doc: number; title: string; desc: string; prio: number; status: string;
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
   archived_at: string | null; hidden_by: string | null;
@@ -1529,6 +1552,7 @@ const toGroup = (r: GroupRow): Group => ({
 
 const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
   id: r.id,
+  ref: r.ref,
   version: r.version,
   projectId: r.project_id,
   title: r.title,
@@ -1546,6 +1570,7 @@ const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
 
 const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   id: r.id,
+  ref: r.ref,
   version: r.version,
   projectId: r.project_id,
   parentId: r.parent_id,

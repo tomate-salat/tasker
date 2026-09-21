@@ -336,6 +336,22 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
      Ein vorhandenes Projekt gleichen Namens bricht den Import ab.
    - **Import-Dialog:** unter „Profil & Einstellungen“ (Menü unten links): Datei wählen, Vorschau,
      „Importieren“. Nur für den Umzug gedacht – kann danach wieder raus.
+
+### Verweise im Text (über den Prototyp hinaus)
+
+Wunsch des Nutzers, wie die Kartenverweise in Codecks: `$142` in einer Beschreibung zeigt auf die
+Aufgabe oder den Milestone mit dieser Nummer.
+
+- Jede Aufgabe und jeder Milestone hat eine **feste, kurze Nummer** (`ref`), eine gemeinsame Folge.
+  Vergeben wird sie von Triggern beim Einfügen (Migration 0005, Zähler in `ref_seq`), so bekommen
+  auch Kopien, Importe und alte Papierkorb-Einträge eine. Nummern werden nie wieder vergeben. Die
+  Migration nummeriert Bestehendes in der Reihenfolge des Anlegens.
+- Gespeichert wird nur die Nummer; angezeigt wird der **aktuelle Titel** als Link (◆ für Milestones,
+  📄 für Dokumente, durchgestrichen wenn erledigt, blass wenn archiviert). Ein Klick springt hin,
+  Archiviertes öffnet das Archiv. Unbekannte Nummern bleiben als `$999` stehen, blass.
+- Beim Schreiben öffnet `$` eine Suche (Titel oder Nummer, eigenes Projekt zuerst); ↑/↓, Enter/Tab,
+  Escape schließt nur die Liste.
+- Die Nummer steht oben rechts im Inspektor; ein Klick kopiert `$142`.
 11. Gamification, dezent.
 
 ### Angleichen an den Prototyp
