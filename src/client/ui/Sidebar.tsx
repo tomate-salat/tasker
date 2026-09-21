@@ -51,7 +51,8 @@ export function Sidebar({
     if (view === 'docs') return ws.isActive(t) && ws.isDoc(t);
     if (!ws.isActive(t) || ws.isDoc(t)) return false;
     const inPlan = !!ws.milestoneOf(t)?.planned;
-    return view === 'plan' ? inPlan : view === 'backlog' ? !inPlan : true;
+    // Der Zeitplan zeigt nur geplante Milestones, zählt also wie der Plan.
+    return view === 'plan' || view === 'timeline' ? inPlan : view === 'backlog' ? !inPlan : true;
   };
 
   const viewTasks = vws.tasks.filter(inView);

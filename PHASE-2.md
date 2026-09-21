@@ -525,7 +525,7 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Kategorie-Chip mit Farbfeld – Markup gegen den Prototyp verglichen.
 - ~~Zähler in Doku und Archiv~~ **Erledigt.** Die Zahlen an Kategorien, Markierungen und Labels
   zeigen, was in der aktuellen Ansicht steht: in der Doku die Seiten, im Archiv das Archivierte
-  (soweit geladen). Plan und Backlog unverändert.
+  (soweit geladen), im Zeitplan wie im Plan nur das Geplante. Plan und Backlog unverändert.
 
 **Inspektor**
 - Dokumentationsseiten zeigen Status, Fortschritt, Priorität und Abhängigkeiten; im Prototyp nur
