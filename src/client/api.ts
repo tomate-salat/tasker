@@ -1,4 +1,12 @@
-import type { BulkAction, BulkItem, Kind, Step, Stub, Undoable } from '@shared/api.js';
+import type {
+  BulkAction,
+  BulkItem,
+  CodecksSummary,
+  Kind,
+  Step,
+  Stub,
+  Undoable,
+} from '@shared/api.js';
 import type { LogEntry } from '@shared/burnup.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data, Milestone, Task } from '@shared/model.js';
@@ -156,6 +164,9 @@ export const api = {
   bulk: (items: BulkItem[], action: BulkAction) => post<Undoable>('/api/bulk', { items, action }),
 
   steps: (steps: Step[]) => post<Undoable>('/api/steps', { steps }),
+
+  importCodecks: (csv: string, dryRun: boolean) =>
+    post<CodecksSummary>('/api/import/codecks', { csv, dryRun }),
 
   archivePage: (params: { q?: string; projectId?: string; offset?: number }) => {
     const q = new URLSearchParams();

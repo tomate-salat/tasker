@@ -334,7 +334,8 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
      Ende; Doc-Karte → Doku; Priorität 3/2/1 → hoch/mittel/niedrig; `unclear` → Status Unklar;
      Effort und Owner fallen weg. Der Export kennt keinen Arbeitsstand – alles kommt offen an.
      Ein vorhandenes Projekt gleichen Namens bricht den Import ab.
-   - **Offen:** Import-Dialog in der App (Datei wählen, Vorschau, bestätigen).
+   - **Import-Dialog:** unter „Profil & Einstellungen“ (Menü unten links): Datei wählen, Vorschau,
+     „Importieren“. Nur für den Umzug gedacht – kann danach wieder raus.
 11. Gamification, dezent.
 
 ### Angleichen an den Prototyp

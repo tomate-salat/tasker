@@ -1,3 +1,4 @@
+import type { CodecksSummary } from '../shared/api.js';
 import type { Prio, Status } from '../shared/model.js';
 import type { DbCtx } from './db.js';
 import { create } from './repo.js';
@@ -31,17 +32,6 @@ export type CodecksCard = {
   project: string;
   milestone: string;
   milestoneDate: string;
-};
-
-export type CodecksSummary = {
-  projects: string[];
-  categories: string[];
-  labels: string[];
-  milestones: string[];
-  tasks: number;
-  subtasks: number;
-  docs: number;
-  unclear: number;
 };
 
 const COLUMNS = {

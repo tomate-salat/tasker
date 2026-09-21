@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { CodecksSummary } from '@shared/api.js';
 import type { Settings } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account } from '../api.js';
@@ -322,11 +323,94 @@ export function ProfileDialog({
       <h3>Passwort</h3>
       <PasswordForm />
 
+      <h3>Import aus Codecks</h3>
+      <CodecksImport onDone={onClose} />
+
       <h3>Sitzung</h3>
       <button className="btn ghost" onClick={onLogout}>
         Abmelden
       </button>
     </Modal>
+  );
+}
+
+/**
+ * Übergangsweise, solange die Daten aus Codecks herüberkommen: Datei wählen,
+ * Vorschau ansehen, bestätigen. Die Vorschau läuft den echten Import und
+ * rollt ihn zurück.
+ */
+const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+function CodecksImport({ onDone }: { onDone: () => void }) {
+  const { say, load } = useStore();
+  const [file, setFile] = useState<{ name: string; csv: string } | null>(null);
+  const [preview, setPreview] = useState<CodecksSummary | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function pick(f: File | undefined): Promise<void> {
+    setPreview(null);
+    setFile(null);
+    if (!f) return;
+    setBusy(true);
+    try {
+      const csv = await f.text();
+      setPreview(await api.importCodecks(csv, true));
+      setFile({ name: f.name, csv });
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Datei konnte nicht gelesen werden');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function run(): Promise<void> {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const s = await api.importCodecks(file.csv, false);
+      await load();
+      say(`Importiert: ${s.projects.join(', ')}`);
+      onDone();
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Import fehlgeschlagen');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <label className="field">
+        <span>CSV-Export aus Codecks</span>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          disabled={busy}
+          onChange={(e) => void pick(e.target.files?.[0])}
+        />
+      </label>
+      {preview ? (
+        <>
+          <p className="pf-hint">
+            Projekt <b>{preview.projects.join(', ')}</b>:{' '}
+            {count(preview.tasks, 'Aufgabe', 'Aufgaben')},{' '}
+            {count(preview.subtasks, 'Unteraufgabe', 'Unteraufgaben')},{' '}
+            {count(preview.docs, 'Doku-Seite', 'Doku-Seiten')}
+            {preview.unclear ? `, davon ${preview.unclear} unklar` : ''}.
+            {preview.milestones.length > 0 && <> Milestones: {preview.milestones.join(', ')}.</>}
+            {preview.categories.length > 0 && <> Kategorien: {preview.categories.join(', ')}.</>}
+            {preview.labels.length > 0 && <> Labels: {preview.labels.join(', ')}.</>}
+          </p>
+          <button className="btn" disabled={busy} onClick={() => void run()}>
+            Importieren
+          </button>
+        </>
+      ) : (
+        <p className="pf-hint">
+          In Codecks Karten auswählen, „Export as CSV“, dazu Content, Project name und Milestone
+          ankreuzen. Vor dem Import siehst du, was angelegt wird.
+        </p>
+      )}
+    </>
   );
 }
 

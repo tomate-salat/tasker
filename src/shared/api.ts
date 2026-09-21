@@ -115,6 +115,18 @@ export const codecksImportBody = z.object({
   dryRun: z.boolean().optional(),
 });
 
+/** Was ein Codecks-Import anlegt – bei der Vorschau: anlegen würde. */
+export type CodecksSummary = {
+  projects: string[];
+  categories: string[];
+  labels: string[];
+  milestones: string[];
+  tasks: number;
+  subtasks: number;
+  docs: number;
+  unclear: number;
+};
+
 /** „Duplizieren“ aus dem Kontextmenü: eine Aufgabe samt allem, was daran hängt. */
 export const duplicateBody = z.object({ id });
 
