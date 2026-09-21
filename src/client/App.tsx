@@ -138,9 +138,6 @@ function Shell({
   }
 
   const title = scope === 'all' ? 'Alle Projekte' : (ws.project(scope)?.name ?? 'Projekt');
-  // Der ausgewählte Milestone, sonst der erste des Projekts.
-  const planTarget =
-    ws.milestone(selected)?.id ?? ws.milestones.find((m) => m.projectId === projectId)?.id ?? null;
 
   return (
     <>
@@ -185,28 +182,34 @@ function Shell({
 
               <span className="tab-actions">
                 <ArchiveDone ws={ws} />
+                {/* Wie im Prototyp: Aufgaben entstehen über die Schnellerfassung oder
+                    in der Liste, der Kopf legt nur Milestones und Seiten an – sofort,
+                    mit dem Titel zum Eintippen in der neuen Zeile. */}
                 {view === 'plan' && (
-                  <NewThing
-                    label="+ Milestone"
-                    placeholder="Titel des Milestones"
-                    onCreate={async (t) => void (await useStore.getState().addMilestone(t))}
-                  />
-                )}
-                {(view === 'plan' || view === 'backlog' || view === 'docs') && (
                   <button
                     className="btn"
+                    title="Neuen Milestone im Plan anlegen"
                     onClick={() =>
-                      void addTask({
-                        projectId,
-                        title: '',
-                        ...(view === 'docs' ? { doc: true } : {}),
-                        // In der Planansicht gehört eine neue Aufgabe in einen Milestone,
-                        // sonst landet sie unsichtbar im Backlog.
-                        ...(view === 'plan' && planTarget ? { milestoneId: planTarget } : {}),
-                      }).then((id) => id && useStore.getState().edit(id, true))
+                      void useStore
+                        .getState()
+                        .addMilestone('')
+                        .then((id) => id && useStore.getState().edit(id, true))
                     }
                   >
-                    + {view === 'docs' ? 'Seite' : 'Aufgabe'}
+                    + Milestone
+                  </button>
+                )}
+                {view === 'docs' && (
+                  <button
+                    className="btn"
+                    title="Neue Seite anlegen"
+                    onClick={() =>
+                      void addTask({ projectId, title: '', doc: true }).then(
+                        (id) => id && useStore.getState().edit(id, true),
+                      )
+                    }
+                  >
+                    + Seite
                   </button>
                 )}
               </span>

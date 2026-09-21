@@ -428,7 +428,7 @@ Inspektor bildschirmfüllend, Labels/Datum/Balken ausgeblendet; zwischen 901 und
 Inspektor rechts. Nebenbei gefunden: Gruppenzeilen waren 40 statt 33 px hoch. Geprüft mit
 denselben Daten nebeneinander bei 1400 px (Plan und Backlog: Zeilen, Pfeile, Titel, Tastenleiste
 pixelgleich) und 375 px. Bleibt: die Kopfzeile läuft mobil seitlich über – das tut sie im
-Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
+Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfallen, siehe Kopf).
 
 **Liste**
 - ~~Zellen nicht anklickbar~~ **Erledigt.** Markierung, Priorität, Kategorie und Labels öffnen
@@ -504,8 +504,9 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   Start 21.09.“ mit Rückgängig.
 
 **Kopf und Seitenleiste**
-- Zusätzlicher Knopf „+ Aufgabe“ in Plan und Backlog (gibt es im Prototyp nicht); „+ Milestone“
-  öffnet ein Eingabefeld statt den neuen Milestone gleich in der Liste zum Benennen.
+- ~~Kopf-Knöpfe~~ **Erledigt.** Wie im Prototyp: „+ Milestone“ nur im Plan, legt den Milestone
+  sofort an und öffnet den Titel zum Eintippen; „+ Seite“ nur in der Doku; „+ Aufgabe“ entfällt
+  (Aufgaben entstehen über Schnellerfassung und Liste). Tooltips aus dem Prototyp übernommen.
 - ~~Projektmenü~~ **Erledigt.** „⋯“ und Rechtsklick am Projekt öffnen `projMenu` (Einträge und
   Farbpalette 1:1 gegen den Prototyp verglichen); Doppelklick benennt in der Zeile um (Meldung mit
   „Rückgängig“), „Nach oben/unten“ tauscht die Reihenfolge in einem Schritt-Paar, „Kategorien
