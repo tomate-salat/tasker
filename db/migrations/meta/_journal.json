@@ -29,6 +29,13 @@
       "when": 1789998827714,
       "tag": "0003_milestone_log_at",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789999946472,
+      "tag": "0004_burnup_neu_zaehlen",
+      "breakpoints": true
     }
   ]
 }

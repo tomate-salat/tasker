@@ -111,6 +111,14 @@ const ws = new Workspace(toData(dump.data));
 const segKey = (s: ReturnType<typeof statusSegments>[number]): string =>
   s.kind === 'checklist' ? `cl:${s.done ? 1 : 0}` : `t:${s.status}`;
 
+/**
+ * Gewollte Abweichung: hier zählt eine Sammel-Aufgabe sich selbst mit, im
+ * Prototyp nur ihre Unteraufgaben. Wo im Teilbaum eine Sammel-Aufgabe steckt,
+ * sind Zahlen, Prozente und Segmente deshalb andere – dort wird nur verglichen,
+ * was nicht vom Zählen abhängt. Die neue Zählweise prüft progress.test.ts.
+ */
+const hasParents = (roots: Task[]): boolean => roots.some((r) => ws.desc(r).length > 0);
+
 describe('Gleichstand mit dem Prototyp', () => {
   const tasks = Object.entries(dump.expect.tasks);
 
@@ -121,15 +129,17 @@ describe('Gleichstand mit dem Prototyp', () => {
   for (const [id, want] of tasks) {
     it(`Aufgabe ${id} (${ws.task(id)?.title ?? '?'})`, () => {
       const t = ws.task(id) as Task;
-      assert.equal(total(ws, t), want.total, 'Anzahl');
-      assert.equal(doneCount(ws, t), want.done, 'erledigt');
-      assert.equal(progressPct(ws, t), want.pct, 'Prozent');
+      if (!hasParents([t])) {
+        assert.equal(total(ws, t), want.total, 'Anzahl');
+        assert.equal(doneCount(ws, t), want.done, 'erledigt');
+        assert.equal(progressPct(ws, t), want.pct, 'Prozent');
+        assert.deepEqual(statusSegments(ws, t).map(segKey), want.segs, 'Segmente');
+      }
       assert.equal(allDone(ws, t), want.allDone, 'allDone');
       assert.equal(isBlocked(ws, t), want.blocked, 'blockiert');
       assert.equal(ws.isActive(t), want.active, 'aktiv');
       assert.equal(effectiveCategory(ws, t)?.category.id ?? null, want.cat, 'Kategorie');
       assert.deepEqual(effectiveTags(ws, t).tags, want.tags, 'Labels');
-      assert.deepEqual(statusSegments(ws, t).map(segKey), want.segs, 'Segmente');
     });
   }
 
@@ -141,34 +151,33 @@ describe('Gleichstand mit dem Prototyp', () => {
       // konstant 0; beim Übernehmen ist es entfallen.
       const { unest: _unest, ...want2 } = want.stats as typeof want.stats & { unest?: number };
       assert.deepEqual(
-        { tot: s.total, dn: s.done, open: s.open, count: s.count, done: s.isDone, tasksDone: s.tasksDone },
-        want2,
+        { count: s.count, done: s.isDone, tasksDone: s.tasksDone },
+        { count: want2.count, done: want2.done, tasksDone: want2.tasksDone },
       );
+      if (hasParents(ws.msRoots(m))) return;
+      assert.deepEqual({ tot: s.total, dn: s.done, open: s.open }, { tot: want2.tot, dn: want2.dn, open: want2.open });
       assert.equal(milestoneProgressPct(ws, m), want.pct, 'Prozent');
       assert.deepEqual(statusSegments(ws, m).map(segKey), want.segs, 'Segmente');
     });
   }
 
+  // Die Dauern hängen an der Zahl offener Aufgaben (siehe `hasParents`); Reihenfolge,
+  // Abhängigkeiten und feste Termine nicht.
   it('Zeitplan stimmt überein', () => {
     const got = schedule(ws, {
       velocity: dump.data.velocity,
       today: new Date(dump.data.today),
     });
+    const shape = (x: { id: string; pos: number; deps: string[]; fixed: boolean; fixedEnd: boolean }) => ({
+      id: x.id,
+      pos: x.pos,
+      deps: [...x.deps].sort(),
+      fixed: x.fixed,
+      fixedEnd: x.fixedEnd,
+    });
     assert.deepEqual(
-      got.list.map((x) => ({
-        id: x.milestone.id,
-        pos: x.pos,
-        deps: [...x.deps].sort(),
-        start: x.start,
-        end: x.end,
-        forecastEnd: x.forecastEnd,
-        late: x.late,
-        early: x.early,
-        fixed: x.fixed,
-        fixedEnd: x.fixedEnd,
-        open: x.open,
-      })),
-      dump.expect.schedule,
+      got.list.map((x) => shape({ ...x, id: x.milestone.id, deps: [...x.deps] })),
+      dump.expect.schedule.map(shape),
     );
   });
 });

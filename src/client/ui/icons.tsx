@@ -138,7 +138,7 @@ const SEG_CLASS: Record<Status, string> = {
 /** Reihenfolge der Segmente: erledigt, in Arbeit, eigene Checkliste, dann der Rest. */
 const RANK: Record<string, number> = { done: 0, prog: 1, cl: 2, blocked: 3, unclear: 4, open: 5 };
 
-/** Ein durchgehender Balken, ein Abschnitt je Checklisten-Punkt und Blatt-Aufgabe. */
+/** Ein durchgehender Balken, ein Abschnitt je Checklisten-Punkt und Aufgabe. */
 export function SegBar({ segments }: { segments: Segment[] }) {
   if (!segments.length) return null;
 

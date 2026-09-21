@@ -3,12 +3,15 @@ import { type Milestone, type Status, type Task, isDone } from './model.js';
 import type { Workspace } from './workspace.js';
 
 /**
- * Gezählt werden Aufgaben, nicht Punkte: jede Aufgabe ohne Unteraufgaben zählt 1,
- * eine Sammel-Aufgabe zählt die Summe ihrer Unteraufgaben.
+ * Gezählt werden Aufgaben, nicht Punkte: jede Aufgabe zählt 1, auch eine
+ * Sammel-Aufgabe – sie zählt sich selbst plus ihre Unteraufgaben.
+ *
+ * Abweichung vom Prototyp, auf Wunsch: dort zählte eine Sammel-Aufgabe nur
+ * ihre Unteraufgaben, eine erledigte Aufgabe mit einer Unteraufgabe war also
+ * nur eine statt zwei.
  */
 export function total(ws: Workspace, t: Task): number {
-  const kids = ws.kids(t.id);
-  return kids.length ? sumBy(kids, (k) => total(ws, k)) : 1;
+  return 1 + sumBy(ws.kids(t.id), (k) => total(ws, k));
 }
 
 /** Erledigte Aufgaben darunter. */
@@ -31,10 +34,10 @@ export function allDone(ws: Workspace, t: Task): boolean {
  */
 export function progressUnits(ws: Workspace, t: Task): number {
   if (isDone(t)) return total(ws, t);
-  const kids = ws.kids(t.id);
+  // Die Aufgabe selbst ist eine Einheit; ihre Checkliste füllt sie anteilig.
   const own = checklist(t.desc);
-  const fromChecklist = own.total && !kids.length ? own.done / own.total : 0;
-  return fromChecklist + sumBy(kids, (k) => progressUnits(ws, k));
+  const fromChecklist = own.total ? own.done / own.total : 0;
+  return fromChecklist + sumBy(ws.kids(t.id), (k) => progressUnits(ws, k));
 }
 
 export function progressPct(ws: Workspace, t: Task): number {
@@ -89,8 +92,9 @@ export type Segment =
   | { kind: 'task'; status: Status };
 
 /**
- * Ein Segment je Checklisten-Punkt des Objekts und je Blatt-Aufgabe darunter.
- * Die Sortierung für die Anzeige macht die Oberfläche.
+ * Ein Segment je Checklisten-Punkt des Objekts und je Aufgabe, die `total`
+ * zählt – Sammel-Aufgaben eingeschlossen, bei einer Aufgabe mit Unteraufgaben
+ * also auch sie selbst. Die Sortierung für die Anzeige macht die Oberfläche.
  */
 export function statusSegments(ws: Workspace, x: Task | Milestone): Segment[] {
   const { lines, out } = checklistLines(x.desc);
@@ -100,12 +104,11 @@ export function statusSegments(ws: Workspace, x: Task | Milestone): Segment[] {
   }));
 
   const walk = (t: Task): void => {
-    const kids = ws.kids(t.id);
-    if (kids.length) kids.forEach(walk);
-    else segs.push({ kind: 'task', status: t.status });
+    segs.push({ kind: 'task', status: t.status });
+    ws.kids(t.id).forEach(walk);
   };
 
-  const roots = isMilestone(x) ? ws.msRoots(x) : ws.kids(x.id);
+  const roots = isMilestone(x) ? ws.msRoots(x) : ws.kids(x.id).length ? [x] : [];
   roots.forEach(walk);
   return segs;
 }

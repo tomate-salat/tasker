@@ -24,11 +24,24 @@ function tree() {
 }
 
 describe('Aufgaben zählen', () => {
-  it('zählt Blätter, nicht Knoten', () => {
+  it('zählt jede Aufgabe, Sammel-Aufgaben eingeschlossen', () => {
     const ws = tree();
-    assert.equal(total(ws, ws.task('t1')!), 3);
-    assert.equal(total(ws, ws.task('t2')!), 2);
+    assert.equal(total(ws, ws.task('t1')!), 5);
+    assert.equal(total(ws, ws.task('t2')!), 3);
     assert.equal(total(ws, ws.task('t3')!), 1);
+  });
+
+  it('eine erledigte Sammel-Aufgabe mit erledigter Unteraufgabe zählt zwei', () => {
+    // Der Fall aus dem Burnup: Karl offen, Heiner und Abc erledigt – 2 von 3.
+    const ws = new Builder()
+      .project('p1')
+      .milestone('m', 'p1')
+      .task('karl', 'p1', { milestoneId: 'm' })
+      .task('heiner', 'p1', { milestoneId: 'm', status: 'done' })
+      .task('abc', 'p1', { parentId: 'heiner', status: 'done' })
+      .build();
+    const s = milestoneStats(ws, ws.milestone('m')!);
+    assert.deepEqual({ total: s.total, done: s.done }, { total: 3, done: 2 });
   });
 
   it('erledigte Unteraufgaben summieren sich nach oben', () => {
@@ -39,7 +52,8 @@ describe('Aufgaben zählen', () => {
       .task('t3', 'p1', { parentId: 't1' })
       .build();
     assert.equal(doneCount(ws, ws.task('t1')!), 1);
-    assert.equal(progressPct(ws, ws.task('t1')!), 50);
+    // t1 selbst ist offen: 1 von 3.
+    assert.equal(progressPct(ws, ws.task('t1')!), 33);
   });
 
   it('ein erledigter Elternteil zählt seinen ganzen Teilbaum', () => {
@@ -49,7 +63,7 @@ describe('Aufgaben zählen', () => {
       .task('t2', 'p1', { parentId: 't1' })
       .task('t3', 'p1', { parentId: 't1' })
       .build();
-    assert.equal(doneCount(ws, ws.task('t1')!), 2);
+    assert.equal(doneCount(ws, ws.task('t1')!), 3);
     assert.equal(progressPct(ws, ws.task('t1')!), 100);
   });
 
@@ -60,7 +74,7 @@ describe('Aufgaben zählen', () => {
       .task('t2', 'p1', { parentId: 't1' })
       .task('t3', 'p1', { parentId: 't1', archivedAt: '2026-01-01T00:00:00Z' })
       .build();
-    assert.equal(total(ws, ws.task('t1')!), 1);
+    assert.equal(total(ws, ws.task('t1')!), 2);
   });
 
   it('allDone gilt auch ohne eigenen Status', () => {
@@ -84,14 +98,14 @@ describe('Checkliste im Fortschritt', () => {
     assert.equal(progressPct(ws, ws.task('t1')!), 50);
   });
 
-  it('die Checkliste eines Elternteils zählt nicht doppelt', () => {
+  it('die Checkliste eines Elternteils füllt nur seinen eigenen Anteil', () => {
     const ws = new Builder()
       .project('p1')
       .task('t1', 'p1', { desc: '- [x] a' })
       .task('t2', 'p1', { parentId: 't1' })
       .build();
-    // t1 hat eine Unteraufgabe, also zählt nur diese
-    assert.equal(progressPct(ws, ws.task('t1')!), 0);
+    // t1 selbst ist per Checkliste fertig, t2 offen: 1 von 2.
+    assert.equal(progressPct(ws, ws.task('t1')!), 50);
   });
 });
 
@@ -137,7 +151,7 @@ describe('Milestone-Kennzahlen', () => {
 });
 
 describe('Segmente für den Fortschrittsbalken', () => {
-  it('ein Segment je Checklisten-Punkt und je Blatt-Aufgabe', () => {
+  it('ein Segment je Checklisten-Punkt und je Aufgabe, die Sammel-Aufgabe selbst eingeschlossen', () => {
     const ws = new Builder()
       .project('p1')
       .task('t1', 'p1', { desc: '- [x] a\n- [ ] b' })
@@ -149,7 +163,9 @@ describe('Segmente für den Fortschrittsbalken', () => {
     assert.deepEqual(statusSegments(ws, ws.task('t1')!), [
       { kind: 'checklist', done: true },
       { kind: 'checklist', done: false },
+      { kind: 'task', status: 'open' },
       { kind: 'task', status: 'progress' },
+      { kind: 'task', status: 'open' },
       { kind: 'task', status: 'blocked' },
     ]);
   });
