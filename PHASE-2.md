@@ -636,7 +636,10 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Schrittweite nach Spannweite), einer Zeile je eingeplantem Milestone und dem Balken aus dem
   Prototyp: blasser Vorlauf bei einem Startdatum in der Vergangenheit, schraffierter Überhang über
   ein zu knappes Enddatum, „✓ Done“ beziehungsweise „keine offenen Aufgaben“ statt eines Balkens.
-  Gerechnet wird immer projektübergreifend, der Projektfilter wählt nur die sichtbaren Zeilen aus.
+  Gerechnet wird immer über alle Projekte, der Projektfilter wählt nur die sichtbaren Zeilen aus.
+  **Abweichung vom Prototyp (Wunsch des Nutzers):** jedes Projekt hat seine eigene Reihe, Projekte
+  verschieben sich nicht gegenseitig; nur eine ausdrücklich gesetzte Milestone- oder
+  Task-Abhängigkeit wirkt über die Projektgrenze.
   Das Tempo steht wie im Prototyp allein über dieser Ansicht – aus dem Plan ist es dorthin
   gewandert. Dabei ist auch die Reihenfolge im Kopf geradegezogen: die Schnellerfassung steht jetzt
   wie im Prototyp über der Filterleiste und in jeder Ansicht, nicht nur in Plan, Backlog und Doku.

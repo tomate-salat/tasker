@@ -43,9 +43,9 @@ export function Timeline({ ws }: { ws: Workspace }) {
   return (
     <div className="tl">
       <p className="tl-note">
-        Du arbeitest allein, also werden alle Milestones im Plan{' '}
-        <b>projektübergreifend nacheinander</b> eingeplant – in der Reihenfolge des Plans, außer
-        eine Abhängigkeit erzwingt etwas anderes. Hat ein Milestone ein <b>Startdatum</b>, beginnt
+        Die Milestones im Plan werden <b>je Projekt nacheinander</b> eingeplant – in der
+        Reihenfolge des Plans, außer eine Abhängigkeit erzwingt etwas anderes. Projekte laufen
+        unabhängig voneinander. Hat ein Milestone ein <b>Startdatum</b>, beginnt
         er dort – so steuerst du den Zeitplan; der blassere Teil des Balkens ist die bereits
         vergangene Zeit, die Restarbeit wird ab heute gerechnet. Die Dauer ergibt sich aus den
         offenen Aufgaben und deinem Tempo. Vorbereitete Milestones im Backlog zählen nicht mit.

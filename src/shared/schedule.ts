@@ -61,7 +61,7 @@ export type ScheduleOptions = {
 };
 
 /**
- * Reiht die eingeplanten Milestones nacheinander auf und rechnet aus, wann sie
+ * Reiht die eingeplanten Milestones je Projekt nacheinander auf und rechnet aus, wann sie
  * beim eingestellten Tempo fertig werden.
  *
  * Abhängigkeiten kommen aus zwei Quellen: direkt zwischen Milestones und
@@ -112,7 +112,10 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
 
   const pending = [...planned];
   const list: ScheduledMilestone[] = [];
-  let cursor = 0;
+  // Jedes Projekt hat seine eigene Reihe (Wunsch des Nutzers, im Prototyp lief
+  // alles in einer): Projekte verschieben sich nicht gegenseitig. Nur eine
+  // ausdrücklich gesetzte Abhängigkeit wirkt über die Projektgrenze.
+  const cursors = new Map<string, number>();
 
   while (pending.length) {
     // Als Nächstes der erste, dessen Abhängigkeiten schon eingeplant sind.
@@ -125,6 +128,7 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     const m = pending.splice(i, 1)[0] as Milestone;
     const x = byId.get(m.id) as ScheduledMilestone;
     const depEnd = Math.max(0, ...x.deps.map((d) => byId.get(d)?.end ?? 0));
+    const cursor = cursors.get(m.projectId) ?? 0;
 
     x.fixed = m.startDate !== null;
     x.fixedEnd = m.endDate !== null;
@@ -138,7 +142,7 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     if (x.fixedEnd && !x.fixed) x.start = Math.min(x.start, x.end);
     x.late = !x.isDone && x.fixedEnd && x.forecastEnd > x.end + 1e-6;
 
-    cursor = Math.max(cursor, x.isDone ? x.end : Math.max(x.end, x.forecastEnd));
+    cursors.set(m.projectId, Math.max(cursor, x.isDone ? x.end : Math.max(x.end, x.forecastEnd)));
     x.pos = list.length + 1;
     list.push(x);
   }

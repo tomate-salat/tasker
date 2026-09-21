@@ -81,6 +81,28 @@ describe('Zeitplan', () => {
     assert.equal(s.byId.get('m2')!.end, 2);
   });
 
+  it('Projekte verschieben sich nicht gegenseitig – außer über eine Abhängigkeit', () => {
+    const build = (deps: string[]) =>
+      new Builder()
+        .project('p1')
+        .project('p2')
+        .milestone('m1', 'p1', { planned: true, qorder: 0 })
+        .milestone('m2', 'p2', { planned: true, qorder: 1 })
+        .milestone('m3', 'p1', { planned: true, qorder: 2, deps })
+        .task('t1', 'p1', { milestoneId: 'm1' })
+        .task('t2', 'p2', { milestoneId: 'm2' })
+        .task('t3', 'p2', { milestoneId: 'm2' })
+        .task('t4', 'p1', { milestoneId: 'm3' })
+        .build();
+
+    const s = schedule(build([]), { velocity: 1, today: TODAY });
+    assert.equal(s.byId.get('m2')!.start, 0);
+    assert.equal(s.byId.get('m3')!.start, 1);
+
+    const d = schedule(build(['m2']), { velocity: 1, today: TODAY });
+    assert.equal(d.byId.get('m3')!.start, 2);
+  });
+
   it('nicht eingeplante und archivierte Milestones bleiben draußen', () => {
     const ws = new Builder()
       .project('p1')
