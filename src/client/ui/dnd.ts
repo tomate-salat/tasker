@@ -1,126 +1,328 @@
-import { useState } from 'react';
-import { container, countIn, isLooseRoot, siblings, type Placement } from '@shared/outline.js';
-import type { Task } from '@shared/model.js';
+import { create } from 'zustand';
+import {
+  container,
+  countIn,
+  draftMilestones,
+  groupsOf,
+  isLooseRoot,
+  plannedMilestones,
+  siblings,
+  type OutlineRow,
+  type Placement,
+} from '@shared/outline.js';
+import type { Milestone, Project, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore } from '../store.js';
+import { useStore, whereLabel, type View } from '../store.js';
+import { placeSteps, toBacklog } from './actions.js';
 
 /**
- * Ziehen und Ablegen im Baum.
+ * Ziehen und Ablegen, Regeln wie im Prototyp (`dragover`/`applyDrop`):
  *
- * Über einer Aufgabe gibt es drei Zonen: oben „davor“, unten „danach“, in der
- * Mitte „hinein“. Über einem Milestone, einer Gruppe oder einem leeren
- * Platzhalter gibt es nur „hinein“. Der Platz wird als Position unter den
- * künftigen Geschwistern geschickt, ohne die verschobene Aufgabe mitzuzählen –
- * genauso rechnet der Server.
+ * - **Aufgabe** über einer Aufgabe: oben „davor“, unten „danach“, in der Mitte
+ *   „hinein“. Über Milestone, Gruppe, leerem Platzhalter, Reiter (Plan,
+ *   Backlog, Doku, Archiv) und Projekt in der Seitenleiste: „hinein“.
+ * - **Milestone** über einem Milestone: davor oder danach; über den Reitern
+ *   Plan, Backlog und Archiv: hinein.
+ * - **Projekt** über einem Projekt, **Gruppe** über einer Gruppe desselben
+ *   Projekts: davor oder danach.
+ *
+ * Über den Prototyp hinaus (Wunsch des Nutzers): Gehört die gezogene Aufgabe
+ * zu einer Mehrfachauswahl, wandern alle Ausgewählten mit.
+ *
+ * Der Zustand liegt in einem eigenen kleinen Speicher, weil Liste,
+ * Seitenleiste und Reiter an einem Ziehvorgang beteiligt sind.
  */
 export type Zone = 'before' | 'after' | 'child' | 'into';
 
-/** Ein Behälter als Ziel: wohin, und in welchem Projekt er liegt. */
-export type Container = { id: string; projectId: string; place: Placement };
+type DragKind = 'task' | 'milestone' | 'group' | 'project';
 
-export type Dnd = {
-  dragId: string | null;
-  drop: { id: string; zone: Zone } | null;
-  start: (id: string) => void;
-  end: () => void;
-  overTask: (e: React.DragEvent, id: string) => void;
-  overContainer: (e: React.DragEvent, target: Container) => void;
-  release: (e: React.DragEvent) => void;
+type Drag = {
+  kind: DragKind;
+  id: string;
+  /** Die Aufgaben, die mitwandern – bei einer Mehrfachauswahl alle obersten. */
+  ids: string[];
+  /** Wohin eine Aufgabe nicht darf: sie selbst und ihr Teilbaum. */
+  blocked: Set<string>;
 };
 
-export function useDnd(ws: Workspace): Dnd {
-  const { moveTask, say } = useStore();
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [drop, setDrop] = useState<{ id: string; zone: Zone } | null>(null);
-  const [into, setInto] = useState<Container | null>(null);
+type DragState = {
+  drag: Drag | null;
+  over: { key: string; zone: Zone } | null;
+};
 
-  const end = (): void => {
-    setDragId(null);
-    setDrop(null);
-    setInto(null);
-  };
+export const useDrag = create<DragState>(() => ({ drag: null, over: null }));
 
-  const accepts = (e: React.DragEvent): boolean => {
-    if (!dragId) return false;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    return true;
-  };
+type GroupRowT = Extract<OutlineRow, { type: 'group' }>;
+type EmptyRowT = Extract<OutlineRow, { type: 'empty' }>;
 
+export type Target =
+  | { type: 'task'; task: Task }
+  | { type: 'milestone'; milestone: Milestone }
+  | { type: 'group'; row: GroupRowT }
+  | { type: 'empty'; row: EmptyRowT }
+  | { type: 'tab'; view: View }
+  | { type: 'project'; project: Project };
+
+const keyOf = (t: Target): string => {
+  switch (t.type) {
+    case 'task':
+      return t.task.id;
+    case 'milestone':
+      return t.milestone.id;
+    case 'group':
+    case 'empty':
+      return t.row.id;
+    case 'tab':
+      return `tab:${t.view}`;
+    case 'project':
+      return `proj:${t.project.id}`;
+  }
+};
+
+const clear = (): void => useDrag.setState({ drag: null, over: null });
+
+/** Die Zone, die gerade über diesem Ziel angezeigt wird. */
+export const useZone = (target: Target): Zone | null => {
+  const key = keyOf(target);
+  return useDrag((s) => (s.over?.key === key ? s.over.zone : null));
+};
+
+/** Ob diese Zeile gerade gezogen wird (bei einer Auswahl: jede ausgewählte). */
+export const useDragging = (id: string): boolean =>
+  useDrag((s) => !!s.drag && (s.drag.id === id || s.drag.ids.includes(id)));
+
+/** Macht ein Element ziehbar. */
+export function dragSource(kind: DragKind, id: string, enabled = true) {
   return {
-    dragId,
-    drop,
-    start: (id) => {
-      setDragId(id);
-      setDrop(null);
-      setInto(null);
+    draggable: enabled,
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.dataTransfer.effectAllowed = 'move';
+      try {
+        e.dataTransfer.setData('text/plain', id);
+      } catch {
+        // Manche Browser erlauben das nicht – das Ziehen geht trotzdem.
+      }
+      useDrag.setState({ drag: start(kind, id), over: null });
     },
-    end,
+    onDragEnd: clear,
+  };
+}
 
-    overContainer: (e, target) => {
-      if (!accepts(e)) return;
-      setDrop({ id: target.id, zone: 'into' });
-      setInto(target);
-    },
+function start(kind: DragKind, id: string): Drag {
+  const { ws, multi, visible } = useStore.getState();
+  let ids = [id];
+  if (kind === 'task' && ws && multi.has(id) && multi.size > 1) {
+    // In der Reihenfolge der Liste, ohne die, deren Vorfahre schon mitwandert.
+    const order = (x: string): number => {
+      const i = visible.indexOf(x);
+      return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    ids = [...multi]
+      .filter((x) => ws.task(x) && !ws.ancestors(ws.task(x) as Task).some((a) => multi.has(a.id)))
+      .sort((a, b) => order(a) - order(b));
+  }
+  const blocked = new Set<string>();
+  if (kind === 'task' && ws) {
+    for (const x of ids) {
+      blocked.add(x);
+      const t = ws.task(x);
+      if (t) for (const d of ws.desc(t)) blocked.add(d.id);
+    }
+  }
+  return { kind, id, ids, blocked };
+}
 
-    overTask: (e, id) => {
-      if (!dragId || id === dragId) return;
-      // Eine Aufgabe darf nicht in den eigenen Teilbaum wandern.
-      const dragged = ws.task(dragId);
-      if (dragged && ws.desc(dragged).some((x) => x.id === id)) return;
-      if (!accepts(e)) return;
-
-      const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const y = (e.clientY - box.top) / box.height;
-      setDrop({ id, zone: y < 0.28 ? 'before' : y > 0.72 ? 'after' : 'child' });
-      setInto(null);
-    },
-
-    release: (e) => {
+/** Macht ein Element zum Ablageziel. */
+export function dropTarget(target: Target) {
+  return {
+    onDragOver: (e: React.DragEvent) => {
+      const { drag, over } = useDrag.getState();
+      if (!drag) return;
+      const zone = zoneFor(drag, target, e);
+      if (!zone) return;
       e.preventDefault();
-      const id = dragId;
-      const target = drop;
-      const dest = into;
-      end();
-      if (!id || !target) return;
-
-      const dragged = ws.task(id);
-      if (!dragged) return;
-
-      if (target.zone === 'into') {
-        if (!dest) return;
-        void moveTask(id, {
-          parentId: null,
-          milestoneId: dest.place.milestoneId ?? null,
-          groupId: dest.place.groupId ?? null,
-          projectId: dest.projectId,
-          ...markFor(dragged, dest.place),
-          index: countIn(ws, dest.projectId, dest.place, id),
-        });
-        return;
-      }
-
-      const onto = ws.task(target.id);
-      if (!onto) return;
-
-      if (target.zone === 'child') {
-        void moveTask(id, { parentId: onto.id, index: ws.kids(onto.id).length });
-        return;
-      }
-
-      const list = siblings(ws, onto).filter((t) => t.id !== id);
-      const at = list.indexOf(onto);
-      if (at < 0) {
-        say('Ziel nicht gefunden.');
-        return;
-      }
-      void moveTask(id, {
-        ...container(onto),
-        projectId: onto.projectId,
-        index: at + (target.zone === 'after' ? 1 : 0),
-      });
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      const key = keyOf(target);
+      if (over?.key !== key || over.zone !== zone) useDrag.setState({ over: { key, zone } });
+    },
+    onDrop: (e: React.DragEvent) => {
+      const { drag, over } = useDrag.getState();
+      if (!drag || !over || over.key !== keyOf(target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clear();
+      void applyDrop(drag, target, over.zone);
     },
   };
+}
+
+function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
+  const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const y = (e.clientY - box.top) / box.height;
+  const half: Zone = y < 0.5 ? 'before' : 'after';
+
+  switch (drag.kind) {
+    case 'task':
+      if (target.type === 'task') {
+        if (drag.blocked.has(target.task.id)) return null;
+        return y < 0.28 ? 'before' : y > 0.72 ? 'after' : 'child';
+      }
+      if (target.type === 'tab') {
+        return ['plan', 'backlog', 'docs', 'archive'].includes(target.view) ? 'into' : null;
+      }
+      return 'into';
+    case 'milestone':
+      if (target.type === 'milestone') return target.milestone.id === drag.id ? null : half;
+      if (target.type === 'tab') {
+        return ['plan', 'backlog', 'archive'].includes(target.view) ? 'into' : null;
+      }
+      return null;
+    case 'project':
+      return target.type === 'project' && target.project.id !== drag.id ? half : null;
+    case 'group':
+      return target.type === 'group' && target.row.group && target.row.group.id !== drag.id
+        ? half
+        : null;
+  }
+}
+
+/* ------------------------------------------------------------ Ablegen */
+
+async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> {
+  const ws = useStore.getState().ws;
+  if (!ws) return;
+  switch (drag.kind) {
+    case 'task':
+      return dropTasks(ws, drag, target, zone);
+    case 'milestone':
+      return dropMilestone(ws, drag.id, target, zone);
+    case 'project':
+      return dropProject(ws, drag.id, target, zone);
+    case 'group':
+      return dropGroup(ws, drag.id, target, zone);
+  }
+}
+
+const loose = { parentId: null, milestoneId: null, groupId: null };
+const END = Number.MAX_SAFE_INTEGER;
+const tasksWord = (n: number): string => `${n} ${n === 1 ? 'Task' : 'Tasks'}`;
+
+async function dropTasks(ws: Workspace, drag: Drag, target: Target, zone: Zone): Promise<void> {
+  const store = useStore.getState();
+  const t = ws.task(drag.id);
+  if (!t) return;
+  const many = drag.ids.length > 1;
+
+  /** Eine Aufgabe oder die ganze Auswahl an dasselbe Ziel. */
+  const move = (
+    to: Record<string, unknown>,
+    one?: (moved: Task | null, now: Workspace | null) => string,
+    all?: (n: number, now: Workspace | null) => string,
+  ): Promise<void> =>
+    many
+      ? store.bulk({ type: 'move', target: to }, (n) =>
+          all ? all(n, useStore.getState().ws) : `${tasksWord(n)} verschoben`,
+        )
+      : store.moveTask(t.id, to, one);
+
+  /** Wo die erste gezogene Aufgabe jetzt liegt – für die Meldung. */
+  const whereNow = (now: Workspace | null): string => {
+    const x = now?.task(t.id);
+    return now && x ? whereLabel(now, x) : '';
+  };
+
+  if (zone === 'into') {
+    switch (target.type) {
+      case 'tab':
+        if (target.view === 'archive') {
+          if (many) {
+            await store.bulk({ type: 'archive' }, (n) => `${tasksWord(n)} archiviert`);
+          } else await store.archiveItem('task', t.id);
+          return;
+        }
+        if (target.view === 'plan') {
+          store.say('Zieh den Task auf einen Milestone im Plan');
+          return;
+        }
+        if (target.view === 'backlog') {
+          if (!many) return toBacklog(t);
+          return move(
+            { ...loose, doc: false, index: END },
+            undefined,
+            (n) => `${tasksWord(n)} liegen jetzt im Backlog › Unsortiert`,
+          );
+        }
+        if (target.view === 'docs') {
+          return move(
+            { ...loose, doc: true, index: END },
+            () => `„${t.title}“ liegt jetzt in der Dokumentation`,
+            (n) => `${tasksWord(n)} liegen jetzt in der Dokumentation`,
+          );
+        }
+        return;
+
+      case 'project': {
+        const p = target.project;
+        return move(
+          { ...loose, doc: false, projectId: p.id, index: END },
+          () => `In den Backlog von ${p.name} verschoben`,
+          (n) => `${tasksWord(n)} in den Backlog von ${p.name} verschoben`,
+        );
+      }
+
+      case 'milestone':
+      case 'group':
+      case 'empty': {
+        const dest =
+          target.type === 'milestone'
+            ? {
+                projectId: target.milestone.projectId,
+                place: { milestoneId: target.milestone.id } as Placement,
+              }
+            : { projectId: target.row.projectId, place: target.row.place };
+        return move(
+          {
+            ...loose,
+            milestoneId: dest.place.milestoneId ?? null,
+            groupId: dest.place.groupId ?? null,
+            projectId: dest.projectId,
+            doc: false,
+            ...markFor(t, dest.place),
+            index: many ? END : countIn(ws, dest.projectId, dest.place, t.id),
+          },
+          (_, now) => `Liegt jetzt ${whereNow(now)}`,
+          (n, now) => `${tasksWord(n)} liegen jetzt ${whereNow(now)}`,
+        );
+      }
+      default:
+        return;
+    }
+  }
+
+  if (target.type !== 'task') return;
+  const onto = target.task;
+
+  if (zone === 'child') {
+    store.setCollapsed(onto.id, false);
+    return move({ parentId: onto.id, index: ws.kids(onto.id).filter((k) => !drag.blocked.has(k.id)).length });
+  }
+
+  // Davor oder danach: Platz unter den künftigen Geschwistern, ohne die Gezogenen.
+  const list = siblings(ws, onto).filter((x) => !drag.ids.includes(x.id));
+  const at = list.indexOf(onto);
+  if (at < 0) {
+    store.say('Ziel nicht gefunden.');
+    return;
+  }
+  return move({
+    ...container(onto),
+    projectId: onto.projectId,
+    // Neben einer Wurzel gilt auch deren Art: Doku-Seite oder Aufgabe.
+    ...(onto.parentId ? {} : { doc: onto.doc }),
+    index: at + (zone === 'after' ? 1 : 0),
+  });
 }
 
 /**
@@ -132,4 +334,50 @@ function markFor(dragged: Task, place: Placement): { markId?: string | null } {
   if (!place.milestoneId && !place.groupId) return { markId: place.markId ?? null };
   if (place.groupId && isLooseRoot(dragged) && dragged.markId) return { markId: null };
   return {};
+}
+
+async function dropMilestone(ws: Workspace, id: string, target: Target, zone: Zone): Promise<void> {
+  const store = useStore.getState();
+  const m = ws.milestone(id);
+  if (!m) return;
+
+  if (zone === 'into' && target.type === 'tab') {
+    if (target.view === 'archive') return store.archiveItem('milestone', id);
+    return store.planMilestone(id, target.view === 'plan');
+  }
+  if (target.type !== 'milestone') return;
+
+  // Wie im Prototyp: der Milestone übernimmt Projekt und Planungsstand des Ziels.
+  const x = target.milestone;
+  const key = x.planned ? 'qorder' : 'order';
+  const list = (x.planned ? plannedMilestones : draftMilestones)(ws, x.projectId).filter(
+    (y) => y.id !== id,
+  );
+  const extra: Record<string, unknown> = {};
+  if (m.projectId !== x.projectId) extra['projectId'] = x.projectId;
+  if (m.planned !== x.planned) extra['planned'] = x.planned;
+  const at = list.indexOf(x) + (zone === 'after' ? 1 : 0);
+  await store.runSteps(placeSteps('milestone', key, [...list, m], m, at, extra), null);
+}
+
+async function dropProject(ws: Workspace, id: string, target: Target, zone: Zone): Promise<void> {
+  const p = ws.project(id);
+  if (!p || target.type !== 'project') return;
+  const list = ws.projects.filter((x) => x.id !== id);
+  const at = list.indexOf(target.project) + (zone === 'after' ? 1 : 0);
+  await useStore.getState().runSteps(placeSteps('project', 'order', ws.projects, p, at), null);
+}
+
+async function dropGroup(ws: Workspace, id: string, target: Target, zone: Zone): Promise<void> {
+  const store = useStore.getState();
+  const g = ws.group(id);
+  const x = target.type === 'group' ? target.row.group : null;
+  if (!g || !x) return;
+  if (g.projectId !== x.projectId) {
+    store.say('Gruppen bleiben in ihrem Projekt');
+    return;
+  }
+  const all = groupsOf(ws, g.projectId);
+  const at = all.filter((y) => y.id !== id).indexOf(x) + (zone === 'after' ? 1 : 0);
+  await store.runSteps(placeSteps('group', 'order', all, g, at), null);
 }

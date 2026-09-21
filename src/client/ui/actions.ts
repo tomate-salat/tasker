@@ -1,8 +1,10 @@
+import type { Step } from '@shared/api.js';
 import type { Group, Milestone, Project, Task } from '@shared/model.js';
 import {
   container,
   draftMilestones,
   groupsOf,
+  isLooseRoot,
   plannedMilestones,
   siblings,
   type Placement,
@@ -82,9 +84,22 @@ export async function outdent(ws: Workspace, t: Task): Promise<void> {
   await store.moveTask(t.id, { ...container(parent), index: list.indexOf(parent) + 1 });
 }
 
-/** Aus Milestone oder Gruppe heraus zurück in den losen Backlog. */
-export const toBacklog = (t: Task): Promise<void> =>
-  useStore.getState().moveTask(t.id, { parentId: null, milestoneId: null, groupId: null });
+/**
+ * Aus Milestone, Gruppe oder Dokumentation zurück in den losen Backlog, ans
+ * Ende – `toBacklog` aus dem Prototyp, samt seinen Meldungen.
+ */
+export async function toBacklog(t: Task): Promise<void> {
+  const store = useStore.getState();
+  if (isLooseRoot(t)) {
+    store.say('Liegt schon unter „Unsortiert“');
+    return;
+  }
+  await store.moveTask(
+    t.id,
+    { parentId: null, milestoneId: null, groupId: null, doc: false, index: Number.MAX_SAFE_INTEGER },
+    () => `„${t.title}“ liegt jetzt im Backlog › Unsortiert`,
+  );
+}
 
 /**
  * Milestone oder Gruppe eine Stelle nach oben oder unten. Beide Zeilen ändern
@@ -124,6 +139,36 @@ export async function moveProjectBy(ws: Workspace, p: Project, delta: 1 | -1): P
     ],
     () => 'Verschoben',
   );
+}
+
+/**
+ * Setzt `item` in `list` auf Platz `index` (gezählt ohne `item` selbst) und
+ * nummeriert lückenlos neu. Heraus kommen nur die Zeilen, deren Wert sich
+ * ändert – als Schritte für **eine** Transaktion. `extra` gehört zur Änderung
+ * von `item` dazu (etwa „eingeplant“ oder ein neues Projekt).
+ *
+ * Der Prototyp rechnet `order ± 0,5`; hier sind die Werte ganzzahlig, deshalb
+ * wird die Liste neu durchgezählt – wie der Server es bei Aufgaben tut.
+ */
+export function placeSteps<T extends { id: string; version: number }>(
+  kind: 'milestone' | 'group' | 'project',
+  key: 'order' | 'qorder',
+  list: T[],
+  item: T,
+  index: number,
+  extra: Record<string, unknown> = {},
+): Step[] {
+  const rest = list.filter((x) => x.id !== item.id);
+  rest.splice(Math.min(index, rest.length), 0, item);
+  const value = (x: T): unknown => (x as unknown as Record<string, unknown>)[key];
+
+  const steps: Step[] = [];
+  rest.forEach((x, i) => {
+    const own = x.id === item.id ? extra : {};
+    if (value(x) === i && !Object.keys(own).length) return;
+    steps.push({ op: 'patch', kind, id: x.id, version: x.version, changes: { ...own, [key]: i } });
+  });
+  return steps;
 }
 
 /** Ob es über oder unter dieser Zeile noch eine gleichrangige gibt. */

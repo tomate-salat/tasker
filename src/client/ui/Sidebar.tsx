@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
-import { isDone, type Task } from '@shared/model.js';
+import { isDone, type Project, type Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
 import { currentProjectId, useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
+import { dragSource, dropTarget, useZone } from './dnd.js';
 import { SIDE_ICON, THEME_ICON, THEME_LABEL } from './icons.js';
 import { useMenu } from './Menu.js';
 import { NewThing } from './NewThing.js';
@@ -114,20 +115,17 @@ export function Sidebar({
             </div>
           ) : (
             <div className="nav-row" key={p.id}>
-              <button
-                className={`nav-i ${scope === p.id ? 'on' : ''}`}
+              <ProjectItem
+                project={p}
+                on={scope === p.id}
+                open={openOf(p.id)}
                 onClick={() => setScope(p.id)}
                 onDoubleClick={() => state.setEditProject(p.id)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   menu.openAtPoint(e.clientX, e.clientY, projectMenu(ws, p));
                 }}
-                title="Offene Aufgaben"
-              >
-                <span className="dot" style={{ background: p.color }} />
-                <span>{p.name}</span>
-                <span className="n">{openOf(p.id)}</span>
-              </button>
+              />
               <button
                 className="nav-more"
                 title="Projekt bearbeiten"
@@ -242,6 +240,44 @@ export function Sidebar({
       </div>
       {menu.node}
     </nav>
+  );
+}
+
+/**
+ * Ein Projekt in der Seitenleiste. Wie im Prototyp zieht man es zum Sortieren,
+ * und eine hierher gezogene Aufgabe landet im Backlog dieses Projekts.
+ */
+function ProjectItem({
+  project,
+  on,
+  open,
+  onClick,
+  onDoubleClick,
+  onContextMenu,
+}: {
+  project: Project;
+  on: boolean;
+  open: number;
+  onClick: () => void;
+  onDoubleClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
+  const target = { type: 'project', project } as const;
+  const zone = useZone(target);
+  return (
+    <button
+      className={`nav-i ${on ? 'on' : ''} ${zone ? (zone === 'into' ? 'dz-on' : `dz-${zone}`) : ''}`}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
+      title="Offene Aufgaben · ziehen zum Sortieren · Task hierher ziehen = in diesen Backlog"
+      {...dragSource('project', project.id)}
+      {...dropTarget(target)}
+    >
+      <span className="dot" style={{ background: project.color }} />
+      <span>{project.name}</span>
+      <span className="n">{open}</span>
+    </button>
   );
 }
 

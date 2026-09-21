@@ -7,7 +7,6 @@ import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
-import { useDnd } from './dnd.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { NewThing } from './NewThing.js';
@@ -24,7 +23,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const state = useStore();
   const { collapsed, settings, filter } = state;
   const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
-  const dnd = useDnd(ws);
   const menu = useMenu();
   useKeys(ws, rows, menu);
 
@@ -49,7 +47,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
     <>
       <div
         className={`list ${state.multi.size ? 'has-multi' : ''}`}
-        onDragEnd={() => dnd.end()}
         onContextMenu={(e) => {
           const el = e.target as HTMLElement;
           const id = el.closest('[data-row]')?.getAttribute('data-row');
@@ -77,7 +74,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
                 ws={ws}
                 task={row.task}
                 depth={row.depth}
-                dnd={dnd}
                 doc={view === 'docs'}
                 menu={menu}
               />
@@ -90,7 +86,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
                 row={row}
                 count={openIn(ws, row.tasks)}
                 onAdd={() => void addIn(row.projectId, row.place)}
-                dnd={dnd}
               />
             );
           }
@@ -100,7 +95,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
                 key={row.id}
                 row={row}
                 onAdd={() => void addIn(row.projectId, row.place)}
-                dnd={dnd}
               />
             );
           }
@@ -136,7 +130,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
               key={m.id}
               ws={ws}
               milestone={m}
-              dnd={dnd}
               stats={stats}
               pct={milestoneProgressPct(ws, m)}
               right={<MilestoneRight ws={ws} milestone={m} line={plan?.byId.get(m.id) ?? null} />}
@@ -292,7 +285,7 @@ function MilestoneRight({
           className="btn tiny"
           onClick={(e) => {
             e.stopPropagation();
-            void patch('milestone', milestone.id, { planned: true });
+            void useStore.getState().planMilestone(milestone.id, true);
           }}
         >
           In den Plan →

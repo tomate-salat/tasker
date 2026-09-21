@@ -780,9 +780,31 @@ export function bulk(ctx: DbCtx, items: BulkItem[], action: BulkAction): Undoabl
       }
     }
 
+    // Mit Platzangabe (Ziehen einer Auswahl zwischen zwei Zeilen): alle
+    // zusammen an diese Stelle, in der Reihenfolge der Auswahl.
+    if (action.type === 'move' && action.target.index !== undefined && targets.length) {
+      placeTogether(ctx, targets, action.target.index);
+    }
+
     // Rückwärts zurücknehmen, sonst stolpern Verschiebungen übereinander.
     return { count: targets.length, undo: undo.reverse() };
   })();
+}
+
+/**
+ * Setzt mehrere Aufgaben, die schon im selben Behälter liegen, als Block an
+ * den Platz `index` – gezählt unter den übrigen Geschwistern.
+ */
+function placeTogether(ctx: DbCtx, ids: string[], index: number): void {
+  const first = readRow(ctx, 'task', ids[0] as string);
+  if (!first) return;
+  const all = containerIds(ctx, containerOf(first));
+  const moved = ids.filter((id) => all.includes(id));
+  const rest = all.filter((id) => !moved.includes(id));
+  rest.splice(Math.min(index, rest.length), 0, ...moved);
+
+  const set = ctx.sqlite.prepare('UPDATE task SET sort_order = ? WHERE id = ?');
+  rest.forEach((sid, i) => set.run(i, sid));
 }
 
 /**

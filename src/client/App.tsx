@@ -3,7 +3,16 @@ import { api, type Account } from './api.js';
 import { connectEvents } from './events.js';
 import { Login } from './Login.js';
 import { doneCandidates } from '@shared/outline.js';
-import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL } from './store.js';
+import {
+  archiveWorkspace,
+  currentProjectId,
+  scopeProjectIds,
+  TABS,
+  useStore,
+  VIEW_LABEL,
+  type View,
+} from './store.js';
+import { dropTarget, useZone } from './ui/dnd.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { SIDE_ICON } from './ui/icons.js';
 import { Inspector } from './ui/Inspector.js';
@@ -171,9 +180,7 @@ function Shell({
 
             <nav className="tabs" aria-label="Ansicht">
               {TABS.map((v) => (
-                <button key={v} className={`tab ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>
-                  {VIEW_LABEL[v]}
-                </button>
+                <Tab key={v} view={v} on={view === v} onClick={() => setView(v)} />
               ))}
 
               <span className="tab-actions">
@@ -262,6 +269,30 @@ function Shell({
       {/* Mobil: ein Tipp neben die offene Seitenleiste schließt sie. */}
       <div className="scrim" onClick={state.toggleSide} />
     </>
+  );
+}
+
+/** Was man auf einen Reiter ziehen kann – die Titel aus dem Prototyp. */
+const TAB_DROP_TITLE: Partial<Record<View, string>> = {
+  plan: 'Milestone hierher ziehen = einplanen',
+  backlog: 'Hierher ziehen = zurück in den Backlog',
+  docs: 'Task hierher ziehen = in die Dokumentation',
+  archive: 'Hierher ziehen = archivieren',
+};
+
+function Tab({ view, on, onClick }: { view: View; on: boolean; onClick: () => void }) {
+  const target = { type: 'tab', view } as const;
+  const zone = useZone(target);
+  const title = TAB_DROP_TITLE[view];
+  return (
+    <button
+      className={`tab ${on ? 'on' : ''} ${zone ? 'dz-on' : ''}`}
+      onClick={onClick}
+      {...(title ? { title } : {})}
+      {...dropTarget(target)}
+    >
+      {VIEW_LABEL[view]}
+    </button>
   );
 }
 

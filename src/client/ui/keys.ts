@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
-import { container, isLooseRoot, siblings, type OutlineRow } from '@shared/outline.js';
+import { container, siblings, type OutlineRow } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { addAndEdit, addChild, addSibling, indent, moveRowBy, outdent, toBacklog } from './actions.js';
@@ -136,12 +136,11 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
             return;
           case 'p':
           case 'P':
-            void store.patch('milestone', m.id, { planned: !m.planned });
+            void store.planMilestone(m.id, !m.planned);
             return;
           case 'b':
           case 'B':
-            if (!m.planned) store.say('Liegt schon im Backlog');
-            else void store.patch('milestone', m.id, { planned: false });
+            void store.planMilestone(m.id, false);
             return;
           case 'a':
           case 'A':
@@ -205,7 +204,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
         case 'b':
         case 'B':
           // Aus Milestone oder Gruppe heraus zurück in den losen Backlog.
-          if (!isLooseRoot(t)) void toBacklog(t);
+          void toBacklog(t);
           return;
         case 'Delete':
         case 'Backspace':

@@ -8,7 +8,7 @@ import { doneCount, progressPct, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
-import type { Dnd } from './dnd.js';
+import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { addChild, addSibling, indent, outdent } from './actions.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
 import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, LOCK_ICON, PrioIcon, statusMark, STATUS_LABEL } from './icons.js';
@@ -23,14 +23,12 @@ export function TaskRow({
   ws,
   task,
   depth,
-  dnd,
   doc = false,
   menu,
 }: {
   ws: Workspace;
   task: Task;
   depth: number;
-  dnd?: Dnd;
   doc?: boolean;
   /** Das Menü der Liste – die Zellen öffnen darin ihre Auswahl. */
   menu?: Menu;
@@ -40,7 +38,9 @@ export function TaskRow({
   const kids = ws.kids(task.id);
   const open = !collapsed[task.id];
   const mark = ws.mark(task.markId);
-  const zone = dnd?.drop?.id === task.id ? dnd.drop.zone : null;
+  const target = { type: 'task', task } as const;
+  const zone = useZone(target);
+  const dragging = useDragging(task.id);
   const tot = total(ws, task);
   const done = doneCount(ws, task);
   const cl = checklist(task.desc);
@@ -71,7 +71,7 @@ export function TaskRow({
         selected === task.id && !multi.size ? 'sel' : '',
         isDone(task) ? 'done' : '',
         kids.length ? 'has-kids' : '',
-        dnd?.dragId === task.id ? 'dragging' : '',
+        dragging ? 'dragging' : '',
         zone ? `dz-${zone}` : '',
       ]
         .filter(Boolean)
@@ -86,11 +86,8 @@ export function TaskRow({
           select(task.id);
         }
       }}
-      draggable={!editing}
-      onDragStart={() => dnd?.start(task.id)}
-      onDragEnd={() => dnd?.end()}
-      onDragOver={(e) => dnd?.overTask(e, task.id)}
-      onDrop={(e) => dnd?.release(e)}
+      {...dragSource('task', task.id, !editing)}
+      {...dropTarget(target)}
     >
       {doc ? (
         <>
@@ -169,14 +166,12 @@ export function TaskRow({
 export function MilestoneRow({
   ws,
   milestone,
-  dnd,
   right,
   stats,
   pct,
 }: {
   ws: Workspace;
   milestone: Milestone;
-  dnd?: Dnd;
   right?: React.ReactNode;
   stats: { done: number; total: number };
   pct: number;
@@ -186,21 +181,25 @@ export function MilestoneRow({
   const waiting = milestone.deps
     .map((id) => ws.milestone(id))
     .filter((m): m is Milestone => !!m && m.status !== 'done');
-  const active = dnd?.drop?.id === milestone.id;
+  const target = { type: 'milestone', milestone } as const;
+  const zone = useZone(target);
+  const dragging = useDragging(milestone.id);
 
   return (
     <div
       data-row={milestone.id}
-      className={`row ms-row ${selected === milestone.id ? 'sel' : ''} ${active ? 'dz-into' : ''}`}
+      className={[
+        'row ms-row',
+        selected === milestone.id ? 'sel' : '',
+        dragging ? 'dragging' : '',
+        zone ? `dz-${zone}` : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={{ '--d': 0 } as React.CSSProperties}
       onClick={() => select(milestone.id)}
-      onDragOver={(e) =>
-        dnd?.overContainer(e, {
-          id: milestone.id,
-          projectId: milestone.projectId,
-          place: { milestoneId: milestone.id },
-        })
-      }
-      onDrop={(e) => dnd?.release(e)}
+      {...dragSource('milestone', milestone.id, !editing)}
+      {...dropTarget(target)}
     >
       <Caret open={open} hasKids onToggle={() => toggle(milestone.id)} />
       <span className="ico ms" title="Milestone">
@@ -245,18 +244,18 @@ export function GroupRow({
   row,
   count,
   onAdd,
-  dnd,
 }: {
   row: Extract<OutlineRow, { type: 'group' }>;
   /** Offene Aufgaben in dieser Gruppe. */
   count: number;
   onAdd: () => void;
-  dnd?: Dnd;
 }) {
   const { collapsed, toggle, editing, edit, remove, setDialog } = useStore();
   const { id, group, mark } = row;
   const open = !collapsed[id];
-  const active = dnd?.drop?.id === id;
+  const target = { type: 'group', row } as const;
+  const zone = useZone(target);
+  const dragging = useDragging(group?.id ?? id);
 
   return (
     <div
@@ -265,15 +264,15 @@ export function GroupRow({
         'row grp-row',
         !group && !mark ? 'unsorted' : '',
         mark ? 'smart' : '',
-        active ? 'dz-into' : '',
+        dragging ? 'dragging' : '',
+        zone ? `dz-${zone}` : '',
       ]
         .filter(Boolean)
         .join(' ')}
+      style={{ '--d': 0 } as React.CSSProperties}
       {...(mark ? { title: `Smarte Gruppe: Tasks hier bekommen automatisch ${mark.emoji} ${mark.name}` } : {})}
-      onDragOver={(e) =>
-        dnd?.overContainer(e, { id, projectId: row.projectId, place: row.place })
-      }
-      onDrop={(e) => dnd?.release(e)}
+      {...dragSource('group', group?.id ?? id, !!group && !editing)}
+      {...dropTarget(target)}
     >
       <Caret open={open} hasKids onToggle={() => toggle(id)} />
       {mark && <span className="mk-emoji">{mark.emoji}</span>}
@@ -339,19 +338,14 @@ export function SectionRow({ title, action }: { title: string; action?: React.Re
 export function EmptyDrop({
   row,
   onAdd,
-  dnd,
 }: {
   row: Extract<OutlineRow, { type: 'empty' }>;
   onAdd: () => void;
-  dnd?: Dnd;
 }) {
-  const active = dnd?.drop?.id === row.id;
+  const target = { type: 'empty', row } as const;
+  const active = !!useZone(target);
   return (
-    <div
-      className={`drop-empty ${active ? 'dz-on' : ''}`}
-      onDragOver={(e) => dnd?.overContainer(e, { id: row.id, projectId: row.projectId, place: row.place })}
-      onDrop={(e) => dnd?.release(e)}
-    >
+    <div className={`drop-empty ${active ? 'dz-on' : ''}`} {...dropTarget(target)}>
       Leer – Tasks hierher ziehen oder{' '}
       <button className="linkish" onClick={onAdd}>
         Task anlegen

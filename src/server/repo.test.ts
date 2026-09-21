@@ -676,6 +676,26 @@ describe('Mehrfachauswahl', () => {
     assert.deepEqual(inMs, ['Schon da', 'A', 'B']);
   });
 
+  /** Ziehen einer Auswahl zwischen zwei Zeilen: alle zusammen an genau diese Stelle. */
+  it('setzt verschobene Ausgewählte mit Platzangabe als Block an die Stelle', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const x = mkTask({ projectId: p.id, title: 'X', milestoneId: m.id });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    mkTask({ projectId: p.id, title: 'Y', milestoneId: m.id });
+    const b = mkTask({ projectId: p.id, title: 'B' });
+
+    // Hinter X, also Platz 1 unter den übrigen (X, Y).
+    bulk(ctx, [at(a), at(b)], { type: 'move', target: { milestoneId: m.id, index: 1 } });
+
+    const inMs = loadBootstrap(ctx)
+      .tasks.filter((t) => t.milestoneId === m.id)
+      .sort((u, v) => u.order - v.order)
+      .map((t) => t.title);
+    assert.deepEqual(inMs, ['X', 'A', 'B', 'Y']);
+    assert.equal(one(x.id).order, 0);
+  });
+
   it('archiviert und löscht ebenfalls nur die obersten Ausgewählten', () => {
     const p = mkProject();
     const a = mkTask({ projectId: p.id, title: 'A' });

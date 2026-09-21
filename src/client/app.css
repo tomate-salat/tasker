@@ -221,6 +221,19 @@
   background: var(--surface);
 }
 
+.nav-i.dz-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.nav-i.dz-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.nav-i.dz-on {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .proj-edit {
   margin: 0;
   border-style: solid;
@@ -395,6 +408,11 @@
 .tab.on {
   color: var(--ink);
   border-color: var(--accent);
+}
+
+.tab.dz-on {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .tab-actions {

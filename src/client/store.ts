@@ -2,7 +2,14 @@ import { create } from 'zustand';
 import type { BulkAction, Kind, Step } from '@shared/api.js';
 import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
-import { doneCandidates, placeLabel, type OutlineFilter } from '@shared/outline.js';
+import {
+  doneCandidates,
+  draftMilestones,
+  placeLabel,
+  plannedMilestones,
+  type OutlineFilter,
+} from '@shared/outline.js';
+import { schedule } from '@shared/schedule.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -120,8 +127,12 @@ type State = {
   /** Zeigt die Kurzmeldung gerade ein „Rückgängig“ an? */
   toastUndo: boolean;
   undo: () => Promise<void>;
-  /** Mehrere Schritte in einer Transaktion, mit Meldung und Rücknahme. */
-  runSteps: (steps: Step[], message: (count: number) => string) => Promise<void>;
+  /**
+   * Mehrere Schritte in einer Transaktion, mit Meldung und Rücknahme. Ohne
+   * Meldung (`null`) landet nur die Rücknahme auf dem Stapel – etwa beim
+   * Umsortieren per Ziehen, das man ohnehin sieht.
+   */
+  runSteps: (steps: Step[], message: ((count: number) => string) | null) => Promise<void>;
   /** Archiviert alles Erledigte der aktuellen Ansicht – Milestones und Aufgaben. */
   archiveDone: () => Promise<void>;
   toggle: (id: string) => void;
@@ -151,8 +162,18 @@ type State = {
   addGroup: (title: string, projectId?: string) => Promise<string | null>;
   /** Kopiert eine Aufgabe samt Unterbaum und wählt die Kopie aus. */
   duplicateTask: (id: string) => Promise<void>;
-  moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
+  /**
+   * Ohne `message` still (nur Rückgängig auf dem Stapel). Mit `message` gibt es
+   * eine Meldung mit „Rückgängig“; sie bekommt die Aufgabe am neuen Ort.
+   */
+  moveTask: (
+    id: string,
+    target: Record<string, unknown>,
+    message?: (moved: Task | null, ws: Workspace | null) => string,
+  ) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
+  /** Milestone in den Plan oder zurück in den Backlog, jeweils ans Ende – `planMs` im Prototyp. */
+  planMilestone: (id: string, planned: boolean) => Promise<void>;
   /** `message` ersetzt die übliche Meldung – etwa „In den Papierkorb verschoben“ im Archiv. */
   remove: (kind: Kind, id: string, message?: string) => Promise<void>;
   /** Nimmt auch die Einbettung aus der Beschreibung, mit „Rückgängig“. */
@@ -471,7 +492,8 @@ export const useStore = create<State>((set, get) => ({
     try {
       const { count, undo } = await api.steps(steps);
       await get().load();
-      remember(message(count), undo);
+      if (message) remember(message(count), undo);
+      else pushUndo(undo);
     } catch (e) {
       const stale = e instanceof ApiError && e.status === 409;
       if (stale) await get().load();
@@ -668,7 +690,7 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  moveTask: async (id, target) => {
+  moveTask: async (id, target, message) => {
     const boot = get().boot;
     const current = boot?.tasks.find((t) => t.id === id);
     if (!current) return;
@@ -676,7 +698,7 @@ export const useStore = create<State>((set, get) => ({
       const moved = await api.move<Task>(id, current.version, target);
       await get().load();
       // Zurück an die alte Stelle – der alte Ordnungswert füllt die Lücke wieder.
-      pushUndo([
+      const back: Step[] = [
         {
           op: 'move',
           id,
@@ -691,7 +713,11 @@ export const useStore = create<State>((set, get) => ({
             order: current.order,
           },
         },
-      ]);
+      ];
+      if (message) {
+        const ws = get().ws;
+        remember(message(ws?.task(id) ?? null, ws), back);
+      } else pushUndo(back);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         set({ toast: 'Inzwischen woanders geändert – bitte nochmal.' });
@@ -703,14 +729,45 @@ export const useStore = create<State>((set, get) => ({
   },
 
   archiveItem: async (kind, id) => {
+    const ws = get().ws;
+    const title = (kind === 'task' ? ws?.task(id)?.title : ws?.milestone(id)?.title) || 'Ohne Titel';
     try {
       await api.archive(kind, id);
       if (get().selected === id) set({ selected: null });
       await get().load();
-      remember('Archiviert', [{ op: 'unarchive', kind, id }]);
+      remember(`„${title}“ archiviert${kind === 'milestone' ? ' – samt Tasks' : ''}`, [
+        { op: 'unarchive', kind, id },
+      ]);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen' });
     }
+  },
+
+  planMilestone: async (id, planned) => {
+    const ws = get().ws;
+    const m = ws?.milestone(id);
+    if (!ws || !m) return;
+    if (m.planned === planned) {
+      set({ toast: planned ? 'Ist schon im Plan' : 'Liegt schon im Backlog', toastUndo: false });
+      return;
+    }
+    // Ans Ende der Zielliste, wie `qorder = 1e6` bzw. `order = 1e6` im Prototyp.
+    const key = planned ? 'qorder' : 'order';
+    const list = (planned ? plannedMilestones : draftMilestones)(ws, m.projectId);
+    const end = list.reduce((max, x) => Math.max(max, x[key]), -1) + 1;
+    await get().patch('milestone', id, { planned, [key]: end });
+
+    const now = get().ws;
+    if (now?.milestone(id)?.planned !== planned) return; // Fehler steht schon in der Meldung.
+    const line = planned
+      ? schedule(now, { velocity: get().settings.velocity }).byId.get(id)
+      : undefined;
+    set({
+      toast: planned
+        ? `„${m.title}“ ist im Plan${line && line.open ? ` · fertig ca. ${inWeeks(line.end)}` : ''}`
+        : `„${m.title}“ ist zurück im Backlog`,
+      toastUndo: true,
+    });
   },
 
   remove: async (kind, id, message) => {
@@ -874,6 +931,14 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 }));
+
+/** Datum in so vielen Wochen, kurz – `fmtD(addWeeks(w))` im Prototyp. */
+const inWeeks = (weeks: number): string => {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + Math.round(weeks * 7));
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+};
 
 /** Wo etwas liegt, in Worten – `whereLabel` aus dem Prototyp. */
 export function whereLabel(ws: Workspace, t: Task): string {

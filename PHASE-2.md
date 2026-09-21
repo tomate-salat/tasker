@@ -412,12 +412,24 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   (`discard`: Papierkorb und gleich endgültig gelöscht, kein Rückgängig-Eintrag). Ein geleertes
   Feld lässt bei bestehenden Zeilen den alten Titel stehen. `indent`/`outdent` liegen dafür jetzt
   in `actions.ts`.
-- Milestones und Gruppen lassen sich nicht ziehen; Aufgaben nicht auf die Reiter (Backlog, Doku,
-  Archiv) und nicht auf ein Projekt in der Seitenleiste.
-- **Neu, über den Prototyp hinaus (Wunsch des Nutzers):** Zieht man eine Zeile, die zu einer
-  Mehrfachauswahl gehört, wandern alle ausgewählten mit – an die neue Stelle ebenso wie unter
-  einen neuen Elternteil. Im Prototyp zieht man immer nur die eine Zeile (`dragstart` nimmt
-  `dataset.id`). Gehört zu Ziehen und Ablegen.
+- ~~Milestones und Gruppen lassen sich nicht ziehen; Aufgaben nicht auf die Reiter und nicht auf
+  ein Projekt~~ **Erledigt** (`dnd.ts`, Regeln aus `dragover`/`applyDrop`). Aufgaben: über einer
+  Aufgabe davor/hinein/danach, über Milestone, Gruppe und Platzhalter hinein („Liegt jetzt …“),
+  auf „Plan“ nur der Hinweis, „Backlog“ wie `B`, „Doku“ und „Archiv“ mit den Meldungen des
+  Prototyps, auf ein Projekt in dessen Backlog. Milestones: davor/danach (übernimmt Projekt und
+  Planungsstand des Ziels), auf „Plan“, „Backlog“ und „Archiv“. Projekte und Gruppen (nur im
+  eigenen Projekt) zum Sortieren. Die Hervorhebungen (`dz-before/after/child/on`) für Zeilen,
+  Reiter und Seitenleiste sind aus dem Prototyp übernommen. Der Ziehzustand liegt in einem
+  eigenen kleinen Speicher, weil Liste, Reiter und Seitenleiste beteiligt sind.
+  Abweichung: Milestones, Gruppen und Projekte haben ganzzahlige Ordnungswerte; statt
+  `order ± 0,5` wird die Liste neu durchgezählt und nur Geänderte gehen als Schritte in einer
+  Transaktion zum Server (Rückgängig ohne Meldung, wie das stille Umsortieren im Prototyp).
+- ~~**Neu, über den Prototyp hinaus (Wunsch des Nutzers):** Mehrfachauswahl ziehen~~ **Erledigt.**
+  Zieht man eine ausgewählte Zeile, wandern alle obersten Ausgewählten mit und werden während des
+  Ziehens blass; über einer von ihnen oder ihren Unteraufgaben gibt es keine Zone. Das läuft über
+  `POST /api/bulk` (`move`), der jetzt `index` beachtet und die Auswahl als Block an die Stelle
+  setzt (Test: `setzt verschobene Ausgewählte mit Platzangabe als Block an die Stelle`). Meldung
+  „n Tasks verschoben“ bzw. „n Tasks liegen jetzt …“, mit Rückgängig.
 - Klick auf eine Gruppenzeile klappt im Prototyp auf/zu; Doppelklick auf den Gruppennamen benennt um.
 - Das Zeichnungs-Abzeichen öffnet im Prototyp direkt die Zeichnung, hier nur die Aufgabe.
 - ~~Status auf Englisch~~ **Erledigt** (Tooltip und Vorschau der Schnell-Erfassung).
@@ -444,10 +456,14 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   öffnen. Jetzt wie im Prototyp (`inList`) nur bei Fokus in der Liste oder auf der Seite selbst.
 - Dabei gefunden und behoben: `Enter` auf einer Doku-Seite der obersten Ebene (und „Neue Seite
   darunter“) legte eine Backlog-Aufgabe an statt einer Seite.
-- Offen: Ein Milestone, der per `P` (oder Menü) in den Plan kommt, behält seinen Platz; im
-  Prototyp rückt er ans Ende (`qorder = 1e6`). Die Meldungen des Prototyps zu `S`/`P` am Milestone
-  („◆ Alpha: In Progress · Start …“, „ist im Plan · fertig ca. …“ mit „Anzeigen“) fehlen – gehört zu
-  „Meldungen und Hilfe“.
+- ~~Ein eingeplanter Milestone behält seinen Platz~~ **Erledigt:** `planMilestone` ist `planMs` –
+  `P`, `B`, Menü, „In den Plan →“ und Ziehen auf die Reiter setzen ihn ans Ende der Zielliste,
+  mit „Ist schon im Plan“/„Liegt schon im Backlog“ und „„…“ ist im Plan · fertig ca. …“ bzw. „ist
+  zurück im Backlog“. `B` an einer Aufgabe meldet wie im Prototyp („liegt jetzt im Backlog ›
+  Unsortiert“ oder „Liegt schon unter „Unsortiert““), `A` meldet „„…“ archiviert“ (am Milestone
+  „– samt Tasks“).
+- Offen: „Anzeigen“ an diesen Meldungen und die Meldung zu `S` am Milestone („◆ Alpha: In
+  Progress · Start …“) – gehört zu „Meldungen und Hilfe“.
 
 **Kopf und Seitenleiste**
 - Zusätzlicher Knopf „+ Aufgabe“ in Plan und Backlog (gibt es im Prototyp nicht); „+ Milestone“
@@ -462,7 +478,8 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   Fremdschlüssel. Jetzt stecken sie samt Burnup-Verlauf und Milestone-Abhängigkeiten im Eintrag;
   Aufgaben werden beim Wiederherstellen Eltern-zuerst eingefügt (nach einem Verschieben kann ein
   Kind älter sein als sein Elternteil). Test: `ein gelöschtes Projekt kommt vollständig wieder`.
-- Projekte lassen sich nicht zum Sortieren ziehen (gehört zu Ziehen und Ablegen).
+- ~~Projekte lassen sich nicht zum Sortieren ziehen~~ **Erledigt** (siehe Ziehen und Ablegen);
+  die Projektzeile trägt den Titel des Prototyps.
 - „+ Neues Projekt“ ist im Prototyp ein gestricheltes Eingabefeld, hier ein Knopf, der erst zum
   Feld wird.
 - Filterleiste ohne „Gefiltert:“ und ohne Farbfeld der Kategorie.
@@ -510,7 +527,7 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   vorher nur in Plan, Backlog und Doku. `.eta` ist wie im Prototyp in Mono gesetzt (auch im Plan).
   Archiv und Papierkorb laden nach jeder Änderung mit, statt leer stehen zu bleiben.
 - Offen: Die Meldungen nach dem Zurückholen haben noch kein „Anzeigen“ bzw. „Öffnen“ (gehört zu
-  „Meldungen und Hilfe“). Ziehen auf den Reiter „Archiv“ gehört zu Drag & Drop.
+  „Meldungen und Hilfe“). Ziehen auf den Reiter „Archiv“ ist mit Drag & Drop erledigt.
 
 **Aus den Notizen des Nutzers (zusätzlich)**
 - ~~Enter legt doppelt an~~ **Erledigt.** Bei allen `NewThing`-Feldern (Projekt, auch beim ersten

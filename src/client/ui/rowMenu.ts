@@ -142,7 +142,7 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
     },
     {
       label: m.planned ? 'Zurück in den Backlog' : 'In den Plan',
-      onSelect: () => void store.patch('milestone', m.id, { planned: !m.planned }),
+      onSelect: () => void store.planMilestone(m.id, !m.planned),
     },
     {
       label: 'Nach oben',
