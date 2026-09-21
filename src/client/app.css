@@ -2489,11 +2489,14 @@ button.prop:hover {
   position: relative;
 }
 
+/*
+ * Fest am Bildschirm statt absolut im Eintrag: sonst schneidet ein scrollendes
+ * Untermenü das nächste (dritte Ebene, etwa Labels › Hinzufügen) ab. Die
+ * Position setzt `Items` in Menu.tsx.
+ */
 .ctx-sub {
   display: none;
-  position: absolute;
-  top: -6px;
-  left: calc(100% + 2px);
+  position: fixed;
   max-height: 70vh;
   overflow: auto;
 }

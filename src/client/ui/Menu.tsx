@@ -190,6 +190,22 @@ function Panel({
 
 function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
   const [openSub, setOpenSub] = useState<number | null>(null);
+  const wraps = useRef(new Map<number, HTMLDivElement>());
+
+  // Rechts neben den Eintrag, bei Platzmangel links davon (`flip` im Prototyp), und
+  // nie über den unteren Rand hinaus.
+  useLayoutEffect(() => {
+    if (openSub === null) return;
+    const wrap = wraps.current.get(openSub);
+    const sub = wrap?.querySelector<HTMLElement>(':scope > .ctx-sub');
+    if (!wrap || !sub) return;
+    const at = wrap.getBoundingClientRect();
+    const { width, height } = sub.getBoundingClientRect();
+    const right = at.right + 2;
+    sub.style.left = `${right + width > window.innerWidth - 8 ? Math.max(8, at.left - width - 2) : right}px`;
+    sub.style.top = `${Math.max(8, Math.min(at.top - 6, window.innerHeight - height - 8))}px`;
+  }, [openSub]);
+
   // Häkchen nur einrücken, wenn es in dieser Ebene überhaupt welche gibt.
   const hasCheck = items.some((i) => 'check' in i);
 
@@ -230,6 +246,10 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
           return (
             <div
               key={i}
+              ref={(el) => {
+                if (el) wraps.current.set(i, el);
+                else wraps.current.delete(i);
+              }}
               className={`ctx-wrap ${openSub === i ? 'open' : ''}`}
               onMouseEnter={() => setOpenSub(i)}
               onMouseLeave={() => setOpenSub(null)}
