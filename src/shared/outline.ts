@@ -97,7 +97,8 @@ export function outline(
       if (!filtering) rows.push({ type: 'empty', id: `empty:${key}`, projectId, place });
       return;
     }
-    for (const t of visible) walk(t, 0);
+    // Wie im Prototyp stehen Aufgaben im Behälter eine Stufe tiefer als dessen Zeile.
+    for (const t of visible) walk(t, 1);
   };
 
   const milestoneBlock = (m: Milestone): void => {

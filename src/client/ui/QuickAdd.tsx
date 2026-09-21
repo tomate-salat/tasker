@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { parseQuickAdd, quickAddInput, targetLabel } from '@shared/quickadd.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
+import { STATUS_LABEL } from './icons.js';
 import { tagStyle } from './rows.js';
 
 /** Die Zeile über der Liste: eine Zeile Text wird zu einer Aufgabe. */
@@ -29,24 +30,31 @@ export function QuickAdd({ ws, projectId }: { ws: Workspace; projectId: string }
 
   return (
     <div className="qa-wrap">
-      <input
-        id="qa"
-        className="qa"
-        value={text}
-        placeholder='Schnell erfassen:  Titel #label !1 >Ziel +Projekt ~status %Markierung &Kategorie @nach:Aufgabe'
-        autoComplete="off"
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            void submit();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            setText('');
-            e.currentTarget.blur();
-          }
-        }}
-      />
+      <div className="qa">
+        <span className="qa-plus" aria-hidden="true">
+          +
+        </span>
+        <input
+          id="qa"
+          value={text}
+          placeholder="Neuer Task  #label  !1  >Milestone/Gruppe  @nach:Task  +Projekt"
+          aria-label="Task schnell anlegen"
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void submit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setText('');
+              e.currentTarget.blur();
+            }
+          }}
+        />
+        <kbd>N</kbd>
+      </div>
 
       {parsed && (
         <div className="qa-preview">
@@ -80,7 +88,7 @@ export function QuickAdd({ ws, projectId }: { ws: Workspace; projectId: string }
           )}
           {parsed.status && (
             <span className="pv">
-              Status <b>{parsed.status}</b>
+              Status <b>{STATUS_LABEL[parsed.status]}</b>
             </span>
           )}
           {parsed.prio > 0 && (
@@ -90,7 +98,7 @@ export function QuickAdd({ ws, projectId }: { ws: Workspace; projectId: string }
           )}
           {parsed.tags.map((t) => (
             <span key={t} className="tag" style={tagStyle(t)}>
-              {t}
+              #{t}
             </span>
           ))}
           {parsed.dep && (

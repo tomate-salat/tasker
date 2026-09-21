@@ -168,8 +168,31 @@ const SEG_TITLE: Record<string, string> = {
   open: 'offen',
 };
 
-export const CHEVRON_DOWN = '▾';
-export const CHEVRON_RIGHT = '▸';
+/** Die Aufklapppfeile des Prototyps (`CHEV_D`, `CHEV_R`). */
+export const CHEVRON_DOWN = (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <path
+      d="M2.5 4.5L6 8l3.5-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+export const CHEVRON_RIGHT = (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <path
+      d="M4.5 2.5L8 6l-3.5 3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 /** Schloss für blockierte Aufgaben. */
 export const LOCK_ICON = (

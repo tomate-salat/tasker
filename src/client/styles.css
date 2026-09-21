@@ -111,8 +111,10 @@
   box-sizing: border-box;
 }
 
+/* Im Prototyp hängt `.app` direkt am Body; hier liegt React's Wurzel dazwischen. */
 html,
-body {
+body,
+#root {
   height: 100%;
 }
 

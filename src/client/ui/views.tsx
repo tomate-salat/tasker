@@ -36,7 +36,14 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
 
   const plan = view === 'plan' ? schedule(ws, { velocity: settings.velocity }) : null;
 
-  if (!rows.length) return <Empty>{view === 'plan' ? <PlanEmpty /> : EMPTY[view]}</Empty>;
+  if (!rows.length) {
+    return (
+      <div className="list">
+        <Empty>{view === 'plan' ? <PlanEmpty /> : EMPTY[view]}</Empty>
+        <KbdHint />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -135,9 +142,36 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
             />
           );
         })}
+        <KbdHint />
       </div>
       {menu.node}
     </>
+  );
+}
+
+/** Die Kürzelleiste am Fuß der Liste, wie im Prototyp. */
+function KbdHint() {
+  return (
+    <div className="kbd-hint">
+      <span>
+        <kbd>N</kbd> Neu
+      </span>
+      <span>
+        <kbd>Enter</kbd> gleiche Ebene
+      </span>
+      <span>
+        <kbd>Tab</kbd> einrücken
+      </span>
+      <span>
+        <kbd>Leertaste</kbd> erledigt
+      </span>
+      <span>
+        <kbd>P</kbd> Milestone planen
+      </span>
+      <span>
+        <kbd>?</kbd> alle Kürzel
+      </span>
+    </div>
   );
 }
 

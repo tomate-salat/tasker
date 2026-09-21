@@ -129,23 +129,24 @@ function Shell({
     ws.milestone(selected)?.id ?? ws.milestones.find((m) => m.projectId === projectId)?.id ?? null;
 
   return (
-    <div
-      className={`app ${selected || multi.size > 1 ? 'with-detail' : ''} ${
-        state.sideCollapsed ? 'side-collapsed' : ''
-      }`}
-    >
-      <Sidebar
-        ws={ws}
-        account={account}
-        onProfile={() => setDialog('profile')}
-        onManageCategories={() => setDialog('categories')}
-        onManageMarks={() => setDialog('marks')}
-        onHelp={() => setDialog('help')}
-      />
+    <>
+      <div
+        className={`app ${selected || multi.size > 1 ? 'with-detail' : ''} ${
+          state.sideCollapsed ? 'side-collapsed' : ''
+        } ${state.sideOpen ? 'side-open' : ''}`}
+      >
+        <Sidebar
+          ws={ws}
+          account={account}
+          onProfile={() => setDialog('profile')}
+          onManageCategories={() => setDialog('categories')}
+          onManageMarks={() => setDialog('marks')}
+          onHelp={() => setDialog('help')}
+        />
 
-      <main className="main">
-        <header className="mhead">
-          {state.sideCollapsed && (
+        <main className="main">
+          <header className="mhead">
+            {/* Die CSS blendet ihn aus, solange die Seitenleiste am Desktop offen ist. */}
             <button
               className="menu-btn"
               onClick={state.toggleSide}
@@ -154,95 +155,97 @@ function Shell({
             >
               {SIDE_ICON}
             </button>
-          )}
 
-          <h1>{title}</h1>
+            <h1>{title}</h1>
 
-          {offline && (
-            <span className="offline" title="Änderungen von anderen Geräten kommen gerade nicht an.">
-              offline
-            </span>
-          )}
+            {offline && (
+              <span className="offline" title="Änderungen von anderen Geräten kommen gerade nicht an.">
+                offline
+              </span>
+            )}
 
-          <nav className="tabs" aria-label="Ansicht">
-            {TABS.map((v) => (
-              <button key={v} className={`tab ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>
-                {VIEW_LABEL[v]}
-              </button>
-            ))}
-
-            <span className="tab-actions">
-              <ArchiveDone ws={ws} />
-              {view === 'plan' && (
-                <NewThing
-                  label="+ Milestone"
-                  placeholder="Titel des Milestones"
-                  onCreate={async (t) => void (await useStore.getState().addMilestone(t))}
-                />
-              )}
-              {(view === 'plan' || view === 'backlog' || view === 'docs') && (
-                <button
-                  className="btn"
-                  onClick={() =>
-                    void addTask({
-                      projectId,
-                      title: '',
-                      ...(view === 'docs' ? { doc: true } : {}),
-                      // In der Planansicht gehört eine neue Aufgabe in einen Milestone,
-                      // sonst landet sie unsichtbar im Backlog.
-                      ...(view === 'plan' && planTarget ? { milestoneId: planTarget } : {}),
-                    }).then((id) => id && useStore.getState().edit(id))
-                  }
-                >
-                  + {view === 'docs' ? 'Seite' : 'Aufgabe'}
+            <nav className="tabs" aria-label="Ansicht">
+              {TABS.map((v) => (
+                <button key={v} className={`tab ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>
+                  {VIEW_LABEL[v]}
                 </button>
-              )}
-            </span>
-          </nav>
-        </header>
+              ))}
 
-        {/* Die Schnellerfassung steht im Prototyp über der Filterleiste und in jeder Ansicht. */}
-        <QuickAdd ws={ws} projectId={projectId} />
-        <FilterBar ws={ws} />
+              <span className="tab-actions">
+                <ArchiveDone ws={ws} />
+                {view === 'plan' && (
+                  <NewThing
+                    label="+ Milestone"
+                    placeholder="Titel des Milestones"
+                    onCreate={async (t) => void (await useStore.getState().addMilestone(t))}
+                  />
+                )}
+                {(view === 'plan' || view === 'backlog' || view === 'docs') && (
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      void addTask({
+                        projectId,
+                        title: '',
+                        ...(view === 'docs' ? { doc: true } : {}),
+                        // In der Planansicht gehört eine neue Aufgabe in einen Milestone,
+                        // sonst landet sie unsichtbar im Backlog.
+                        ...(view === 'plan' && planTarget ? { milestoneId: planTarget } : {}),
+                      }).then((id) => id && useStore.getState().edit(id))
+                    }
+                  >
+                    + {view === 'docs' ? 'Seite' : 'Aufgabe'}
+                  </button>
+                )}
+              </span>
+            </nav>
+          </header>
 
-        {(view === 'plan' || view === 'backlog' || view === 'docs') && (
-          <Outline ws={ws} view={view} />
-        )}
-        {view === 'timeline' && <Timeline ws={ws} />}
-        {view === 'archive' && <ArchiveView />}
-        {view === 'trash' && <TrashView />}
-      </main>
+          {/* Die Schnellerfassung steht im Prototyp über der Filterleiste und in jeder Ansicht. */}
+          <QuickAdd ws={ws} projectId={projectId} />
+          <FilterBar ws={ws} />
 
-      {/* Bei mehreren Ausgewählten zeigt der Inspektor sie alle nebeneinander. */}
-      {multi.size > 1 ? <MultiDetail ws={ws} /> : selected && <Inspector ws={ws} id={selected} />}
-
-      <BulkBar ws={ws} />
-
-      {dialog === 'categories' && (
-        <CategoriesDialog ws={ws} projectId={projectId} onClose={() => setDialog('none')} />
-      )}
-      {dialog === 'marks' && <MarksDialog ws={ws} onClose={() => setDialog('none')} />}
-      {dialog === 'profile' && (
-        <ProfileDialog
-          account={account}
-          onAccount={onAccount}
-          onLogout={() => void logout()}
-          onClose={() => setDialog('none')}
-        />
-      )}
-      {dialog === 'help' && <HelpDialog onClose={() => setDialog('none')} />}
-
-      {toast && (
-        <div className="toast" role="status">
-          <span>{toast}</span>
-          {state.toastUndo && (
-            <button onClick={() => void state.undo()} title="Rückgängig (Strg+Z)">
-              Rückgängig
-            </button>
+          {(view === 'plan' || view === 'backlog' || view === 'docs') && (
+            <Outline ws={ws} view={view} />
           )}
-        </div>
-      )}
-    </div>
+          {view === 'timeline' && <Timeline ws={ws} />}
+          {view === 'archive' && <ArchiveView />}
+          {view === 'trash' && <TrashView />}
+        </main>
+
+        {/* Bei mehreren Ausgewählten zeigt der Inspektor sie alle nebeneinander. */}
+        {multi.size > 1 ? <MultiDetail ws={ws} /> : selected && <Inspector ws={ws} id={selected} />}
+
+        <BulkBar ws={ws} />
+
+        {dialog === 'categories' && (
+          <CategoriesDialog ws={ws} projectId={projectId} onClose={() => setDialog('none')} />
+        )}
+        {dialog === 'marks' && <MarksDialog ws={ws} onClose={() => setDialog('none')} />}
+        {dialog === 'profile' && (
+          <ProfileDialog
+            account={account}
+            onAccount={onAccount}
+            onLogout={() => void logout()}
+            onClose={() => setDialog('none')}
+          />
+        )}
+        {dialog === 'help' && <HelpDialog onClose={() => setDialog('none')} />}
+
+        {toast && (
+          <div className="toast" role="status">
+            <span>{toast}</span>
+            {state.toastUndo && (
+              <button onClick={() => void state.undo()} title="Rückgängig (Strg+Z)">
+                Rückgängig
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {/* Mobil: ein Tipp neben die offene Seitenleiste schließt sie. */}
+      <div className="scrim" onClick={state.toggleSide} />
+    </>
   );
 }
 

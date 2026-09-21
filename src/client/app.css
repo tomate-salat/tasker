@@ -629,27 +629,43 @@
 /* -------------------------------------------------------- Schnell-Erfassung */
 
 .qa-wrap {
-  padding: 10px 16px 6px;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 16px 24px 4px;
 }
 
 .qa {
-  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--surface);
-  padding: 9px 12px;
-  font: 14px ui-monospace, 'Cascadia Code', Menlo, monospace;
-  color: var(--ink);
-  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
-.qa:focus {
+.qa:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.qa::placeholder {
+.qa-plus {
+  font: 500 18px/1 var(--mono);
+  color: var(--accent);
+}
+
+.qa input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 0;
+  border: 0;
+  background: transparent;
+  font: 14px var(--mono);
+  outline: none;
+}
+
+.qa input::placeholder {
   color: var(--faint);
 }
 
@@ -677,15 +693,8 @@
 }
 
 .pv.bad {
-  background: var(--sunk);
-  color: var(--bad);
-}
-
-.pv kbd {
-  font: 11px ui-monospace, Menlo, monospace;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0 4px;
+  background: var(--warn-soft);
+  color: var(--p1);
 }
 
 /* ----------------------------------------------------------------- Liste
@@ -697,18 +706,41 @@
  * Einrückung.
  */
 
+/* Wie im Prototyp scrollt `.main` als Ganzes; der Kopf bleibt oben kleben. */
 .list {
-  flex: 1;
-  overflow-y: auto;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
   container-type: inline-size;
+}
+
+/* Ohne Filterleiste rückt die Liste etwas von der Schnell-Erfassung ab. */
+.qa-wrap + .list {
+  padding-top: 12px;
 }
 
 /* Hinweis in einer leeren Ansicht. Heißt wie im Prototyp .empty-state –
    ein bloßes .empty würde auch den leeren Fortschrittsbalken treffen. */
 .empty-state {
-  padding: 40px 20px;
+  padding: 28px 16px;
   text-align: center;
+  color: var(--muted);
+}
+
+.kbd-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 22px 12px;
   color: var(--faint);
+  font-size: 12px;
+}
+
+/* Die Kürzelleiste sitzt am unteren Rand, auch wenn die Liste kurz ist. */
+.list > .kbd-hint {
+  margin-top: auto;
+  padding-bottom: 16px;
 }
 
 .row {
@@ -717,7 +749,9 @@
   align-items: center;
   gap: 10px;
   min-height: 32px;
-  padding-right: 12px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-right: 10px;
   cursor: default;
   user-select: none;
 }
@@ -735,9 +769,12 @@
   border-bottom: 1px solid var(--line);
 }
 
+.list .ms-row {
+  min-height: 40px;
+}
+
 .list .ms-row,
 .list .grp-row {
-  min-height: 40px;
   background: var(--sunk);
   border-bottom: 1px solid var(--line);
 }
@@ -841,10 +878,6 @@
   line-height: 1;
 }
 
-.mk-emoji.mk-default {
-  opacity: 0.32;
-}
-
 /* Labels und Kategorie stehen an festen Positionen ab Listenanfang. */
 .list .task-row {
   --tagcol: clamp(300px, 55cqw, 520px);
@@ -931,13 +964,17 @@
 /* -------------------------------------------------------------- Inhalt */
 
 .caret {
-  width: 20px;
+  width: 22px;
+  height: 22px;
   flex: none;
+  display: grid;
+  place-items: center;
+  margin-left: -3px;
   padding: 0;
   border: none;
+  border-radius: 5px;
   background: none;
   color: var(--muted);
-  font-size: 11px;
   cursor: pointer;
 }
 
@@ -1657,8 +1694,33 @@ button.prop:hover {
   color: var(--faint);
 }
 
+/* Prioritäts-Icon: Farbe nach Stufe, wie im Prototyp. */
+.prio-ico {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-left: -2px;
+}
+
+.prio-ico.p1 {
+  color: var(--p1);
+}
+
+.prio-ico.p2 {
+  color: var(--p2);
+}
+
+.prio-ico.p3 {
+  color: var(--muted);
+}
+
+.row.done .prio-ico {
+  opacity: 0.45;
+}
+
+.list .task-row .prio-gut .prio-ico,
 .prop .prio-ico {
-  width: auto;
+  margin-left: 0;
 }
 
 .prop.date {
@@ -2120,22 +2182,37 @@ button.prop:hover {
   font-size: 14px;
 }
 
-/* Schmal: der Inspektor legt sich über die Liste. */
-@media (max-width: 860px) {
-  .app,
+/* Mittelbreit: der Inspektor schwebt rechts über der Liste. */
+@media (max-width: 1080px) and (min-width: 901px) {
   .app.with-detail {
-    grid-template-columns: 1fr;
-  }
-
-  .side {
-    display: none;
+    grid-template-columns: 236px minmax(0, 1fr);
   }
 
   .detail {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(520px, calc(100vw - 236px));
     z-index: 20;
+    box-shadow: var(--shadow);
   }
+
+  .app.side-collapsed.with-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.side-collapsed .detail {
+    width: min(520px, 100vw);
+  }
+}
+
+.scrim {
+  display: none;
+}
+
+.app:not(.side-collapsed) .menu-btn {
+  display: none;
 }
 
 /* ------------------------------------------------------------- Aufklappmenü */
@@ -2888,4 +2965,81 @@ body:has(.bulk) .toast {
 
 .toast button:hover {
   text-decoration: underline;
+}
+
+/* Schmal (Handy): Seitenleiste als Overlay, Inspektor bildschirmfüllend. */
+@media (max-width: 900px) {
+  .app,
+  .app.with-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 270px;
+    z-index: 30;
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow);
+    padding-top: calc(18px + env(safe-area-inset-top, 0px));
+  }
+
+  .app.side-open .side {
+    transform: none;
+  }
+
+  .app.side-open + .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    background: rgba(10, 15, 13, 0.35);
+  }
+
+  .detail {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  }
+
+  .app:not(.side-collapsed) .menu-btn {
+    display: grid;
+  }
+
+  .app.side-collapsed .side {
+    display: flex;
+  }
+
+  .app.side-collapsed.with-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mhead {
+    padding: 14px 16px 0;
+  }
+
+  .qa-wrap {
+    padding: 12px 16px 4px;
+  }
+
+  .toolbar {
+    padding: 10px 16px;
+  }
+
+  .list {
+    padding: 0 4px 60px;
+  }
+
+  .tags,
+  .bar:not(.wide),
+  .eta,
+  .from {
+    display: none;
+  }
+
+  .qa kbd {
+    display: none;
+  }
 }

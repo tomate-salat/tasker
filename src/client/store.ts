@@ -59,6 +59,8 @@ type State = {
   filter: OutlineFilter;
   /** Seitenleiste eingeklappt – pro Gerät. */
   sideCollapsed: boolean;
+  /** Auf schmalen Bildschirmen liegt die Seitenleiste als Overlay über allem. */
+  sideOpen: boolean;
   view: View;
   selected: string | null;
   /** Zeile, deren Titel gerade im Baum bearbeitet wird. */
@@ -184,6 +186,7 @@ export const useStore = create<State>((set, get) => ({
   lastProject: null,
   filter: { tag: null, categoryId: null, markId: null },
   sideCollapsed: readLocal<boolean>(SIDE_KEY, false),
+  sideOpen: false,
   view: 'plan',
   selected: null,
   editing: null,
@@ -223,12 +226,19 @@ export const useStore = create<State>((set, get) => ({
       // Die Kategorie gehört zum Projekt und passt nach dem Wechsel nicht mehr.
       filter: { ...get().filter, categoryId: null },
       archive: null,
+      sideOpen: false,
     });
   },
 
-  setFilter: (patch) => set({ filter: { ...get().filter, ...patch } }),
+  setFilter: (patch) => set({ filter: { ...get().filter, ...patch }, sideOpen: false }),
 
+  // Wie im Prototyp: mobil öffnet und schließt das Overlay, am Desktop wird
+  // dauerhaft ein- oder ausgeklappt.
   toggleSide: () => {
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      set({ sideOpen: !get().sideOpen });
+      return;
+    }
     const sideCollapsed = !get().sideCollapsed;
     writeLocal(SIDE_KEY, sideCollapsed);
     set({ sideCollapsed });
@@ -253,7 +263,7 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  setView: (view) => set({ view, selected: null, editing: null }),
+  setView: (view) => set({ view, selected: null, editing: null, sideOpen: false }),
 
   setVelocity: async (velocity) => {
     try {

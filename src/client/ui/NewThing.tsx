@@ -21,6 +21,7 @@ export function NewThing({
   const [open, setOpen] = useState(startOpen);
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
+  const committing = useRef(false);
 
   useEffect(() => {
     if (open) ref.current?.focus();
@@ -35,15 +36,23 @@ export function NewThing({
   }
 
   const commit = async (value: string): Promise<void> => {
+    // Enter sperrt das Feld, das gesperrte Feld verliert den Fokus, und der Blur
+    // käme mit demselben Namen ein zweites Mal hier an.
+    if (committing.current) return;
     const name = value.trim();
     if (!name) {
       setOpen(false);
       return;
     }
+    committing.current = true;
     setBusy(true);
-    await onCreate(name);
-    setBusy(false);
-    setOpen(false);
+    try {
+      await onCreate(name);
+    } finally {
+      committing.current = false;
+      setBusy(false);
+      setOpen(false);
+    }
   };
 
   return (

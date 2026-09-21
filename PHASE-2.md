@@ -382,6 +382,78 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Änderung; deshalb ein eigener Punkt.
 - **Zeichnungen an Milestones.** Im Prototyp kann auch ein Milestone Zeichnungen haben; hier hängen
   sie bisher nur an Aufgaben.
+
+#### Zweiter Abgleich (21.09.2026)
+
+Nach dem Kontextmenü habe ich gemeldet, die Oberfläche sei bis auf zwei Punkte durch – abgeleitet
+aus dieser Liste, nicht aus einem Vergleich. Das war falsch. Danach Prototyp und App mit denselben
+Beispieldaten (`prototype-parity.json`) nebeneinander verglichen, Ansicht für Ansicht, dazu den
+Prototyp-Code vollständig gelesen. Offen ist demnach:
+
+~~**Aussehen**~~ **Erledigt.** Prioritätsfarben, farbiges 📋, Tiefe 1 im Behälter,
+SVG-Chevrons, Innenmaß der Liste, `#root` mit voller Höhe (`.main` scrollt jetzt wie im Prototyp
+als Ganzes), Schnell-Erfassung mit „+“ und `N`, Tastenleiste am Fuß der Liste, leere Ansichten wie
+im Prototyp. Mobil (≤ 900 px): Seitenleiste als Overlay mit Menü-Knopf und Abdunklung,
+Inspektor bildschirmfüllend, Labels/Datum/Balken ausgeblendet; zwischen 901 und 1080 px schwebt der
+Inspektor rechts. Nebenbei gefunden: Gruppenzeilen waren 40 statt 33 px hoch. Geprüft mit
+denselben Daten nebeneinander bei 1400 px (Plan und Backlog: Zeilen, Pfeile, Titel, Tastenleiste
+pixelgleich) und 375 px. Bleibt: die Kopfzeile läuft mobil seitlich über – das tut sie im
+Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
+
+**Liste**
+- Die Zellen Markierung, Priorität, Kategorie und Labels sind nicht anklickbar (Prototyp: Klick
+  öffnet das passende Menü; das Label-Menü bleibt nach einem Klick offen). „+ Label“ bei leeren
+  Labels fehlt.
+- Titel bearbeiten: `Enter` legt im Prototyp gleich die nächste Aufgabe an, `⇧ Enter` eine
+  Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus; eine neue Aufgabe ohne Titel
+  verschwindet wieder.
+- Milestones und Gruppen lassen sich nicht ziehen; Aufgaben nicht auf die Reiter (Backlog, Doku,
+  Archiv) und nicht auf ein Projekt in der Seitenleiste.
+- Klick auf eine Gruppenzeile klappt im Prototyp auf/zu; Doppelklick auf den Gruppennamen benennt um.
+- Das Zeichnungs-Abzeichen öffnet im Prototyp direkt die Zeichnung, hier nur die Aufgabe.
+- Status im Tooltip auf Englisch („done“, „progress“). (In der Schnell-Erfassungs-Vorschau erledigt.)
+
+**Tastatur**
+- Milestones: `S`, `P`, `B`, `F2`/`E`, `Alt ↑/↓` fehlen. Aufgaben: `M` (Verschieben nach …),
+  `Kontextmenü`/`⇧ F10` fehlen.
+- `S` schaltet in anderer Reihenfolge (Prototyp: Offen → Unklar → In Progress → Blockiert → Erledigt).
+- Leertaste und `S` wirken auch auf Dokumentationsseiten; im Prototyp nicht.
+- `Esc` schließt im Prototyp den Inspektor nur auf schmalen Bildschirmen, hier immer.
+- Menüs lassen sich nicht mit den Pfeiltasten bedienen.
+
+**Kopf und Seitenleiste**
+- Zusätzlicher Knopf „+ Aufgabe“ in Plan und Backlog (gibt es im Prototyp nicht); „+ Milestone“
+  öffnet ein Eingabefeld statt den neuen Milestone gleich in der Liste zum Benennen.
+- Projekte: kein „⋯“-Menü (Öffnen, Umbenennen, Kategorien, Farbe, Nach oben/unten, Neuer Task,
+  Papierkorb), kein Rechtsklick, kein Doppelklick zum Umbenennen, kein Ziehen zum Sortieren.
+- Filterleiste ohne „Gefiltert:“ und ohne Farbfeld der Kategorie.
+- Zähler in Doku und Archiv zählen alles statt nur die Doku-Seiten bzw. das Archivierte.
+
+**Inspektor**
+- Dokumentationsseiten zeigen Status, Fortschritt, Priorität und Abhängigkeiten; im Prototyp nur
+  Kategorie, Markierung und Labels.
+- Der Inhalts-Editor übernimmt beim Verlassen des Feldes nicht (Prototyp: Fokus weg = fertig).
+- Trefferliste der Abhängigkeiten nicht mit Pfeiltasten wählbar.
+
+**Archiv und Papierkorb**
+- Archiv: keine Monatsüberschriften, keine Herkunft („aus dem Plan · 3 Tasks“), kein Aufklappen der
+  Unteraufgaben, keine Auswahl mit Inspektor, kein „In den Papierkorb“, kein Rechtsklick, keine
+  Tasten `A`/`Entf`. Beim Milestone steht „+3 Unteraufgaben“ statt „3 Tasks“.
+- Papierkorb: ohne Kopfzeile und „Papierkorb leeren“ (mit Rückfrage), ohne Herkunft und „vor n
+  Tagen“, ohne Symbol je Art.
+
+**Aus den Notizen des Nutzers (zusätzlich)**
+- ~~Enter legt doppelt an~~ **Erledigt.** Bei allen `NewThing`-Feldern (Projekt, auch beim ersten
+  Projekt, Milestone, Gruppe): `Enter` rief `commit`, `busy` sperrte das Feld, das gesperrte Feld
+  verlor den Fokus, `onBlur` rief `commit` ein zweites Mal. Jetzt sperrt ein Ref den zweiten Aufruf.
+- ~~Aufgaben der obersten Ebene lassen sich nicht zuklappen~~ **Erledigt** mit der Tiefe (0 → 1):
+  Der Pfeil lag unter der absolut liegenden Prioritätsspalte, die den Klick abfing.
+- Ein Projekt lässt sich nicht löschen: Der Server kann es, die Oberfläche bietet es nirgends an
+  (gehört zum fehlenden Projektmenü).
+
+**Meldungen und Hilfe**
+- Meldungen mit „Anzeigen“ (nach Anlegen außerhalb der Sicht, Wiederherstellen, In den Plan) fehlen.
+- Die Kürzel-Hilfe ist gekürzt – sie spiegelt die fehlenden Funktionen oben.
 - ~~**Backlog.**~~ **Erledigt.** Die drei Abschnitte des Prototyps: „Vorbereitete Milestones“ (die
   nicht eingeplanten, mit „In den Plan →“ und eigenem „+ Milestone“), „Ideen & Tasks“ (Unsortiert
   plus die eigenen Gruppen, mit „+ Gruppe“) und „Smarte Gruppen“ – eine je Markierung. Der Plan
