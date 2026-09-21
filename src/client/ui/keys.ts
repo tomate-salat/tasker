@@ -31,7 +31,8 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
       const inList = !target || target === document.body || !!target.closest('.list');
 
       // Strg+A wählt alles Sichtbare aus – die einzige Strg-Taste, die uns gehört.
-      if (inList && (e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      // Wie im Prototyp nicht beim Tippen: im Namensfeld markiert sie den Text.
+      if (!typing && inList && (e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
         store.selectAllVisible();
         return;

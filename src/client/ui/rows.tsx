@@ -272,6 +272,12 @@ export function GroupRow({
         .join(' ')}
       style={{ '--d': 0 } as React.CSSProperties}
       {...(mark ? { title: `Smarte Gruppe: Tasks hier bekommen automatisch ${mark.emoji} ${mark.name}` } : {})}
+      // Wie im Prototyp: ein Klick auf die Zeile klappt sie auf oder zu – außer im
+      // Eingabefeld und auf den Knöpfen, die ihre eigene Handlung haben.
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('input, button')) return;
+        toggle(id);
+      }}
       {...dragSource('group', group?.id ?? id, !!group && !editing)}
       {...dropTarget(target)}
     >
@@ -281,7 +287,14 @@ export function GroupRow({
       {group && editing === group.id ? (
         <TitleEdit kind="group" id={group.id} title={group.title} />
       ) : (
-        <span className="title">{row.title}</span>
+        <span
+          className="title"
+          // Doppelklick auf den Namen benennt eine echte Gruppe um (die beiden
+          // Einzelklicks davor klappen hin und zurück, wie im Prototyp).
+          {...(group ? { onDoubleClick: () => edit(group.id) } : {})}
+        >
+          {row.title}
+        </span>
       )}
 
       {mark && <span className="smart-badge">smart</span>}

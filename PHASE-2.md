@@ -460,7 +460,11 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   `POST /api/bulk` (`move`), der jetzt `index` beachtet und die Auswahl als Block an die Stelle
   setzt (Test: `setzt verschobene Ausgewählte mit Platzangabe als Block an die Stelle`). Meldung
   „n Tasks verschoben“ bzw. „n Tasks liegen jetzt …“, mit Rückgängig.
-- Klick auf eine Gruppenzeile klappt im Prototyp auf/zu; Doppelklick auf den Gruppennamen benennt um.
+- ~~Klick auf eine Gruppenzeile klappt im Prototyp auf/zu; Doppelklick auf den Gruppennamen benennt
+  um.~~ **Erledigt.** Gilt für eigene Gruppen, „Unsortiert“ und smarte Gruppen; Knöpfe und das
+  Namensfeld behalten ihre eigene Handlung, umbenennen lassen sich nur eigene Gruppen. Nebenbei:
+  `Strg+A` griff auch in Eingabefeldern der Liste und wählte alle Aufgaben aus, statt den Text zu
+  markieren – jetzt wie im Prototyp nur, wenn nicht getippt wird.
 - Das Zeichnungs-Abzeichen öffnet im Prototyp direkt die Zeichnung, hier nur die Aufgabe.
 - ~~Status auf Englisch~~ **Erledigt** (Tooltip und Vorschau der Schnell-Erfassung).
 
