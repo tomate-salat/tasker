@@ -14,7 +14,9 @@ import {
 } from './store.js';
 import { dropTarget, useZone } from './ui/dnd.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
+import { categoryHue } from './ui/colors.js';
 import { SIDE_ICON } from './ui/icons.js';
+import { tagStyle } from './ui/rows.js';
 import { Inspector } from './ui/Inspector.js';
 import { NewThing } from './ui/NewThing.js';
 import { QuickAdd } from './ui/QuickAdd.js';
@@ -358,10 +360,24 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
 
   if (!any) return null;
 
+  // Das Farbfeld hängt wie in der Seitenleiste an der Stelle in der Projektliste.
+  const catIndex = category
+    ? ws.categories
+        .filter((c) => c.projectId === category.projectId)
+        .sort((a, b) => a.order - b.order)
+        .indexOf(category)
+    : -1;
+
   return (
     <div className="toolbar">
+      <span className="sum">Gefiltert:</span>
       {filter.tag && (
-        <button className="tag" onClick={() => setFilter({ tag: null })} title="Filter entfernen">
+        <button
+          className="tag"
+          style={tagStyle(filter.tag)}
+          onClick={() => setFilter({ tag: null })}
+          title="Filter entfernen"
+        >
           #{filter.tag} ×
         </button>
       )}
@@ -371,6 +387,7 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
           onClick={() => setFilter({ categoryId: null })}
           title="Filter entfernen"
         >
+          <span className="cat-sw" style={{ '--h': categoryHue(catIndex) } as React.CSSProperties} />{' '}
           {category.name} ×
         </button>
       )}

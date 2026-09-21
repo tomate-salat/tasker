@@ -521,7 +521,8 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   die Projektzeile trägt den Titel des Prototyps.
 - „+ Neues Projekt“ ist im Prototyp ein gestricheltes Eingabefeld, hier ein Knopf, der erst zum
   Feld wird.
-- Filterleiste ohne „Gefiltert:“ und ohne Farbfeld der Kategorie.
+- ~~Filterleiste~~ **Erledigt.** „Gefiltert:“ vor den Chips, Label-Chip in seiner Farbe,
+  Kategorie-Chip mit Farbfeld – Markup gegen den Prototyp verglichen.
 - Zähler in Doku und Archiv zählen alles statt nur die Doku-Seiten bzw. das Archivierte.
 
 **Inspektor**
