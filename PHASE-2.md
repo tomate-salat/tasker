@@ -377,9 +377,17 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Anlegen, siehe Abschnitt 5), und die Priorität steht im Menü als Chip-Reihe, kennt aber kein
   eigenes Tastenkürzel. „Nach oben/Nach unten“ trägt kein `Alt ↑/↓` im Menü, weil die Pfeiltasten
   mit Alt bisher nur Aufgaben verschieben, keine Milestones.
-- **Burnup.** Der Milestone-Inspektor hat im Prototyp eine Burnup-Kurve. Sie braucht ein
-  Umfangs-Protokoll je Milestone (`m.log`), also eine eigene Tabelle und Fortschreibung bei jeder
-  Änderung; deshalb ein eigener Punkt.
+- ~~**Burnup.**~~ **Erledigt.** Die Kurve im Milestone-Inspektor ist `burnupHtml`/`attachBurnup`
+  aus dem Prototyp (Committed, Erledigt, Prognose, Heute- und Ende-Linie, Überfahren mit Datum und
+  Werten, Hinweise auf Umfangsänderung und Verspätung); bei gleichen Daten sind die Pfade
+  zeichengleich. Das Protokoll (`m.log`) steht in `milestone_log`: der Server schreibt es nach
+  jeder erfolgreichen Änderung fort (`logScopes` in `src/server/burnup.ts`, ein Eintrag pro Tag,
+  am selben Tag überschrieben) und trägt es für Milestones ohne Protokoll aus den Abschlussdaten
+  nach (`backfillLog`). Das Startpaket liefert es als `milestoneLog` mit; den heutigen Punkt
+  rechnet der Client selbst, damit die Kurve jeder Änderung sofort folgt. Rückgängig braucht
+  nichts Eigenes: die Rücknahme ist selbst eine Änderung und schreibt den heutigen Stand neu.
+  Der Tag ist der Kalendertag in der Zeitzone des Servers – auf Railway `TZ=Europe/Berlin`
+  setzen, sonst wechselt der Tag um 1 bzw. 2 Uhr nachts.
 - **Zeichnungen an Milestones.** Im Prototyp kann auch ein Milestone Zeichnungen haben; hier hängen
   sie bisher nur an Aufgaben.
 
@@ -462,8 +470,12 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   zurück im Backlog“. `B` an einer Aufgabe meldet wie im Prototyp („liegt jetzt im Backlog ›
   Unsortiert“ oder „Liegt schon unter „Unsortiert““), `A` meldet „„…“ archiviert“ (am Milestone
   „– samt Tasks“).
-- Offen: „Anzeigen“ an diesen Meldungen und die Meldung zu `S` am Milestone („◆ Alpha: In
-  Progress · Start …“) – gehört zu „Meldungen und Hilfe“.
+- Offen: „Anzeigen“ an diesen Meldungen – gehört zu „Meldungen und Hilfe“.
+- ~~Meldung zu `S` am Milestone~~ **Erledigt** (mit dem Burnup). Wie `setMsStatus` im Prototyp
+  laufen `S`, Inspektor, Menü, „Als Done markieren“ und „Alle Tasks erledigt – Done?“ über
+  `setMilestoneStatus`: „In Progress“ setzt ein fehlendes Startdatum, „Done“ ein fehlendes
+  Enddatum (`endAuto`), das beim Zurücksetzen wieder verschwindet. Meldung „◆ Alpha: In Progress ·
+  Start 21.09.“ mit Rückgängig.
 
 **Kopf und Seitenleiste**
 - Zusätzlicher Knopf „+ Aufgabe“ in Plan und Backlog (gibt es im Prototyp nicht); „+ Milestone“

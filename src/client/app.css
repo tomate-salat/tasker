@@ -2081,6 +2081,32 @@ button.prop:hover {
   border-bottom: 0 !important;
 }
 
+/* Burnup im Milestone-Inspektor, wie im Prototyp */
+.burnup { position: relative; margin-top: 4px; }
+.burnup svg { display: block; width: 100%; height: auto; overflow: visible; }
+.bd-grid { stroke: var(--line); stroke-width: 1; }
+.bd-lbl { fill: var(--muted); font: 10px var(--mono); }
+.bd-dead-lbl { fill: var(--p1); }
+.bd-area { fill: var(--accent); opacity: 0.12; }
+.bd-actual { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.bd-fc { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.75; }
+.bd-today { stroke: var(--muted); stroke-width: 1; }
+.bd-dead { stroke: var(--p1); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.bd-cross { stroke: var(--muted); stroke-width: 1; }
+.bd-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.bd-hit { fill: transparent; cursor: crosshair; }
+.bd-tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; box-shadow: var(--shadow); }
+.bd-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.bd-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bd-legend .sw { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--accent); }
+.bd-legend .sw.fc { border-top-style: dashed; opacity: 0.8; }
+.bd-legend .sw.scope { border-top-color: var(--muted); }
+.bu-scope { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; }
+.bu-scope-fc { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0.7; }
+.bu-dot-s { fill: var(--muted); stroke: var(--surface); stroke-width: 2; }
+.bu-val { fill: var(--muted); font-weight: 500; }
+.bu-val.acc { fill: var(--ink); }
+
 .child {
   display: flex;
   align-items: center;

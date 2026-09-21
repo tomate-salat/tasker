@@ -137,7 +137,7 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       sub: (['open', 'progress', 'done'] as const).map((s) => ({
         label: MS_STATUS[s],
         check: m.status === s,
-        onSelect: () => void store.patch('milestone', m.id, { status: s }),
+        onSelect: () => void store.setMilestoneStatus(m.id, s),
       })),
     },
     {

@@ -127,6 +127,22 @@ describe('Routen', () => {
     assert.deepEqual((await send('GET', '/settings')).body, { velocity: 12, theme: 'dark' });
   });
 
+  it('schreibt nach jeder Änderung das Burnup-Protokoll fort', async () => {
+    const p = await mk('project', { name: 'P' });
+    const m = await mk('milestone', { projectId: p.id, title: 'M' });
+    const a = await mk('task', { projectId: p.id, title: 'A', milestoneId: m.id });
+    await mk('task', { projectId: p.id, title: 'B', milestoneId: m.id });
+    await send('PATCH', `/kind/task/${a.id}`, { version: a.version, changes: { status: 'done' } });
+
+    const boot = (await send('GET', '/bootstrap')).body as {
+      milestoneLog: Record<string, { d: string; s: number; dn: number }[]>;
+    };
+    const log = boot.milestoneLog[m.id] ?? [];
+    // Alles am selben Tag: ein einziger Eintrag mit dem letzten Stand.
+    assert.equal(log.length, 1);
+    assert.deepEqual({ s: log[0]?.s, dn: log[0]?.dn }, { s: 2, dn: 1 });
+  });
+
   it('Zeichnungen: anlegen, speichern, umbenennen, löschen', async () => {
     const p = await mk('project', { name: 'P' });
     const t = await mk('task', { projectId: p.id, title: 'Mit Skizze' });

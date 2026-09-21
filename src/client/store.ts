@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { BulkAction, Kind, Step } from '@shared/api.js';
+import { dayKey } from '@shared/burnup.js';
 import type { ChangeEvent } from '@shared/events.js';
 import type { Milestone, Task } from '@shared/model.js';
 import {
@@ -19,6 +20,7 @@ import {
   type Settings,
   type TrashList,
 } from './api.js';
+import { MS_STATUS } from './ui/icons.js';
 
 export const VIEWS = ['plan', 'backlog', 'docs', 'timeline', 'archive', 'trash'] as const;
 export type View = (typeof VIEWS)[number];
@@ -174,6 +176,12 @@ type State = {
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   /** Milestone in den Plan oder zurück in den Backlog, jeweils ans Ende – `planMs` im Prototyp. */
   planMilestone: (id: string, planned: boolean) => Promise<void>;
+  /**
+   * Status eines Milestones, `setMsStatus` im Prototyp: „In Progress“ setzt ein
+   * fehlendes Startdatum, „Done“ ein fehlendes Enddatum; das automatische
+   * Enddatum geht wieder, wenn er doch nicht fertig ist.
+   */
+  setMilestoneStatus: (id: string, status: 'open' | 'progress' | 'done') => Promise<void>;
   /** `message` ersetzt die übliche Meldung – etwa „In den Papierkorb verschoben“ im Archiv. */
   remove: (kind: Kind, id: string, message?: string) => Promise<void>;
   /** Nimmt auch die Einbettung aus der Beschreibung, mit „Rückgängig“. */
@@ -766,6 +774,27 @@ export const useStore = create<State>((set, get) => ({
       toast: planned
         ? `„${m.title}“ ist im Plan${line && line.open ? ` · fertig ca. ${inWeeks(line.end)}` : ''}`
         : `„${m.title}“ ist zurück im Backlog`,
+      toastUndo: true,
+    });
+  },
+
+  setMilestoneStatus: async (id, status) => {
+    const m = get().ws?.milestone(id);
+    if (!m || m.status === status) return;
+    const today = dayKey(new Date());
+    const changes: Partial<Milestone> = { status };
+    const autoStart = status === 'progress' && !m.startDate;
+    const autoEnd = status === 'done' && !m.endDate;
+    if (autoStart) changes.startDate = today;
+    if (autoEnd) Object.assign(changes, { endDate: today, endAuto: true });
+    if (m.status === 'done' && status !== 'done' && m.endAuto) {
+      Object.assign(changes, { endDate: null, endAuto: false });
+    }
+    await get().patch('milestone', id, changes);
+    if (get().ws?.milestone(id)?.status !== status) return; // Fehler steht schon in der Meldung.
+    const now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    set({
+      toast: `◆ ${m.title}: ${MS_STATUS[status]}${autoStart ? ` · Start ${now}` : ''}${autoEnd ? ` · Ende ${now}` : ''}`,
       toastUndo: true,
     });
   },

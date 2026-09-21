@@ -17,6 +17,7 @@ import {
   type Kind,
 } from '../shared/api.js';
 import { CLIENT_HEADER, type ChangeEvent } from '../shared/events.js';
+import { loadLogs, logScopes } from './burnup.js';
 import type { DbCtx } from './db.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
@@ -55,10 +56,15 @@ import { getSettings, putSettings } from './settings.js';
  */
 export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   const app = new Hono();
+  const run = (...args: RunArgs) => runWith(ctx, ...args);
 
   /* ------------------------------------------------------------- Lesen */
 
-  app.get('/bootstrap', (c) => c.json(loadBootstrap(ctx)));
+  // Das Burnup-Protokoll kommt mit; ein neuer Tag bekommt dabei seinen Eintrag.
+  app.get('/bootstrap', (c) => {
+    logScopes(ctx);
+    return c.json({ ...loadBootstrap(ctx), milestoneLog: loadLogs(ctx) });
+  });
 
   app.get('/archive', (c) => {
     const q = archiveQuery.safeParse(c.req.query());
@@ -296,8 +302,11 @@ const publish = (c: Context, bus: EventBus, event: ChangeEvent): void => {
   bus.publish(event, c.req.header(CLIENT_HEADER) ?? null);
 };
 
+type RunArgs = Parameters<typeof runWith> extends [DbCtx, ...infer R] ? R : never;
+
 /** Übersetzt die Fehler der Datenschicht in Antwortcodes und meldet Erfolge. */
-function run(
+function runWith(
+  ctx: DbCtx,
   c: Context,
   bus: EventBus,
   fn: () => unknown,
@@ -305,6 +314,8 @@ function run(
 ) {
   try {
     const result = fn();
+    // Wie `logScopes` nach jedem `mut` im Prototyp: der Burnup kennt jede Änderung.
+    logScopes(ctx);
     if (o.event) publish(c, bus, o.event(result));
     return c.json(result as object, o.status ?? 200);
   } catch (e) {

@@ -219,7 +219,7 @@ function MilestoneRight({
   milestone: Milestone;
   line: ScheduledMilestone | null;
 }) {
-  const { patch, archiveItem, settings } = useStore();
+  const { setMilestoneStatus, archiveItem, settings } = useStore();
   const stats = milestoneStats(ws, milestone);
 
   if (stats.isDone) {
@@ -257,7 +257,7 @@ function MilestoneRight({
           title="Alle Aufgaben sind erledigt"
           onClick={(e) => {
             e.stopPropagation();
-            void patch('milestone', milestone.id, { status: 'done' });
+            void setMilestoneStatus(milestone.id, 'done');
           }}
         >
           Als Done markieren

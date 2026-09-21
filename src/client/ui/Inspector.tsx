@@ -8,6 +8,7 @@ import { allDone, doneCount, milestoneStats, statusSegments, total } from '@shar
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
+import { Burnup } from './Burnup.js';
 import { categoryHue, tagHue } from './colors.js';
 import { DrawingEmbed, useDrawings } from './Drawings.js';
 import {
@@ -83,6 +84,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
       />
 
       {task && <TaskChildren ws={ws} task={task} />}
+      {milestone && <Burnup ws={ws} milestone={milestone} />}
       {milestone && <MilestoneChildren ws={ws} milestone={milestone} />}
 
       <Deps ws={ws} kind={kind} item={item} />
@@ -363,7 +365,7 @@ function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
 /* ------------------------------------------------------- Kopf: Milestone */
 
 function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone }) {
-  const { patch, settings } = useStore();
+  const { patch, settings, setMilestoneStatus } = useStore();
   const stats = milestoneStats(ws, milestone);
   const plan = schedule(ws, { velocity: settings.velocity });
   const line = plan.byId.get(milestone.id) ?? null;
@@ -390,7 +392,7 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
             Alle Tasks erledigt –{' '}
             <button
               className="linkish"
-              onClick={() => void patch('milestone', milestone.id, { status: 'done' })}
+              onClick={() => void setMilestoneStatus(milestone.id, 'done')}
             >
               Done
             </button>
@@ -972,6 +974,11 @@ function StatusGroups({
   labels: Record<string, string>;
 }) {
   const patch = useStore((s) => s.patch);
+  const setMilestoneStatus = useStore((s) => s.setMilestoneStatus);
+  const choose = (s: Status): void => {
+    if (kind === 'milestone') void setMilestoneStatus(item.id, s as 'open' | 'progress' | 'done');
+    else void patch(kind, item.id, { status: s });
+  };
 
   return (
     <div className="status-groups" role="radiogroup" aria-label="Status">
@@ -985,7 +992,7 @@ function StatusGroups({
               aria-checked={item.status === s}
               title={labels[s]}
               aria-label={labels[s]}
-              onClick={() => void patch(kind, item.id, { status: s })}
+              onClick={() => choose(s)}
             >
               <StatusIcon status={s} />
               <span>{labels[s]}</span>

@@ -1,4 +1,5 @@
 import type { BulkAction, BulkItem, Kind, Step, Stub, Undoable } from '@shared/api.js';
+import type { LogEntry } from '@shared/burnup.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data, Milestone, Task } from '@shared/model.js';
 
@@ -29,6 +30,8 @@ export type Bootstrap = Data & {
   archiveCounts: Record<string, number>;
   /** Nur die Namen – die Szenen holt der Editor einzeln. */
   drawings: DrawingMeta[];
+  /** Burnup-Protokoll je aktivem Milestone; den heutigen Stand rechnet der Client selbst. */
+  milestoneLog: Record<string, LogEntry[]>;
 };
 
 export class ApiError extends Error {

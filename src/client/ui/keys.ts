@@ -132,7 +132,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
             return;
           case 's':
           case 'S':
-            void store.patch('milestone', m.id, { status: nextMsStatus(m.status) });
+            void store.setMilestoneStatus(m.id, nextMsStatus(m.status));
             return;
           case 'p':
           case 'P':
@@ -296,7 +296,7 @@ const STATUS_CYCLE: Status[] = ['open', 'progress', 'done'];
 const nextStatus = (s: Status): Status =>
   STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length] ?? 'open';
 
-const MS_CYCLE: Milestone['status'][] = ['open', 'progress', 'done'];
+const MS_CYCLE = ['open', 'progress', 'done'] as const;
 
-const nextMsStatus = (s: Milestone['status']): Milestone['status'] =>
-  MS_CYCLE[(MS_CYCLE.indexOf(s) + 1) % MS_CYCLE.length] ?? 'open';
+const nextMsStatus = (s: Milestone['status']): (typeof MS_CYCLE)[number] =>
+  MS_CYCLE[(MS_CYCLE.indexOf(s as (typeof MS_CYCLE)[number]) + 1) % MS_CYCLE.length] ?? 'open';
