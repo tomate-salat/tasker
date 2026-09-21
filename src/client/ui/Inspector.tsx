@@ -486,7 +486,7 @@ function Content({
 }) {
   const patch = useStore((s) => s.patch);
   const mark = kind === 'task' ? ws.mark((item as Task).markId) : null;
-  const drawings = useDrawings(kind === 'task' ? item.id : null, item.desc);
+  const drawings = useDrawings({ kind, id: item.id }, item.desc);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const { parts, embedded } = markdownParts(item.desc, drawings.list);
@@ -592,18 +592,16 @@ function Content({
         </div>
       )}
 
-      {kind === 'task' && (
-        <div className="d-actions">
-          <button
-            className="linkish"
-            disabled={drawings.busy}
-            title="Neue Zeichnung anlegen und in die Beschreibung einbinden"
-            onClick={() => void drawings.add()}
-          >
-            + Zeichnung
-          </button>
-        </div>
-      )}
+      <div className="d-actions">
+        <button
+          className="linkish"
+          disabled={drawings.busy}
+          title="Neue Zeichnung anlegen und in die Beschreibung einbinden"
+          onClick={() => void drawings.add()}
+        >
+          + Zeichnung
+        </button>
+      </div>
 
       {drawings.editor}
     </>

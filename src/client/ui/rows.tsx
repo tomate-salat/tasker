@@ -6,6 +6,7 @@ import { isDone, type Milestone, type Task } from '@shared/model.js';
 import type { OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
+import { drawingsOf } from '../api.js';
 import { useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
@@ -129,7 +130,7 @@ export function TaskRow({
       )}
 
       <ChecklistBadge desc={task.desc} />
-      <DrawingBadge taskId={task.id} />
+      <DrawingBadge ownerId={task.id} />
       {!doc && <LockBadge ws={ws} task={task} />}
 
       <CategoryCell ws={ws} task={task} onClick={cell('cat')} />
@@ -213,6 +214,7 @@ export function MilestoneRow({
         </span>
       )}
       <ChecklistBadge desc={milestone.desc} />
+      <DrawingBadge ownerId={milestone.id} />
       <span className="ms-spacer" />
 
       {waiting.length > 0 && (
@@ -409,10 +411,10 @@ export function ChecklistBadge({ desc }: { desc: string }) {
   );
 }
 
-/** Zeigt an, dass an der Aufgabe eine Zeichnung hängt. */
-function DrawingBadge({ taskId }: { taskId: string }) {
+/** Zeigt an, dass an der Aufgabe oder dem Milestone eine Zeichnung hängt. */
+function DrawingBadge({ ownerId }: { ownerId: string }) {
   const { boot, select } = useStore();
-  const drawings = (boot?.drawings ?? []).filter((d) => d.taskId === taskId);
+  const drawings = drawingsOf(boot?.drawings, ownerId);
   if (!drawings.length) return null;
   const names = drawings.map((d) => d.name).join(', ');
   return (
@@ -422,7 +424,7 @@ function DrawingBadge({ taskId }: { taskId: string }) {
       aria-label="Zeichnungen"
       onClick={(e) => {
         e.stopPropagation();
-        select(taskId);
+        select(ownerId);
       }}
     >
       {DRAW_ICON}

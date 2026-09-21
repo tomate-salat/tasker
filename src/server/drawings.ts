@@ -4,9 +4,9 @@ import { newId } from './ids.js';
 import { Conflict, NotFound } from './repo.js';
 
 /**
- * Zeichnungen gehören zu einer Aufgabe und werden mit Excalidraw bearbeitet.
- * Gespeichert wird die Szene als JSON – die Elemente werden nie einzeln
- * abgefragt, immer nur als Ganzes.
+ * Zeichnungen gehören wie im Prototyp zu einer Aufgabe oder einem Milestone und
+ * werden mit Excalidraw bearbeitet. Gespeichert wird die Szene als JSON – die
+ * Elemente werden nie einzeln abgefragt, immer nur als Ganzes.
  *
  * Der Bestand liefert beim Start nur die Namen (`DrawingMeta`); die Szene
  * selbst holt erst der Editor. Eine Zeichnung ist schnell ein paar hundert
@@ -19,10 +19,15 @@ export type Scene = {
   files?: Record<string, unknown>;
 };
 
+/** Wem eine Zeichnung gehört. */
+export type Owner = { kind: 'task' | 'milestone'; id: string };
+
 export type DrawingMeta = {
   id: string;
   version: number;
-  taskId: string;
+  /** Genau eins von beiden ist gesetzt. */
+  taskId: string | null;
+  milestoneId: string | null;
   name: string;
   order: number;
   updatedAt: string;
@@ -33,7 +38,8 @@ export type Drawing = DrawingMeta & { scene: Scene };
 type Row = {
   id: string;
   version: number;
-  task_id: string;
+  task_id: string | null;
+  milestone_id: string | null;
   name: string;
   sort_order: number;
   shapes: string;
@@ -42,10 +48,16 @@ type Row = {
 
 const nowIso = (): string => new Date().toISOString();
 
+const COLUMN = { task: 'task_id', milestone: 'milestone_id' } as const;
+
+const ownerOf = (r: Row): Owner =>
+  r.task_id ? { kind: 'task', id: r.task_id } : { kind: 'milestone', id: r.milestone_id as string };
+
 const toMeta = (r: Row): DrawingMeta => ({
   id: r.id,
   version: r.version,
   taskId: r.task_id,
+  milestoneId: r.milestone_id,
   name: r.name,
   order: r.sort_order,
   updatedAt: r.updated_at,
@@ -65,32 +77,36 @@ function toScene(raw: string): Scene {
 
 const toDrawing = (r: Row): Drawing => ({ ...toMeta(r), scene: toScene(r.shapes) });
 
-/** Nur die Namen – das reicht dem Startpaket für die Anzeige am Task. */
+/** Nur die Namen – das reicht dem Startpaket für die Anzeige in der Liste. */
 export const loadDrawingMeta = (ctx: DbCtx): DrawingMeta[] =>
   (
     ctx.sqlite
-      .prepare('SELECT id, version, task_id, name, sort_order, updated_at FROM drawing ORDER BY sort_order')
+      .prepare(
+        'SELECT id, version, task_id, milestone_id, name, sort_order, updated_at FROM drawing ORDER BY sort_order',
+      )
       .all() as Row[]
   ).map(toMeta);
 
-export const loadDrawings = (ctx: DbCtx, taskId: string): Drawing[] =>
+export const loadDrawings = (ctx: DbCtx, owner: Owner): Drawing[] =>
   (
-    ctx.sqlite.prepare('SELECT * FROM drawing WHERE task_id = ? ORDER BY sort_order').all(taskId) as Row[]
+    ctx.sqlite
+      .prepare(`SELECT * FROM drawing WHERE ${COLUMN[owner.kind]} = ? ORDER BY sort_order`)
+      .all(owner.id) as Row[]
   ).map(toDrawing);
 
-export function createDrawing(ctx: DbCtx, taskId: string, name?: string): Drawing {
+export function createDrawing(ctx: DbCtx, owner: Owner, name?: string): Drawing {
   return ctx.sqlite.transaction(() => {
-    const task = ctx.sqlite.prepare('SELECT id FROM task WHERE id = ?').get(taskId);
-    if (!task) throw new NotFound();
+    const found = ctx.sqlite.prepare(`SELECT id FROM ${owner.kind} WHERE id = ?`).get(owner.id);
+    if (!found) throw new NotFound();
 
-    const existing = loadDrawings(ctx, taskId);
+    const existing = loadDrawings(ctx, owner);
     const id = newId('d');
     ctx.sqlite
       .prepare(
-        `INSERT INTO drawing (id, task_id, name, sort_order, shapes, created_at, updated_at, version)
+        `INSERT INTO drawing (id, ${COLUMN[owner.kind]}, name, sort_order, shapes, created_at, updated_at, version)
          VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
       )
-      .run(id, taskId, uniqueName(name, existing), existing.length, '{"elements":[]}', nowIso(), nowIso());
+      .run(id, owner.id, uniqueName(name, existing), existing.length, '{"elements":[]}', nowIso(), nowIso());
 
     return readDrawing(ctx, id);
   })();
@@ -112,7 +128,7 @@ export function patchDrawing(
         ? row.name
         : uniqueName(
             changes.name,
-            loadDrawings(ctx, row.task_id).filter((d) => d.id !== id),
+            loadDrawings(ctx, ownerOf(row)).filter((d) => d.id !== id),
           );
 
     ctx.sqlite
@@ -139,16 +155,16 @@ export function patchDrawing(
  * (im Prototyp gibt es gelöschte Zeichnungen dort auch nicht) und läuft mit der
  * üblichen Frist ab.
  *
- * Gibt die Aufgabe mit zurück, damit der Änderungs-Strom sie nennen kann.
+ * Gibt den Besitzer mit zurück, damit der Änderungs-Strom ihn nennen kann.
  */
-export function removeDrawing(ctx: DbCtx, id: string): Undoable & { taskId: string } {
+export function removeDrawing(ctx: DbCtx, id: string): Undoable & { ownerId: string } {
   return ctx.sqlite.transaction(() => {
     const row = ctx.sqlite.prepare('SELECT * FROM drawing WHERE id = ?').get(id) as Row | undefined;
     if (!row) throw new NotFound();
-    const task = ctx.sqlite.prepare('SELECT "desc", project_id FROM task WHERE id = ?').get(row.task_id) as {
-      desc: string;
-      project_id: string;
-    };
+    const owner = ownerOf(row);
+    const item = ctx.sqlite
+      .prepare(`SELECT "desc", project_id FROM ${owner.kind} WHERE id = ?`)
+      .get(owner.id) as { desc: string; project_id: string };
 
     const trashId = newId('x');
     ctx.sqlite
@@ -156,21 +172,21 @@ export function removeDrawing(ctx: DbCtx, id: string): Undoable & { taskId: stri
         `INSERT INTO trash (id, kind, title, project_id, payload, deleted_at)
          VALUES (?, 'drawing', ?, ?, ?, ?)`,
       )
-      .run(trashId, row.name, task.project_id, JSON.stringify({ kind: 'drawing', row, tasks: [] }), nowIso());
+      .run(trashId, row.name, item.project_id, JSON.stringify({ kind: 'drawing', row, tasks: [] }), nowIso());
     ctx.sqlite.prepare('DELETE FROM drawing WHERE id = ?').run(id);
 
     const undo: Step[] = [{ op: 'untrash', trashId }];
-    if (task.desc.includes(`![[zeichnung:${row.name}]]`)) {
-      const desc = stripEmbed(task.desc, row.name);
+    if (item.desc.includes(`![[zeichnung:${row.name}]]`)) {
+      const desc = stripEmbed(item.desc, row.name);
       ctx.sqlite
-        .prepare('UPDATE task SET "desc" = ?, updated_at = ?, version = version + 1 WHERE id = ?')
-        .run(desc, nowIso(), row.task_id);
-      const { version } = ctx.sqlite.prepare('SELECT version FROM task WHERE id = ?').get(row.task_id) as {
+        .prepare(`UPDATE ${owner.kind} SET "desc" = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
+        .run(desc, nowIso(), owner.id);
+      const { version } = ctx.sqlite.prepare(`SELECT version FROM ${owner.kind} WHERE id = ?`).get(owner.id) as {
         version: number;
       };
-      undo.push({ op: 'patch', kind: 'task', id: row.task_id, version, changes: { desc: task.desc } });
+      undo.push({ op: 'patch', kind: owner.kind, id: owner.id, version, changes: { desc: item.desc } });
     }
-    return { count: 1, undo, taskId: row.task_id };
+    return { count: 1, undo, ownerId: owner.id };
   })();
 }
 
@@ -188,7 +204,7 @@ function readDrawing(ctx: DbCtx, id: string): Drawing {
   return toDrawing(row);
 }
 
-/** Namen müssen je Aufgabe eindeutig sein, damit `![[zeichnung:Name]]` trifft. */
+/** Namen müssen je Besitzer eindeutig sein, damit `![[zeichnung:Name]]` trifft. */
 function uniqueName(wanted: string | undefined, existing: { name: string }[]): string {
   const base = (wanted ?? '').trim() || 'Zeichnung';
   const taken = new Set(existing.map((d) => d.name));

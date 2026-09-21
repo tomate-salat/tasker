@@ -14,6 +14,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   type AnySQLiteColumn,
+  check,
   index,
   integer,
   primaryKey,
@@ -193,21 +194,28 @@ export const dependencies = sqliteTable(
   ],
 );
 
-/** Zeichnungen gehören zu einem Task und werden über ![[zeichnung:Name]] eingebettet. */
+/**
+ * Zeichnungen gehören zu einem Task oder einem Milestone (genau eins von
+ * beiden) und werden über ![[zeichnung:Name]] eingebettet.
+ */
 export const drawings = sqliteTable(
   'drawing',
   {
     id: text('id').primaryKey(),
-    taskId: text('task_id')
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
+    taskId: text('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+    milestoneId: text('milestone_id').references(() => milestones.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     order: integer('sort_order').notNull().default(0),
     /** Die Formen als JSON – sie werden nie einzeln abgefragt, nur als Ganzes. */
     shapes: text('shapes', { mode: 'json' }).notNull().default(sql`'[]'`),
     ...tracked,
   },
-  (t) => [index('drawing_task_idx').on(t.taskId)],
+  (t) => [
+    index('drawing_task_idx').on(t.taskId),
+    index('drawing_milestone_idx').on(t.milestoneId),
+    // Ohne Tabellennamen, sonst zeigt die Regel nach dem Umbenennen in der Migration ins Leere.
+    check('drawing_owner', sql`(task_id IS NULL) <> (milestone_id IS NULL)`),
+  ],
 );
 
 /** Tagespunkte für den Burnup eines Milestones (im Prototyp `m.log`). */
@@ -296,6 +304,7 @@ export const milestoneRelations = relations(milestones, ({ one, many }) => ({
   project: one(projects, { fields: [milestones.projectId], references: [projects.id] }),
   tasks: many(tasks),
   log: many(milestoneLog),
+  drawings: many(drawings),
 }));
 
 /* ---------------------------------------------------------------------- Typen */

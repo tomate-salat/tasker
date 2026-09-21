@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type Drawing } from '../api.js';
+import { api, type Drawing, type DrawingOwner, drawingsOf } from '../api.js';
 import { useStore } from '../store.js';
 import { DrawingEditor } from './DrawingEditor.js';
 
 /**
- * Die Zeichnungen einer Aufgabe. Das Startpaket kennt nur ihre Namen; die
- * Szenen werden geholt, sobald die Aufgabe im Inspektor steht, denn dort
- * werden sie in der Beschreibung angezeigt.
+ * Die Zeichnungen einer Aufgabe oder eines Milestones. Das Startpaket kennt
+ * nur ihre Namen; die Szenen werden geholt, sobald der Besitzer im Inspektor
+ * steht, denn dort werden sie in der Beschreibung angezeigt.
  */
 export type DrawingsApi = {
   list: Drawing[];
@@ -18,9 +18,10 @@ export type DrawingsApi = {
   editor: React.ReactNode;
 };
 
-export function useDrawings(taskId: string | null, desc: string): DrawingsApi {
+export function useDrawings(owner: DrawingOwner, desc: string): DrawingsApi {
   const { boot, say, load, patch } = useStore();
-  const metas = (boot?.drawings ?? []).filter((d) => d.taskId === taskId);
+  const { kind, id } = owner;
+  const metas = drawingsOf(boot?.drawings, id);
   // Ändert sich eine Version, ist die Szene veraltet und wird neu geholt.
   const stamp = metas.map((d) => `${d.id}:${d.version}`).join('|');
 
@@ -30,14 +31,14 @@ export function useDrawings(taskId: string | null, desc: string): DrawingsApi {
 
   useEffect(() => {
     setOpen(null);
-    if (!taskId || !stamp) {
+    if (!stamp) {
       setList([]);
       return;
     }
     let alive = true;
     void (async () => {
       try {
-        const { drawings } = await api.drawings(taskId);
+        const { drawings } = await api.drawings({ kind, id });
         if (alive) setList(drawings);
       } catch (e) {
         if (alive) say(e instanceof Error ? e.message : 'Zeichnungen konnten nicht geladen werden');
@@ -46,16 +47,15 @@ export function useDrawings(taskId: string | null, desc: string): DrawingsApi {
     return () => {
       alive = false;
     };
-  }, [taskId, stamp, say]);
+  }, [kind, id, stamp, say]);
 
   async function add(): Promise<void> {
-    if (!taskId) return;
     setBusy(true);
     try {
-      const created = await api.addDrawing(taskId);
+      const created = await api.addDrawing({ kind, id });
       // Wie im Prototyp: die neue Zeichnung hängt gleich in der Beschreibung.
       const token = `![[zeichnung:${created.name}]]`;
-      await patch('task', taskId, {
+      await patch(kind, id, {
         desc: desc.trim() ? `${desc.replace(/\s+$/, '')}\n\n${token}` : token,
       });
       await load();

@@ -223,6 +223,52 @@ describe('Routen', () => {
     );
   });
 
+  it('Zeichnungen an Milestones: anlegen, löschen samt Einbettung, mit dem Milestone in den Papierkorb', async () => {
+    const p = await mk('project', { name: 'P' });
+    const m = await mk('milestone', { projectId: p.id, title: 'M' });
+    assert.equal((await send('POST', '/drawings', { name: 'X' })).status, 400, 'ohne Besitzer');
+    assert.equal(
+      (await send('POST', '/drawings', { taskId: m.id, milestoneId: m.id })).status,
+      400,
+      'nicht beides',
+    );
+
+    const d = (await send('POST', '/drawings', { milestoneId: m.id, name: 'Plan' })).body as {
+      id: string;
+      taskId: string | null;
+      milestoneId: string;
+    };
+    assert.deepEqual([d.taskId, d.milestoneId], [null, m.id]);
+    const list = (await send('GET', `/drawings?milestoneId=${m.id}`)).body as { drawings: { id: string }[] };
+    assert.deepEqual(list.drawings.map((x) => x.id), [d.id]);
+
+    // Löschen nimmt die Einbettung aus der Beschreibung des Milestones.
+    await send('PATCH', `/kind/milestone/${m.id}`, { version: m.version, changes: { desc: '![[zeichnung:Plan]]' } });
+    const del = (await send('DELETE', `/drawings/${d.id}`)).body as { undo: unknown[] };
+    const ms = async () =>
+      ((await send('GET', '/bootstrap')).body as { milestones: { id: string; desc: string }[] }).milestones.find(
+        (x) => x.id === m.id,
+      );
+    assert.equal((await ms())?.desc, '');
+    await send('POST', '/steps', { steps: del.undo });
+    assert.equal((await ms())?.desc, '![[zeichnung:Plan]]');
+
+    // Der gelöschte Milestone nimmt Zeichnung und Protokoll mit und bringt sie zurück.
+    const { trashId } = (await send('DELETE', `/kind/milestone/${m.id}`)).body as { trashId: string };
+    const boot = async () =>
+      (await send('GET', '/bootstrap')).body as {
+        drawings: { id: string }[];
+        milestoneLog: Record<string, unknown[]>;
+      };
+    assert.equal((await boot()).drawings.length, 0);
+    const entry = ((await send('GET', '/trash')).body as { entries: { drawingCount: number }[] }).entries[0];
+    assert.equal(entry?.drawingCount, 1);
+    await send('POST', `/trash/${trashId}/restore`);
+    const after = await boot();
+    assert.deepEqual(after.drawings.map((x) => x.id), [d.id]);
+    assert.ok(after.milestoneLog[m.id]?.length);
+  });
+
   it('meldet jede Änderung im Strom und nennt den schreibenden Tab', async () => {
     const p = await mk('project', { name: 'P' });
     seen.length = 0;

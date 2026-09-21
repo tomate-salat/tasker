@@ -17,13 +17,24 @@ export type Scene = { elements: unknown[]; files?: Record<string, unknown> };
 export type DrawingMeta = {
   id: string;
   version: number;
-  taskId: string;
+  /** Genau eins von beiden ist gesetzt. */
+  taskId: string | null;
+  milestoneId: string | null;
   name: string;
   order: number;
   updatedAt: string;
 };
 
 export type Drawing = DrawingMeta & { scene: Scene };
+
+/** Wem eine Zeichnung gehört – einer Aufgabe oder einem Milestone. */
+export type DrawingOwner = { kind: 'task' | 'milestone'; id: string };
+
+const OWNER_KEY = { task: 'taskId', milestone: 'milestoneId' } as const;
+
+/** Die Zeichnungen eines Besitzers aus den Namen im Startpaket. */
+export const drawingsOf = (metas: DrawingMeta[] | undefined, ownerId: string): DrawingMeta[] =>
+  (metas ?? []).filter((d) => (d.taskId ?? d.milestoneId) === ownerId);
 
 export type Bootstrap = Data & {
   stubs: Stub[];
@@ -164,11 +175,11 @@ export const api = {
   /** „Papierkorb leeren“ – nur was die Ansicht gerade zeigt. */
   emptyTrash: (ids: string[]) => post<Undoable>('/api/trash/purge', { ids }),
 
-  drawings: (taskId: string) =>
-    request<{ drawings: Drawing[] }>(`/api/drawings?taskId=${encodeURIComponent(taskId)}`),
+  drawings: (owner: DrawingOwner) =>
+    request<{ drawings: Drawing[] }>(`/api/drawings?${OWNER_KEY[owner.kind]}=${encodeURIComponent(owner.id)}`),
 
-  addDrawing: (taskId: string, name?: string) =>
-    post<Drawing>('/api/drawings', { taskId, ...(name ? { name } : {}) }),
+  addDrawing: (owner: DrawingOwner, name?: string) =>
+    post<Drawing>('/api/drawings', { [OWNER_KEY[owner.kind]]: owner.id, ...(name ? { name } : {}) }),
 
   saveDrawing: (id: string, version: number, changes: { name?: string; scene?: Scene }) =>
     request<Drawing>(`/api/drawings/${id}`, {

@@ -219,7 +219,10 @@ export const sceneSchema = z.object({
   files: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const drawingCreate = z.object({ taskId: id, name: title.optional() });
+/** Eine Zeichnung gehört einer Aufgabe oder einem Milestone – genau einem von beiden. */
+export const drawingCreate = z
+  .object({ taskId: id.optional(), milestoneId: id.optional(), name: title.optional() })
+  .refine((b) => !b.taskId !== !b.milestoneId, { message: 'taskId oder milestoneId angeben' });
 
 export const drawingPatch = z.object({
   version: z.number().int().positive(),

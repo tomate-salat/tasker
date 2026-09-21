@@ -15,6 +15,13 @@
       "when": 1789827757774,
       "tag": "0001_lucky_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789997991594,
+      "tag": "0002_drawing_milestone",
+      "breakpoints": true
     }
   ]
 }

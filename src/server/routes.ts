@@ -78,8 +78,12 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
 
   app.get('/drawings', (c) => {
     const taskId = c.req.query('taskId');
-    if (!taskId) return c.json({ error: 'taskId fehlt.' }, 400);
-    return c.json({ drawings: loadDrawings(ctx, taskId) });
+    const milestoneId = c.req.query('milestoneId');
+    if (!taskId === !milestoneId) return c.json({ error: 'taskId oder milestoneId angeben.' }, 400);
+    const owner = taskId
+      ? ({ kind: 'task', id: taskId } as const)
+      : ({ kind: 'milestone', id: milestoneId as string } as const);
+    return c.json({ drawings: loadDrawings(ctx, owner) });
   });
 
   /* ---------------------------------------------------- Änderungs-Strom */
@@ -187,26 +191,32 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     });
   });
 
-  /* Zeichnungen hängen an einer Aufgabe, sind aber zu groß fürs Startpaket. */
+  /* Zeichnungen hängen an einer Aufgabe oder einem Milestone, sind aber zu groß fürs Startpaket. */
+
+  const drawingEvent = (d: unknown): ChangeEvent => {
+    const { taskId, milestoneId } = d as { taskId: string | null; milestoneId: string | null };
+    return { type: 'drawings', ownerId: (taskId ?? milestoneId) as string };
+  };
 
   app.post('/drawings', async (c) => {
     const body = drawingCreate.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
-    return run(c, bus, () => createDrawing(ctx, body.data.taskId, body.data.name), {
-      status: 201,
-      event: (d) => ({ type: 'drawings', taskId: (d as { taskId: string }).taskId }),
-    });
+    const { taskId, milestoneId, name } = body.data;
+    const owner = taskId
+      ? ({ kind: 'task', id: taskId } as const)
+      : ({ kind: 'milestone', id: milestoneId as string } as const);
+    return run(c, bus, () => createDrawing(ctx, owner, name), { status: 201, event: drawingEvent });
   });
 
   app.patch('/drawings/:id', async (c) => {
     const body = drawingPatch.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
     return run(c, bus, () => patchDrawing(ctx, c.req.param('id'), body.data.version, body.data.changes), {
-      event: (d) => ({ type: 'drawings', taskId: (d as { taskId: string }).taskId }),
+      event: drawingEvent,
     });
   });
 
-  // Mit der Zeichnung ändert sich auch die Beschreibung der Aufgabe.
+  // Mit der Zeichnung ändert sich auch die Beschreibung ihres Besitzers.
   app.delete('/drawings/:id', (c) =>
     run(c, bus, () => removeDrawing(ctx, c.req.param('id')), {
       event: () => ({ type: 'reload', reason: 'Zeichnung gelöscht' }),

@@ -950,7 +950,8 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
     const categories = owned('category');
     const groups = owned('"group"');
     const milestones = owned('milestone');
-    const milestoneIds = milestones.map((m) => m['id'] as string);
+    // Dazu der Milestone selbst: Protokoll und Zeichnungen gehen mit ihm und kommen mit ihm zurück.
+    const milestoneIds = [...milestones.map((m) => m['id'] as string), ...(kind === 'milestone' ? [id] : [])];
 
     const payload = {
       kind,
@@ -964,7 +965,10 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
       milestoneLog: milestoneIds.length ? rowsFor(ctx, 'milestone_log', 'milestone_id', milestoneIds) : [],
       tasks: taskIds.length ? rowsIn(ctx, 'task', taskIds) : [],
       tags: taskIds.length ? rowsFor(ctx, 'task_tag', 'task_id', taskIds) : [],
-      drawings: taskIds.length ? rowsFor(ctx, 'drawing', 'task_id', taskIds) : [],
+      drawings: [
+        ...(taskIds.length ? rowsFor(ctx, 'drawing', 'task_id', taskIds) : []),
+        ...(milestoneIds.length ? rowsFor(ctx, 'drawing', 'milestone_id', milestoneIds) : []),
+      ],
       deps: dependenciesFor(ctx, [...taskIds, ...milestoneIds, id]),
     };
 

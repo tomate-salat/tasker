@@ -18,7 +18,7 @@ export type ChangeEvent =
   | { type: 'reload'; reason: string }
   | { type: 'settings'; settings: Settings }
   /** Zeichnungen einer Aufgabe haben sich geändert (Name, Anzahl, Inhalt). */
-  | { type: 'drawings'; taskId: string };
+  | { type: 'drawings'; ownerId: string };
 
 /** Jede Nachricht sagt, von welchem Tab sie stammt – der eigene Hall wird übergangen. */
 export type Envelope = { id: number; origin: string | null; event: ChangeEvent };

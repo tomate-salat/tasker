@@ -388,8 +388,14 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   nichts Eigenes: die Rücknahme ist selbst eine Änderung und schreibt den heutigen Stand neu.
   Der Tag ist der Kalendertag in der Zeitzone des Servers – auf Railway `TZ=Europe/Berlin`
   setzen, sonst wechselt der Tag um 1 bzw. 2 Uhr nachts.
-- **Zeichnungen an Milestones.** Im Prototyp kann auch ein Milestone Zeichnungen haben; hier hängen
-  sie bisher nur an Aufgaben.
+- ~~**Zeichnungen an Milestones.**~~ **Erledigt.** `drawing` hat jetzt `task_id` oder
+  `milestone_id` (genau eins, als CHECK; Migration `0002_drawing_milestone`, die von Drizzle
+  erzeugte Kopierzeile las `milestone_id` aus der alten Tabelle und ist von Hand auf `NULL`
+  korrigiert). Der Milestone-Inspektor hat „+ Zeichnung“ und die Einbettung wie eine Aufgabe, die
+  Milestone-Zeile das Zeichnungs-Abzeichen (`drawingBadge(m)` im Prototyp). Löschen nimmt die
+  Einbettung aus der Beschreibung des Milestones, mit Rückgängig. Ein gelöschter Milestone nimmt
+  seine Zeichnungen und sein Burnup-Protokoll mit in den Papierkorb und bringt sie zurück (das
+  Protokoll ging vorher verloren). API: `?milestoneId=` bzw. `{ milestoneId }` statt `taskId`.
 
 #### Zweiter Abgleich (21.09.2026)
 
