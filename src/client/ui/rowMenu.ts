@@ -1,4 +1,12 @@
-import { isDone, TASK_STATUS, type Group, type Milestone, type Prio, type Task } from '@shared/model.js';
+import {
+  isDone,
+  TASK_STATUS,
+  type Group,
+  type Milestone,
+  type Prio,
+  type Project,
+  type Task,
+} from '@shared/model.js';
 import {
   doneInContainer,
   draftMilestones,
@@ -10,7 +18,15 @@ import {
 import { effectiveCategory } from '@shared/inherit.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
-import { addChild, addIn, addSibling, canMoveRow, moveRowBy, toBacklog } from './actions.js';
+import {
+  addChild,
+  addIn,
+  addSibling,
+  canMoveRow,
+  moveProjectBy,
+  moveRowBy,
+  toBacklog,
+} from './actions.js';
 import { MS_STATUS, STATUS_LABEL } from './icons.js';
 import type { MenuItem } from './Menu.js';
 
@@ -233,6 +249,62 @@ export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group
   ];
 }
 
+/** Die Farben des Prototyps (`PROJECT_COLORS`) mit ihren Namen. */
+export const PROJECT_COLORS: [string, string][] = [
+  ['#2A6B5A', 'Tannengrün'],
+  ['#3F63A8', 'Blau'],
+  ['#A8651A', 'Ocker'],
+  ['#7A4FA0', 'Violett'],
+  ['#B04A6A', 'Beere'],
+  ['#3E8A8A', 'Petrol'],
+  ['#6B7A2A', 'Oliv'],
+  ['#8A5A44', 'Braun'],
+];
+
+/** „⋯“ und Rechtsklick an einem Projekt in der Seitenleiste – `projMenu` im Prototyp. */
+export function projectMenu(ws: Workspace, p: Project): MenuItem[] {
+  const store = useStore.getState();
+  const i = ws.projects.indexOf(p);
+  const last = ws.projects.length <= 1;
+
+  return [
+    { label: 'Öffnen', onSelect: () => store.setScope(p.id) },
+    { label: 'Umbenennen', kbd: 'Doppelklick', onSelect: () => store.setEditProject(p.id) },
+    { label: 'Kategorien verwalten …', onSelect: () => store.openCategories(p.id) },
+    {
+      label: 'Farbe',
+      sub: PROJECT_COLORS.map(([color, name]) => ({
+        label: name,
+        check: p.color.toLowerCase() === color.toLowerCase(),
+        onSelect: () => void store.patch('project', p.id, { color }),
+      })),
+    },
+    { sep: true },
+    { label: 'Nach oben', disabled: i <= 0, onSelect: () => void moveProjectBy(ws, p, -1) },
+    {
+      label: 'Nach unten',
+      disabled: i >= ws.projects.length - 1,
+      onSelect: () => void moveProjectBy(ws, p, 1),
+    },
+    { sep: true },
+    {
+      label: 'Neuer Task im Backlog',
+      onSelect: () => {
+        store.setScope(p.id);
+        store.setView('backlog');
+        void addIn(p.id, {});
+      },
+    },
+    { sep: true },
+    {
+      label: 'Projekt in den Papierkorb',
+      danger: true,
+      disabled: last,
+      onSelect: () => void store.trashProject(p.id),
+    },
+  ];
+}
+
 /* ------------------------------------------------------------- Untermenüs */
 
 const statusSub = (t: Task): MenuItem[] =>
@@ -264,7 +336,8 @@ export function categorySub(ws: Workspace, t: Task): MenuItem[] {
       onSelect: () => void store.patch('task', t.id, { categoryId: c.id }),
     })),
     { sep: true },
-    { label: 'Kategorien verwalten …', onSelect: () => store.setDialog('categories') },
+    // Die Kategorien gehören zum Projekt der Aufgabe, auch unter „Alle Projekte“.
+    { label: 'Kategorien verwalten …', onSelect: () => store.openCategories(t.projectId) },
   ];
 }
 

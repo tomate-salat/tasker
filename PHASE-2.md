@@ -429,8 +429,19 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
 **Kopf und Seitenleiste**
 - Zusätzlicher Knopf „+ Aufgabe“ in Plan und Backlog (gibt es im Prototyp nicht); „+ Milestone“
   öffnet ein Eingabefeld statt den neuen Milestone gleich in der Liste zum Benennen.
-- Projekte: kein „⋯“-Menü (Öffnen, Umbenennen, Kategorien, Farbe, Nach oben/unten, Neuer Task,
-  Papierkorb), kein Rechtsklick, kein Doppelklick zum Umbenennen, kein Ziehen zum Sortieren.
+- ~~Projektmenü~~ **Erledigt.** „⋯“ und Rechtsklick am Projekt öffnen `projMenu` (Einträge und
+  Farbpalette 1:1 gegen den Prototyp verglichen); Doppelklick benennt in der Zeile um (Meldung mit
+  „Rückgängig“), „Nach oben/unten“ tauscht die Reihenfolge in einem Schritt-Paar, „Kategorien
+  verwalten …“ gilt dem gewählten Projekt (auch aus dem Kategorie-Menü einer Aufgabe), das letzte
+  Projekt lässt sich nicht löschen.
+  Dabei im Server gefunden: Ein gelöschtes Projekt nahm Kategorien, Gruppen und Milestones per
+  Kaskade mit, ohne sie in den Papierkorb zu legen – Wiederherstellen scheiterte am
+  Fremdschlüssel. Jetzt stecken sie samt Burnup-Verlauf und Milestone-Abhängigkeiten im Eintrag;
+  Aufgaben werden beim Wiederherstellen Eltern-zuerst eingefügt (nach einem Verschieben kann ein
+  Kind älter sein als sein Elternteil). Test: `ein gelöschtes Projekt kommt vollständig wieder`.
+- Projekte lassen sich nicht zum Sortieren ziehen (gehört zu Ziehen und Ablegen).
+- „+ Neues Projekt“ ist im Prototyp ein gestricheltes Eingabefeld, hier ein Knopf, der erst zum
+  Feld wird.
 - Filterleiste ohne „Gefiltert:“ und ohne Farbfeld der Kategorie.
 - Zähler in Doku und Archiv zählen alles statt nur die Doku-Seiten bzw. das Archivierte.
 
@@ -439,6 +450,10 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   Kategorie, Markierung und Labels.
 - Der Inhalts-Editor übernimmt beim Verlassen des Feldes nicht (Prototyp: Fokus weg = fertig).
 - Trefferliste der Abhängigkeiten nicht mit Pfeiltasten wählbar.
+- Zeichnungen lassen sich nicht löschen (vom Nutzer gemeldet). Server und `useDrawings().remove`
+  können es, aber nichts ruft es auf. Im Prototyp sitzt „Löschen“ in der Leiste des
+  Zeichen-Editors; dabei verschwindet auch `![[zeichnung:Name]]` aus der Beschreibung, und die
+  Meldung bietet „Rückgängig“ an – beides fehlt hier.
 
 **Archiv und Papierkorb**
 - Archiv: keine Monatsüberschriften, keine Herkunft („aus dem Plan · 3 Tasks“), kein Aufklappen der
@@ -453,8 +468,8 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   verlor den Fokus, `onBlur` rief `commit` ein zweites Mal. Jetzt sperrt ein Ref den zweiten Aufruf.
 - ~~Aufgaben der obersten Ebene lassen sich nicht zuklappen~~ **Erledigt** mit der Tiefe (0 → 1):
   Der Pfeil lag unter der absolut liegenden Prioritätsspalte, die den Klick abfing.
-- Ein Projekt lässt sich nicht löschen: Der Server kann es, die Oberfläche bietet es nirgends an
-  (gehört zum fehlenden Projektmenü).
+- ~~Ein Projekt lässt sich nicht löschen~~ **Erledigt** mit dem Projektmenü (siehe Kopf und
+  Seitenleiste).
 
 **Meldungen und Hilfe**
 - Meldungen mit „Anzeigen“ (nach Anlegen außerhalb der Sicht, Wiederherstellen, In den Plan) fehlen.

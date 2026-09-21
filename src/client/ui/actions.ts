@@ -1,4 +1,4 @@
-import type { Group, Milestone, Task } from '@shared/model.js';
+import type { Group, Milestone, Project, Task } from '@shared/model.js';
 import {
   container,
   draftMilestones,
@@ -106,6 +106,19 @@ export async function moveRowBy(
     [
       { op: 'patch', kind, id: item.id, version: item.version, changes: { [key]: value(other) } },
       { op: 'patch', kind, id: other.id, version: other.version, changes: { [key]: value(item) } },
+    ],
+    () => 'Verschoben',
+  );
+}
+
+/** Projekt in der Seitenleiste eine Stelle nach oben oder unten – ein Schritt-Paar. */
+export async function moveProjectBy(ws: Workspace, p: Project, delta: 1 | -1): Promise<void> {
+  const other = ws.projects[ws.projects.indexOf(p) + delta];
+  if (!other) return;
+  await useStore.getState().runSteps(
+    [
+      { op: 'patch', kind: 'project', id: p.id, version: p.version, changes: { order: other.order } },
+      { op: 'patch', kind: 'project', id: other.id, version: other.version, changes: { order: p.order } },
     ],
     () => 'Verschoben',
   );

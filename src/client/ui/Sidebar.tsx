@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
@@ -5,7 +6,9 @@ import type { Account } from '../api.js';
 import { currentProjectId, useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import { SIDE_ICON, THEME_ICON, THEME_LABEL } from './icons.js';
+import { useMenu } from './Menu.js';
 import { NewThing } from './NewThing.js';
+import { projectMenu } from './rowMenu.js';
 
 /**
  * Die Seitenleiste, Aufbau und Verhalten wie im Prototyp: Projekte mit „Alle
@@ -31,6 +34,7 @@ export function Sidebar({
   onHelp: () => void;
 }) {
   const state = useStore();
+  const menu = useMenu();
   const { scope, setScope, filter, setFilter, view, setView, settings, cycleTheme, toggleSide } =
     state;
   const projectId = currentProjectId(state);
@@ -103,19 +107,39 @@ export function Sidebar({
           <span className="n">{ws.projects.reduce((n, p) => n + openOf(p.id), 0)}</span>
         </button>
 
-        {ws.projects.map((p) => (
-          <div className="nav-row" key={p.id}>
-            <button
-              className={`nav-i ${scope === p.id ? 'on' : ''}`}
-              onClick={() => setScope(p.id)}
-              title="Offene Aufgaben"
-            >
-              <span className="dot" style={{ background: p.color }} />
-              <span>{p.name}</span>
-              <span className="n">{openOf(p.id)}</span>
-            </button>
-          </div>
-        ))}
+        {ws.projects.map((p) =>
+          state.editProject === p.id ? (
+            <div className="nav-row" key={p.id}>
+              <ProjectNameEdit id={p.id} name={p.name} />
+            </div>
+          ) : (
+            <div className="nav-row" key={p.id}>
+              <button
+                className={`nav-i ${scope === p.id ? 'on' : ''}`}
+                onClick={() => setScope(p.id)}
+                onDoubleClick={() => state.setEditProject(p.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  menu.openAtPoint(e.clientX, e.clientY, projectMenu(ws, p));
+                }}
+                title="Offene Aufgaben"
+              >
+                <span className="dot" style={{ background: p.color }} />
+                <span>{p.name}</span>
+                <span className="n">{openOf(p.id)}</span>
+              </button>
+              <button
+                className="nav-more"
+                title="Projekt bearbeiten"
+                aria-label={`Projekt ${p.name} bearbeiten`}
+                aria-haspopup="menu"
+                onClick={(e) => menu.openAt(e.currentTarget, () => projectMenu(ws, p))}
+              >
+                ⋯
+              </button>
+            </div>
+          ),
+        )}
 
         <NewThing
           label="+ Neues Projekt"
@@ -216,6 +240,46 @@ export function Sidebar({
           Papierkorb{trashCount ? ` (${trashCount})` : ''}
         </button>
       </div>
+      {menu.node}
     </nav>
+  );
+}
+
+/** Der Projektname als Feld in der Zeile: Enter übernimmt, Escape bricht ab. */
+function ProjectNameEdit({ id, name }: { id: string; name: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+
+  const finish = (value: string, cancel = false): void => {
+    if (done.current) return;
+    done.current = true;
+    const store = useStore.getState();
+    if (cancel) store.setEditProject(null);
+    else void store.renameProject(id, value);
+  };
+
+  return (
+    <input
+      ref={ref}
+      className="new-proj proj-edit"
+      defaultValue={name}
+      aria-label="Projektname"
+      autoComplete="off"
+      onBlur={(e) => finish(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish(e.currentTarget.value);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          finish('', true);
+        }
+      }}
+    />
   );
 }

@@ -139,7 +139,7 @@ function Shell({
           ws={ws}
           account={account}
           onProfile={() => setDialog('profile')}
-          onManageCategories={() => setDialog('categories')}
+          onManageCategories={() => state.openCategories()}
           onManageMarks={() => setDialog('marks')}
           onHelp={() => setDialog('help')}
         />
@@ -219,7 +219,11 @@ function Shell({
         <BulkBar ws={ws} />
 
         {dialog === 'categories' && (
-          <CategoriesDialog ws={ws} projectId={projectId} onClose={() => setDialog('none')} />
+          <CategoriesDialog
+            ws={ws}
+            projectId={(state.catProject && ws.project(state.catProject)?.id) || projectId}
+            onClose={() => setDialog('none')}
+          />
         )}
         {dialog === 'marks' && <MarksDialog ws={ws} onClose={() => setDialog('none')} />}
         {dialog === 'profile' && (

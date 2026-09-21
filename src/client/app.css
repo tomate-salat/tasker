@@ -162,6 +162,72 @@
   position: relative;
 }
 
+/* „⋯“ am Projekt: erscheint beim Überfahren und verdeckt dann den Zähler. */
+.nav-more {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nav-row:hover .nav-more,
+.nav-more:focus-visible {
+  opacity: 1;
+}
+
+.nav-row:hover .nav-i .n {
+  visibility: hidden;
+}
+
+.nav-more:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+@media (hover: none) {
+  .nav-more {
+    opacity: 1;
+  }
+
+  .nav-i .n {
+    margin-right: 22px;
+  }
+}
+
+.new-proj {
+  margin-top: 4px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: transparent;
+}
+
+.new-proj:focus {
+  border-style: solid;
+  border-color: var(--accent);
+  outline: none;
+  background: var(--surface);
+}
+
+.proj-edit {
+  margin: 0;
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
 .dot.all {
   background: conic-gradient(#2a6b5a 0 33%, #3f63a8 0 66%, #a8651a 0);
 }

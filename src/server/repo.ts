@@ -800,13 +800,26 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
           ? projectTaskIds(ctx, id)
           : [];
 
+    // Ein Projekt besitzt Kategorien, Gruppen und Milestones; die Datenbank
+    // löscht sie mit, also müssen sie mit in den Eintrag.
+    const owned = (table: string): Record<string, unknown>[] =>
+      kind === 'project' ? rowsFor(ctx, table, 'project_id', [id]) as Record<string, unknown>[] : [];
+    const categories = owned('category');
+    const groups = owned('"group"');
+    const milestones = owned('milestone');
+    const milestoneIds = milestones.map((m) => m['id'] as string);
+
     const payload = {
       kind,
       row,
+      categories,
+      groups,
+      milestones,
+      milestoneLog: milestoneIds.length ? rowsFor(ctx, 'milestone_log', 'milestone_id', milestoneIds) : [],
       tasks: taskIds.length ? rowsIn(ctx, 'task', taskIds) : [],
       tags: taskIds.length ? rowsFor(ctx, 'task_tag', 'task_id', taskIds) : [],
       drawings: taskIds.length ? rowsFor(ctx, 'drawing', 'task_id', taskIds) : [],
-      deps: dependenciesFor(ctx, [...taskIds, id]),
+      deps: dependenciesFor(ctx, [...taskIds, ...milestoneIds, id]),
     };
 
     const trashId = newId('x');
@@ -870,6 +883,11 @@ export function loadTrash(ctx: DbCtx): TrashEntry[] {
 type TrashPayload = {
   kind: Kind;
   row: Record<string, unknown>;
+  /** Nur bei einem Projekt; ältere Einträge haben sie nicht. */
+  categories?: Record<string, unknown>[];
+  groups?: Record<string, unknown>[];
+  milestones?: Record<string, unknown>[];
+  milestoneLog?: Record<string, unknown>[];
   tasks: Record<string, unknown>[];
   tags: Record<string, unknown>[];
   drawings: Record<string, unknown>[];
@@ -886,7 +904,12 @@ export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } 
 
     const p = JSON.parse(entry.payload) as TrashPayload;
     insertRows(ctx, TABLE[p.kind], [p.row]);
-    insertRows(ctx, 'task', p.tasks);
+    // Erst was das Projekt besitzt, dann die Aufgaben, die darauf zeigen.
+    insertRows(ctx, 'category', p.categories ?? []);
+    insertRows(ctx, '"group"', p.groups ?? []);
+    insertRows(ctx, 'milestone', p.milestones ?? []);
+    insertRows(ctx, 'milestone_log', p.milestoneLog ?? []);
+    insertRows(ctx, 'task', parentsFirst(p.tasks));
     insertRows(ctx, 'task_tag', p.tags);
     insertRows(ctx, 'drawing', p.drawings);
     insertRows(ctx, 'dependency', p.deps);
@@ -901,6 +924,27 @@ export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } 
     ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
     return { restored: p.tasks.length || 1 };
   })();
+}
+
+/**
+ * Aufgaben so ordnen, dass jede nach ihrem Elternteil kommt – der Fremdschlüssel
+ * prüft sofort. Die Tabellenreihenfolge taugt nicht: nach einem Verschieben
+ * kann ein Kind älter sein als sein neuer Elternteil.
+ */
+function parentsFirst(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const byId = new Map(rows.map((r) => [r['id'] as string, r]));
+  const out: Record<string, unknown>[] = [];
+  const placed = new Set<string>();
+  const place = (r: Record<string, unknown>): void => {
+    const id = r['id'] as string;
+    if (placed.has(id)) return;
+    placed.add(id);
+    const parent = byId.get(r['parent_id'] as string);
+    if (parent) place(parent);
+    out.push(r);
+  };
+  rows.forEach(place);
+  return out;
 }
 
 export function purgeTrash(ctx: DbCtx, trashId: string): void {

@@ -133,6 +133,15 @@ type State = {
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
   addTask: (input: Record<string, unknown>) => Promise<string | null>;
   addProject: (name: string) => Promise<void>;
+  /** Projekt, dessen Name gerade in der Seitenleiste bearbeitet wird. */
+  editProject: string | null;
+  setEditProject: (id: string | null) => void;
+  renameProject: (id: string, name: string) => Promise<void>;
+  /** Wie im Prototyp: das letzte Projekt bleibt. */
+  trashProject: (id: string) => Promise<void>;
+  /** Für welches Projekt der Kategorien-Dialog gilt; ohne Angabe das aktuelle. */
+  catProject: string | null;
+  openCategories: (projectId?: string) => void;
   /** Ohne Angabe ein eingeplanter Milestone im aktuellen Projekt. Gibt die ID zurück. */
   addMilestone: (
     title: string,
@@ -547,6 +556,53 @@ export const useStore = create<State>((set, get) => ({
       set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
     }
   },
+
+  editProject: null,
+  setEditProject: (editProject) => set({ editProject }),
+
+  renameProject: async (id, name) => {
+    set({ editProject: null });
+    const before = get().ws?.project(id)?.name;
+    const next = name.trim();
+    if (!next || next === before) return;
+    await get().patch('project', id, { name: next });
+    // Nur melden, wenn es geklappt hat – sonst steht dort schon der Fehler.
+    if (get().ws?.project(id)?.name === next) {
+      set({ toast: `Projekt heißt jetzt „${next}“`, toastUndo: true });
+    }
+  },
+
+  trashProject: async (id) => {
+    const { ws } = get();
+    const p = ws?.project(id);
+    if (!ws || !p) return;
+    if (ws.projects.length <= 1) {
+      set({ toast: 'Das letzte Projekt kann nicht gelöscht werden', toastUndo: false });
+      return;
+    }
+    try {
+      const { trashId } = await api.remove('project', id);
+      const entry = (await api.trash()).entries.find((e) => e.id === trashId);
+      const rest = ws.projects.filter((x) => x.id !== id);
+      const fallback = rest[0]?.id ?? 'all';
+      if (get().scope === id) get().setScope(fallback);
+      if (get().lastProject === id) set({ lastProject: fallback === 'all' ? null : fallback });
+      await get().load();
+      if (get().selected && !get().ws?.task(get().selected) && !get().ws?.milestone(get().selected)) {
+        set({ selected: null });
+      }
+      set({ trash: null });
+      const n = entry?.taskCount ?? 0;
+      remember(`Projekt „${p.name}“ mit ${n} ${n === 1 ? 'Task' : 'Tasks'} im Papierkorb`, [
+        { op: 'untrash', trashId },
+      ]);
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  catProject: null,
+  openCategories: (projectId) => set({ catProject: projectId ?? null, dialog: 'categories' }),
 
   addMilestone: async (title, o) => {
     const projectId = o?.projectId ?? currentProjectId(get());

@@ -21,6 +21,7 @@ import {
   patch,
   remove,
   restore,
+  restoreTrash,
 } from './repo.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tasker-test-'));
@@ -468,6 +469,48 @@ describe('Löschen', () => {
     remove(ctx, 'milestone', m.id);
 
     assert.deepEqual(active(), [a.id]);
+    assert.deepEqual(hiddenMismatches(ctx), []);
+  });
+
+  /**
+   * Ein Projekt besitzt Kategorien, Gruppen und Milestones – sie gehen mit in
+   * den Papierkorb und kommen beim Wiederherstellen samt Zuordnung zurück.
+   */
+  it('ein gelöschtes Projekt kommt vollständig wieder', () => {
+    const p = mkProject();
+    const other = create(ctx, 'project', { name: 'Website' }) as { id: string };
+    const c = create(ctx, 'category', { projectId: p.id, name: 'Technik' }) as { id: string };
+    const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
+    const m = mkMilestone({ projectId: p.id, title: 'M', planned: true });
+    const m2 = mkMilestone({ projectId: p.id, title: 'M2', planned: true });
+    patch(ctx, 'milestone', m2.id, 1, { deps: [m.id] });
+    const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
+    const kind = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
+    patch(ctx, 'task', kind.id, 1, { categoryId: c.id, tags: ['code'] });
+    const b = mkTask({ projectId: p.id, title: 'B', groupId: g.id });
+    // Das Kind wird zur Wurzel und B sein Elternteil: das Kind liegt dann vor B in der Tabelle.
+    move(ctx, kind.id, 2, { parentId: b.id });
+    const x = mkTask({ projectId: other.id, title: 'X' });
+    patch(ctx, 'task', x.id, 1, { deps: [a.id] });
+
+    const { trashId } = remove(ctx, 'project', p.id);
+    const empty = loadBootstrap(ctx);
+    assert.deepEqual(empty.projects.map((q) => q.id), [other.id]);
+    assert.deepEqual(empty.milestones, []);
+
+    restoreTrash(ctx, trashId);
+    const boot = loadBootstrap(ctx);
+    assert.deepEqual(boot.projects.map((q) => q.id).sort(), [p.id, other.id].sort());
+    assert.deepEqual(boot.categories.map((q) => q.id), [c.id]);
+    assert.deepEqual(boot.groups.map((q) => q.id), [g.id]);
+    assert.deepEqual(boot.milestones.map((q) => q.id).sort(), [m.id, m2.id].sort());
+    assert.deepEqual(boot.milestones.find((q) => q.id === m2.id)?.deps, [m.id]);
+    assert.equal(one(a.id).milestoneId, m.id);
+    assert.equal(one(b.id).groupId, g.id);
+    assert.equal(one(kind.id).parentId, b.id);
+    assert.equal(one(kind.id).categoryId, c.id);
+    assert.deepEqual(one(kind.id).tags, ['code']);
+    assert.deepEqual(one(x.id).deps, [a.id]);
     assert.deepEqual(hiddenMismatches(ctx), []);
   });
 
