@@ -1,3 +1,4 @@
+import type { Step, Undoable } from '../shared/api.js';
 import type { DbCtx } from './db.js';
 import { newId } from './ids.js';
 import { Conflict, NotFound } from './repo.js';
@@ -131,15 +132,55 @@ export function patchDrawing(
   })();
 }
 
-/** Gibt die Aufgabe mit zurück, damit der Änderungs-Strom sie nennen kann. */
-export function removeDrawing(ctx: DbCtx, id: string): { ok: true; taskId: string } {
-  const row = ctx.sqlite.prepare('SELECT task_id FROM drawing WHERE id = ?').get(id) as
-    | { task_id: string }
-    | undefined;
-  if (!row) throw new NotFound();
-  ctx.sqlite.prepare('DELETE FROM drawing WHERE id = ?').run(id);
-  return { ok: true, taskId: row.task_id };
+/**
+ * Wie im Prototyp verschwindet mit der Zeichnung auch `![[zeichnung:Name]]` aus
+ * der Beschreibung. Damit „Rückgängig“ sie zurückholen kann, liegt sie danach
+ * als Papierkorb-Eintrag vor – der erscheint aber nicht in der Papierkorb-Liste
+ * (im Prototyp gibt es gelöschte Zeichnungen dort auch nicht) und läuft mit der
+ * üblichen Frist ab.
+ *
+ * Gibt die Aufgabe mit zurück, damit der Änderungs-Strom sie nennen kann.
+ */
+export function removeDrawing(ctx: DbCtx, id: string): Undoable & { taskId: string } {
+  return ctx.sqlite.transaction(() => {
+    const row = ctx.sqlite.prepare('SELECT * FROM drawing WHERE id = ?').get(id) as Row | undefined;
+    if (!row) throw new NotFound();
+    const task = ctx.sqlite.prepare('SELECT "desc", project_id FROM task WHERE id = ?').get(row.task_id) as {
+      desc: string;
+      project_id: string;
+    };
+
+    const trashId = newId('x');
+    ctx.sqlite
+      .prepare(
+        `INSERT INTO trash (id, kind, title, project_id, payload, deleted_at)
+         VALUES (?, 'drawing', ?, ?, ?, ?)`,
+      )
+      .run(trashId, row.name, task.project_id, JSON.stringify({ kind: 'drawing', row, tasks: [] }), nowIso());
+    ctx.sqlite.prepare('DELETE FROM drawing WHERE id = ?').run(id);
+
+    const undo: Step[] = [{ op: 'untrash', trashId }];
+    if (task.desc.includes(`![[zeichnung:${row.name}]]`)) {
+      const desc = stripEmbed(task.desc, row.name);
+      ctx.sqlite
+        .prepare('UPDATE task SET "desc" = ?, updated_at = ?, version = version + 1 WHERE id = ?')
+        .run(desc, nowIso(), row.task_id);
+      const { version } = ctx.sqlite.prepare('SELECT version FROM task WHERE id = ?').get(row.task_id) as {
+        version: number;
+      };
+      undo.push({ op: 'patch', kind: 'task', id: row.task_id, version, changes: { desc: task.desc } });
+    }
+    return { count: 1, undo, taskId: row.task_id };
+  })();
 }
+
+/** Nimmt die Einbettung heraus, wie der Prototyp: ohne Lücke von Leerzeilen. */
+export const stripEmbed = (desc: string, name: string): string =>
+  desc
+    .split(`![[zeichnung:${name}]]`)
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 
 function readDrawing(ctx: DbCtx, id: string): Drawing {
   const row = ctx.sqlite.prepare('SELECT * FROM drawing WHERE id = ?').get(id) as Row | undefined;

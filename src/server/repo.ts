@@ -867,7 +867,8 @@ export const TRASH_DAYS = 30;
 
 export function loadTrash(ctx: DbCtx): TrashEntry[] {
   const rows = ctx.sqlite
-    .prepare('SELECT * FROM trash ORDER BY deleted_at DESC')
+    // Gelöschte Zeichnungen liegen nur für „Rückgängig“ hier (siehe removeDrawing).
+    .prepare("SELECT * FROM trash WHERE kind != 'drawing' ORDER BY deleted_at DESC")
     .all() as { id: string; kind: string; title: string; project_id: string | null; deleted_at: string; payload: string }[];
 
   return rows.map((r) => ({
@@ -881,7 +882,7 @@ export function loadTrash(ctx: DbCtx): TrashEntry[] {
 }
 
 type TrashPayload = {
-  kind: Kind;
+  kind: Kind | 'drawing';
   row: Record<string, unknown>;
   /** Nur bei einem Projekt; ältere Einträge haben sie nicht. */
   categories?: Record<string, unknown>[];
@@ -889,9 +890,10 @@ type TrashPayload = {
   milestones?: Record<string, unknown>[];
   milestoneLog?: Record<string, unknown>[];
   tasks: Record<string, unknown>[];
-  tags: Record<string, unknown>[];
-  drawings: Record<string, unknown>[];
-  deps: Record<string, unknown>[];
+  /** Fehlen bei einer gelöschten Zeichnung. */
+  tags?: Record<string, unknown>[];
+  drawings?: Record<string, unknown>[];
+  deps?: Record<string, unknown>[];
 };
 
 /** Schreibt einen Papierkorb-Eintrag samt allem, was daran hing, zurück. */
@@ -903,16 +905,16 @@ export function restoreTrash(ctx: DbCtx, trashId: string): { restored: number } 
     if (!entry) throw new NotFound();
 
     const p = JSON.parse(entry.payload) as TrashPayload;
-    insertRows(ctx, TABLE[p.kind], [p.row]);
+    insertRows(ctx, p.kind === 'drawing' ? 'drawing' : TABLE[p.kind], [p.row]);
     // Erst was das Projekt besitzt, dann die Aufgaben, die darauf zeigen.
     insertRows(ctx, 'category', p.categories ?? []);
     insertRows(ctx, '"group"', p.groups ?? []);
     insertRows(ctx, 'milestone', p.milestones ?? []);
     insertRows(ctx, 'milestone_log', p.milestoneLog ?? []);
     insertRows(ctx, 'task', parentsFirst(p.tasks));
-    insertRows(ctx, 'task_tag', p.tags);
-    insertRows(ctx, 'drawing', p.drawings);
-    insertRows(ctx, 'dependency', p.deps);
+    insertRows(ctx, 'task_tag', p.tags ?? []);
+    insertRows(ctx, 'drawing', p.drawings ?? []);
+    insertRows(ctx, 'dependency', p.deps ?? []);
 
     // Verweise, deren Gegenstück inzwischen fehlt, fallen wieder raus.
     pruneDependencies(ctx);

@@ -34,6 +34,7 @@ const dark = (): boolean =>
 export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose: () => void }) {
   const say = useStore((s) => s.say);
   const reload = useStore((s) => s.load);
+  const removeDrawing = useStore((s) => s.removeDrawing);
   const [name, setName] = useState(drawing.name);
   const [saving, setSaving] = useState(false);
 
@@ -79,6 +80,17 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
     onClose();
   }
 
+  /**
+   * Wie im Prototyp ohne Rückfrage – die Meldung bietet „Rückgängig“ an.
+   * Was noch nicht gespeichert war, wird vorher gesichert, damit es beim
+   * Zurückholen nicht fehlt.
+   */
+  async function remove(): Promise<void> {
+    await flush();
+    onClose();
+    await removeDrawing(drawing.id, drawing.name);
+  }
+
   return (
     <div className="draw-modal" role="dialog" aria-label="Zeichnung bearbeiten">
       <header className="draw-head">
@@ -89,6 +101,9 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
           onChange={(e) => setName(e.target.value)}
         />
         <span className="muted small">{saving ? 'Speichert …' : 'Gespeichert'}</span>
+        <button className="danger" onClick={() => void remove()}>
+          Löschen
+        </button>
         <button className="btn" onClick={() => void close()}>
           Fertig
         </button>

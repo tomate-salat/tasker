@@ -14,7 +14,6 @@ export type DrawingsApi = {
   open: (d: Drawing) => void;
   /** Legt eine Zeichnung an, bindet sie in die Beschreibung ein und öffnet sie. */
   add: () => Promise<void>;
-  remove: (id: string) => Promise<void>;
   /** Der Editor – gehört an eine Stelle, die nicht mitscrollt. */
   editor: React.ReactNode;
 };
@@ -68,22 +67,11 @@ export function useDrawings(taskId: string | null, desc: string): DrawingsApi {
     }
   }
 
-  async function remove(id: string): Promise<void> {
-    try {
-      await api.deleteDrawing(id);
-      await load();
-      say('Zeichnung gelöscht');
-    } catch (e) {
-      say(e instanceof Error ? e.message : 'Löschen fehlgeschlagen');
-    }
-  }
-
   return {
     list,
     busy,
     open: setOpen,
     add,
-    remove,
     editor: open ? <DrawingEditor drawing={open} onClose={() => setOpen(null)} /> : null,
   };
 }

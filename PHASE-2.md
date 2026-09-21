@@ -414,6 +414,10 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   in `actions.ts`.
 - Milestones und Gruppen lassen sich nicht ziehen; Aufgaben nicht auf die Reiter (Backlog, Doku,
   Archiv) und nicht auf ein Projekt in der Seitenleiste.
+- **Neu, über den Prototyp hinaus (Wunsch des Nutzers):** Zieht man eine Zeile, die zu einer
+  Mehrfachauswahl gehört, wandern alle ausgewählten mit – an die neue Stelle ebenso wie unter
+  einen neuen Elternteil. Im Prototyp zieht man immer nur die eine Zeile (`dragstart` nimmt
+  `dataset.id`). Gehört zu Ziehen und Ablegen.
 - Klick auf eine Gruppenzeile klappt im Prototyp auf/zu; Doppelklick auf den Gruppennamen benennt um.
 - Das Zeichnungs-Abzeichen öffnet im Prototyp direkt die Zeichnung, hier nur die Aufgabe.
 - ~~Status auf Englisch~~ **Erledigt** (Tooltip und Vorschau der Schnell-Erfassung).
@@ -450,10 +454,13 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
   Kategorie, Markierung und Labels.
 - Der Inhalts-Editor übernimmt beim Verlassen des Feldes nicht (Prototyp: Fokus weg = fertig).
 - Trefferliste der Abhängigkeiten nicht mit Pfeiltasten wählbar.
-- Zeichnungen lassen sich nicht löschen (vom Nutzer gemeldet). Server und `useDrawings().remove`
-  können es, aber nichts ruft es auf. Im Prototyp sitzt „Löschen“ in der Leiste des
-  Zeichen-Editors; dabei verschwindet auch `![[zeichnung:Name]]` aus der Beschreibung, und die
-  Meldung bietet „Rückgängig“ an – beides fehlt hier.
+- ~~Zeichnungen lassen sich nicht löschen~~ **Erledigt** (vom Nutzer gemeldet). „Löschen“ sitzt
+  wie im Prototyp in der Leiste des Zeichen-Editors, ohne Rückfrage. Der Server nimmt dabei
+  `![[zeichnung:Name]]` aus der Beschreibung (Leerzeilen zusammengezogen wie im Prototyp) und legt
+  die Zeichnung als Papierkorb-Eintrag der Art `drawing` ab; der erscheint nicht in der
+  Papierkorb-Liste, dient nur „Rückgängig“ (`untrash` plus die alte Beschreibung) und läuft mit
+  der üblichen Frist ab. Das nie aufgerufene `useDrawings().remove` ist weg. Test: `eine gelöschte
+  Zeichnung verlässt die Beschreibung und kommt mit Rückgängig wieder`.
 
 **Archiv und Papierkorb**
 - Archiv: keine Monatsüberschriften, keine Herkunft („aus dem Plan · 3 Tasks“), kein Aufklappen der

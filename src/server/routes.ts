@@ -189,9 +189,10 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     });
   });
 
+  // Mit der Zeichnung ändert sich auch die Beschreibung der Aufgabe.
   app.delete('/drawings/:id', (c) =>
     run(c, bus, () => removeDrawing(ctx, c.req.param('id')), {
-      event: (d) => ({ type: 'drawings', taskId: (d as { taskId: string }).taskId }),
+      event: () => ({ type: 'reload', reason: 'Zeichnung gelöscht' }),
     }),
   );
 

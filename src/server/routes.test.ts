@@ -169,6 +169,44 @@ describe('Routen', () => {
     assert.equal((await send('DELETE', `/drawings/${d.id}`)).status, 404);
   });
 
+  it('eine gelöschte Zeichnung verlässt die Beschreibung und kommt mit Rückgängig wieder', async () => {
+    const p = await mk('project', { name: 'P' });
+    const t = await mk('task', { projectId: p.id, title: 'Mit Skizze' });
+    const d = (await send('POST', '/drawings', { taskId: t.id, name: 'Ablauf' })).body as {
+      id: string;
+      version: number;
+    };
+    const scene = { elements: [{ type: 'rectangle', id: 'a' }] };
+    await send('PATCH', `/drawings/${d.id}`, { version: d.version, changes: { scene } });
+    const desc = 'Vorher\n\n![[zeichnung:Ablauf]]\n\nNachher';
+    const withDesc = (await send('PATCH', `/kind/task/${t.id}`, { version: 1, changes: { desc } })).body as {
+      version: number;
+    };
+    assert.ok(withDesc.version);
+
+    const del = await send('DELETE', `/drawings/${d.id}`);
+    assert.equal(del.status, 200);
+    const { undo } = del.body as { undo: unknown[] };
+
+    const task = async () =>
+      ((await send('GET', '/bootstrap')).body as { tasks: { id: string; desc: string }[] }).tasks.find(
+        (x) => x.id === t.id,
+      );
+    assert.equal((await task())?.desc, 'Vorher\n\nNachher');
+    // Im Papierkorb taucht sie nicht auf – sie liegt dort nur für die Rücknahme.
+    assert.deepEqual((await send('GET', '/trash')).body, { entries: [], days: 30 });
+
+    assert.equal((await send('POST', '/steps', { steps: undo })).status, 200);
+    assert.equal((await task())?.desc, desc);
+    const back = (await send('GET', `/drawings?taskId=${t.id}`)).body as {
+      drawings: { id: string; name: string; scene: unknown }[];
+    };
+    assert.deepEqual(
+      back.drawings.map((x) => [x.id, x.name, x.scene]),
+      [[d.id, 'Ablauf', scene]],
+    );
+  });
+
   it('meldet jede Änderung im Strom und nennt den schreibenden Tab', async () => {
     const p = await mk('project', { name: 'P' });
     seen.length = 0;

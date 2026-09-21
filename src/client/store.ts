@@ -154,6 +154,8 @@ type State = {
   moveTask: (id: string, target: Record<string, unknown>) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
   remove: (kind: Kind, id: string) => Promise<void>;
+  /** Nimmt auch die Einbettung aus der Beschreibung, mit „Rückgängig“. */
+  removeDrawing: (id: string, name: string) => Promise<void>;
 
   /** Eine Änderung aus einem anderen Tab oder Gerät einspielen. */
   applyEvent: (event: ChangeEvent) => void;
@@ -699,6 +701,16 @@ export const useStore = create<State>((set, get) => ({
       await get().load();
       set({ trash: null });
       remember(REMOVED[kind] ?? 'In den Papierkorb gelegt', [{ op: 'untrash', trashId }]);
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  removeDrawing: async (id, name) => {
+    try {
+      const { undo } = await api.deleteDrawing(id);
+      await get().load();
+      remember(`Zeichnung „${name}“ gelöscht`, undo);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }

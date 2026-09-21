@@ -144,7 +144,7 @@ export const api = {
       body: JSON.stringify({ version, changes }),
     }),
 
-  deleteDrawing: (id: string) => request<{ ok: true }>(`/api/drawings/${id}`, { method: 'DELETE' }),
+  deleteDrawing: (id: string) => request<Undoable>(`/api/drawings/${id}`, { method: 'DELETE' }),
 
   settings: () => request<Settings>('/api/settings'),
 

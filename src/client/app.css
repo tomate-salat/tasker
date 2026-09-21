@@ -2640,6 +2640,22 @@ button.prop:hover {
   outline: none;
 }
 
+/* „Löschen“ in der Leiste, wie `.danger` im Prototyp. */
+.draw-head .danger {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--p1);
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+.draw-head .danger:hover {
+  background: var(--warn-soft);
+}
+
 .draw-canvas {
   flex: 1;
   min-height: 0;
