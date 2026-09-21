@@ -3,7 +3,7 @@ import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Project, type Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
-import { currentProjectId, useStore } from '../store.js';
+import { archiveWorkspace, currentProjectId, useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useZone } from './dnd.js';
 import { SIDE_ICON, THEME_ICON, THEME_LABEL } from './icons.js';
@@ -41,14 +41,20 @@ export function Sidebar({
   const projectId = currentProjectId(state);
 
   const inScope = (t: Task): boolean => scope === 'all' || t.projectId === scope;
+  // Im Archiv zählt, was dort geladen ist – dafür braucht es die archivierten Aufgaben.
+  const vws = (view === 'archive' && archiveWorkspace(state)) || ws;
   const inView = (t: Task): boolean => {
-    if (!ws.isActive(t) || ws.isDoc(t)) return false;
     if (!inScope(t)) return false;
+    // Wie im Prototyp zählt jede Ansicht, was auf ihr steht: das Archiv das
+    // Archivierte, die Doku ihre Seiten.
+    if (view === 'archive') return !vws.isActive(t);
+    if (view === 'docs') return ws.isActive(t) && ws.isDoc(t);
+    if (!ws.isActive(t) || ws.isDoc(t)) return false;
     const inPlan = !!ws.milestoneOf(t)?.planned;
     return view === 'plan' ? inPlan : view === 'backlog' ? !inPlan : true;
   };
 
-  const viewTasks = ws.tasks.filter(inView);
+  const viewTasks = vws.tasks.filter(inView);
   const countBy = (f: (t: Task) => boolean): number => viewTasks.filter(f).length;
   const openOf = (pid: string): number =>
     ws.tasks.filter(
@@ -61,7 +67,7 @@ export function Sidebar({
     if (inScope(t) && ws.isActive(t)) for (const g of t.tags) if (!tagCount.has(g)) tagCount.set(g, 0);
   }
   for (const t of viewTasks) {
-    for (const g of effectiveTags(ws, t).tags) tagCount.set(g, (tagCount.get(g) ?? 0) + 1);
+    for (const g of effectiveTags(vws, t).tags) tagCount.set(g, (tagCount.get(g) ?? 0) + 1);
   }
   const tags = [...tagCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 
@@ -156,7 +162,7 @@ export function Sidebar({
             </button>
           </div>
           {categories.map((c, i) => {
-            const n = countBy((t) => effectiveCategory(ws, t)?.category.id === c.id);
+            const n = countBy((t) => effectiveCategory(vws, t)?.category.id === c.id);
             return (
               <button
                 key={c.id}
