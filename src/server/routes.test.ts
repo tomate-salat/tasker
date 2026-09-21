@@ -135,12 +135,15 @@ describe('Routen', () => {
     await send('PATCH', `/kind/task/${a.id}`, { version: a.version, changes: { status: 'done' } });
 
     const boot = (await send('GET', '/bootstrap')).body as {
-      milestoneLog: Record<string, { d: string; s: number; dn: number }[]>;
+      milestoneLog: Record<string, { at: string; s: number; dn: number }[]>;
     };
     const log = boot.milestoneLog[m.id] ?? [];
-    // Alles am selben Tag: ein einziger Eintrag mit dem letzten Stand.
-    assert.equal(log.length, 1);
-    assert.deepEqual({ s: log[0]?.s, dn: log[0]?.dn }, { s: 2, dn: 1 });
+    // Je Änderung ein Eintrag mit UTC-Zeitpunkt; die Tage bildet erst der Client.
+    // (Zwei Änderungen in derselben Millisekunde teilen sich einen Eintrag – der letzte Stand gilt.)
+    assert.deepEqual(log[0] && [log[0].s, log[0].dn], [0, 0]);
+    assert.deepEqual(log.at(-1) && [log.at(-1)!.s, log.at(-1)!.dn], [2, 1]);
+    assert.ok(log.length >= 3);
+    assert.ok(log.every((e) => e.at.endsWith('Z')));
   });
 
   it('Zeichnungen: anlegen, speichern, umbenennen, löschen', async () => {

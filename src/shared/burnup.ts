@@ -4,18 +4,28 @@ import { weeksFromToday } from './schedule.js';
 import type { Workspace } from './workspace.js';
 
 /**
- * Burnup wie im Prototyp: je Milestone ein Umfangs-Protokoll mit einem Eintrag
- * pro Tag, an dem sich etwas geändert hat (`m.log`). Hier steht es in der
- * Tabelle `milestone_log`; der Server schreibt es nach jeder Änderung fort.
+ * Burnup wie im Prototyp: je Milestone ein Umfangs-Protokoll (`m.log`). Hier
+ * steht es in der Tabelle `milestone_log`; der Server schreibt es nach jeder
+ * Änderung fort.
+ *
+ * Anders als im Prototyp trägt ein Eintrag keinen Kalendertag, sondern den
+ * Zeitpunkt in UTC: der Server kennt die Zeitzone des Nutzers nicht. Zu Tagen
+ * werden die Einträge erst in `burnupData`, in der Zeitzone des Clients.
  */
 export type LogEntry = {
-  /** 'YYYY-MM-DD' */
-  d: string;
-  /** Committete Aufgaben an diesem Tag. */
+  /** ISO-Zeitpunkt in UTC. */
+  at: string;
+  /** Committete Aufgaben ab diesem Zeitpunkt. */
   s: number;
   /** Davon erledigt. */
   dn: number;
 };
+
+/** Ein Protokoll-Eintrag auf seinen Kalendertag gebracht, wie `m.log` im Prototyp. */
+type DayEntry = { d: string; s: number; dn: number };
+
+/** „Gilt seit jeher“ – der Anfangsstand eines nachgetragenen Protokolls. */
+const SINCE_EVER = '1970-01-01T00:00:00.000Z';
 
 /** Der Kalendertag in Ortszeit, wie `dayKey` im Prototyp. */
 export const dayKey = (date: Date): string =>
@@ -28,48 +38,65 @@ export function msPoints(ws: Workspace, m: Milestone): { s: number; dn: number }
 }
 
 /**
- * Für Milestones ohne Protokoll: Umfang wie heute, Erledigtes aus den
- * Abschlussdaten der Aufgaben.
+ * Für Milestones ohne Protokoll, wie `backfillLog` im Prototyp: Umfang wie
+ * heute, Erledigtes aus den Abschlusszeitpunkten der Aufgaben. Aufgaben ohne
+ * Zeitpunkt zählen von Anfang an als erledigt.
  */
-export function backfillLog(ws: Workspace, m: Milestone, today: string): LogEntry[] {
+export function backfillLog(ws: Workspace, m: Milestone): LogEntry[] {
   const roots = ws.msRoots(m);
   const s = sumBy(roots, (r) => total(ws, r));
-  const ev: { d: string | null; p: number }[] = [];
+  const ev: { at: string | null; p: number }[] = [];
   const walk = (t: (typeof roots)[number]): void => {
     if (isDone(t)) {
-      ev.push({ d: t.doneAt ? dayKey(new Date(t.doneAt)) : null, p: total(ws, t) });
+      ev.push({ at: t.doneAt, p: total(ws, t) });
       return;
     }
     ws.kids(t.id).forEach(walk);
   };
   roots.forEach(walk);
 
-  const first = m.startDate ?? today;
-  const doneBy = (d: string): number => sumBy(ev.filter((e) => !e.d || e.d <= d), (e) => e.p);
-  const dates = [...new Set(ev.map((e) => e.d).filter((d): d is string => !!d && d > first))].sort();
-  return [{ d: first, s, dn: doneBy(first) }, ...dates.map((d) => ({ d, s, dn: doneBy(d) }))];
+  let dn = sumBy(ev.filter((e) => !e.at), (e) => e.p);
+  const log: LogEntry[] = [{ at: SINCE_EVER, s, dn }];
+  for (const e of ev.filter((x) => x.at).sort((a, b) => (a.at as string).localeCompare(b.at as string))) {
+    dn += e.p;
+    const last = log[log.length - 1] as LogEntry;
+    if (last.at === e.at) last.dn = dn;
+    else log.push({ at: e.at as string, s, dn });
+  }
+  return log;
 }
 
 /**
- * Der Eintrag für heute, falls sich seit dem letzten etwas geändert hat –
- * sonst `null`. Wie `logScopes` im Prototyp: am selben Tag wird überschrieben.
+ * Der nächste Eintrag, falls sich seit dem letzten etwas geändert hat – sonst
+ * `null`. Wie `logScopes` im Prototyp, nur ohne Überschreiben am selben Tag:
+ * welcher Tag das ist, entscheidet erst der Client.
  */
-export function todayEntry(log: LogEntry[], s: number, dn: number, today: string): LogEntry | null {
+export function nextEntry(log: LogEntry[], s: number, dn: number, at: string): LogEntry | null {
   const last = log[log.length - 1];
   if (last && last.s === s && last.dn === dn) return null;
-  return { d: today, s, dn };
+  return { at, s, dn };
 }
 
-/** Das Protokoll samt dem heutigen Stand. */
-export function withToday(log: LogEntry[], s: number, dn: number, today: string): LogEntry[] {
-  const e = todayEntry(log, s, dn, today);
-  if (!e) return log;
-  const last = log[log.length - 1];
-  return last && last.d === today ? [...log.slice(0, -1), e] : [...log, e];
+/** Das Protokoll samt dem aktuellen Stand. */
+export function withNow(log: LogEntry[], s: number, dn: number, at: string): LogEntry[] {
+  const e = nextEntry(log, s, dn, at);
+  return e ? [...log, e] : log;
 }
 
-const logAt = (log: LogEntry[], d: string): LogEntry => {
-  let v: LogEntry | null = null;
+/** Je Kalendertag in Ortszeit der letzte Stand – daraus wird `m.log` des Prototyps. */
+function toDays(log: LogEntry[]): DayEntry[] {
+  const out: DayEntry[] = [];
+  for (const e of [...log].sort((a, b) => a.at.localeCompare(b.at))) {
+    const d = dayKey(new Date(e.at));
+    const last = out[out.length - 1];
+    if (last && last.d === d) Object.assign(last, { s: e.s, dn: e.dn });
+    else out.push({ d, s: e.s, dn: e.dn });
+  }
+  return out;
+}
+
+const logAt = (log: DayEntry[], d: string): DayEntry => {
+  let v: DayEntry | null = null;
   for (const e of log) {
     if (e.d <= d) v = e;
     else break;
@@ -108,6 +135,7 @@ export function burnupData(
   now: Date = new Date(),
 ): BurnupData | null {
   if (!m.startDate || weeksFromToday(m.startDate, now) > 0) return null;
+  const days = toDays(log);
   const start = noon(m.startDate);
   const today = new Date(now);
   today.setHours(12, 0, 0, 0);
@@ -121,7 +149,7 @@ export function burnupData(
   for (let i = 0; i <= endI; i++) {
     const dt = new Date(start);
     dt.setDate(dt.getDate() + i);
-    const e = logAt(log, dayKey(dt));
+    const e = logAt(days, dayKey(dt));
     scope.push(e.s);
     doneS.push(Math.min(e.dn, e.s));
   }

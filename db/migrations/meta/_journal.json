@@ -22,6 +22,13 @@
       "when": 1789997991594,
       "tag": "0002_drawing_milestone",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789998827714,
+      "tag": "0003_milestone_log_at",
+      "breakpoints": true
     }
   ]
 }

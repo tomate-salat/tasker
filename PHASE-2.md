@@ -381,13 +381,17 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   aus dem Prototyp (Committed, Erledigt, Prognose, Heute- und Ende-Linie, Überfahren mit Datum und
   Werten, Hinweise auf Umfangsänderung und Verspätung); bei gleichen Daten sind die Pfade
   zeichengleich. Das Protokoll (`m.log`) steht in `milestone_log`: der Server schreibt es nach
-  jeder erfolgreichen Änderung fort (`logScopes` in `src/server/burnup.ts`, ein Eintrag pro Tag,
-  am selben Tag überschrieben) und trägt es für Milestones ohne Protokoll aus den Abschlussdaten
-  nach (`backfillLog`). Das Startpaket liefert es als `milestoneLog` mit; den heutigen Punkt
-  rechnet der Client selbst, damit die Kurve jeder Änderung sofort folgt. Rückgängig braucht
-  nichts Eigenes: die Rücknahme ist selbst eine Änderung und schreibt den heutigen Stand neu.
-  Der Tag ist der Kalendertag in der Zeitzone des Servers – auf Railway `TZ=Europe/Berlin`
-  setzen, sonst wechselt der Tag um 1 bzw. 2 Uhr nachts.
+  jeder erfolgreichen Änderung fort (`logScopes` in `src/server/burnup.ts`) und trägt es für
+  Milestones ohne Protokoll aus den Abschlusszeitpunkten nach (`backfillLog`). Das Startpaket
+  liefert es als `milestoneLog` mit; den aktuellen Punkt rechnet der Client selbst, damit die
+  Kurve jeder Änderung sofort folgt. Rückgängig braucht nichts Eigenes: die Rücknahme ist selbst
+  eine Änderung und schreibt den Stand neu.
+
+  **Abweichung, auf Wunsch:** Der Prototyp führt einen Eintrag pro Kalendertag. Hier trägt jeder
+  Eintrag stattdessen den Zeitpunkt der Änderung in UTC (Spalte `at`, Migration
+  `0003_milestone_log_at`). Der Server kennt keine Zeitzone; erst der Client verteilt die
+  Einträge auf Tage in seiner Ortszeit (letzter Stand je Tag, `toDays` in
+  `src/shared/burnup.ts`) und rechnet daraus die Kurve wie der Prototyp.
 - ~~**Zeichnungen an Milestones.**~~ **Erledigt.** `drawing` hat jetzt `task_id` oder
   `milestone_id` (genau eins, als CHECK; Migration `0002_drawing_milestone`, die von Drizzle
   erzeugte Kopierzeile las `milestone_id` aus der alten Tabelle und ist von Hand auf `NULL`

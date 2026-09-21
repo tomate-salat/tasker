@@ -1,12 +1,5 @@
 import { useRef, useState } from 'react';
-import {
-  backfillLog,
-  burnupData,
-  dayKey,
-  monotonePath,
-  msPoints,
-  withToday,
-} from '@shared/burnup.js';
+import { backfillLog, burnupData, monotonePath, msPoints, withNow } from '@shared/burnup.js';
 import type { Milestone } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
@@ -20,8 +13,9 @@ const fmtD = (d: Date): string => d.toLocaleDateString('de-DE', { day: '2-digit'
  * Prototyp: Committed und Erledigt je Tag seit dem Start, gestrichelt die
  * Prognose bis zum Ende, beim Überfahren Datum und Werte.
  *
- * Das Protokoll kommt vom Server; den heutigen Stand rechnet die Ansicht selbst
- * aus den aktuellen Daten, damit die Kurve jeder Änderung sofort folgt.
+ * Das Protokoll kommt vom Server, mit Zeitpunkten in UTC; auf Tage verteilt
+ * wird es hier, in der Zeitzone des Browsers. Den aktuellen Stand rechnet die
+ * Ansicht selbst aus den Daten, damit die Kurve jeder Änderung sofort folgt.
  */
 export function Burnup({ ws, milestone: m }: { ws: Workspace; milestone: Milestone }) {
   const stored = useStore((s) => s.boot?.milestoneLog?.[m.id]);
@@ -29,9 +23,8 @@ export function Burnup({ ws, milestone: m }: { ws: Workspace; milestone: Milesto
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<{ i: number; s: number; dn: number; fc: boolean } | null>(null);
 
-  const today = dayKey(new Date());
   const { s: nowS, dn: nowDn } = msPoints(ws, m);
-  const log = withToday(stored?.length ? stored : backfillLog(ws, m, today), nowS, nowDn, today);
+  const log = withNow(stored?.length ? stored : backfillLog(ws, m), nowS, nowDn, new Date().toISOString());
   const d = burnupData(m, log, velocity);
   if (!d) return null;
 

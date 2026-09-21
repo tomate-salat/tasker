@@ -218,21 +218,25 @@ export const drawings = sqliteTable(
   ],
 );
 
-/** Tagespunkte für den Burnup eines Milestones (im Prototyp `m.log`). */
+/**
+ * Burnup-Protokoll eines Milestones (im Prototyp `m.log`): ein Eintrag je
+ * Änderung von Umfang oder Erledigtem. Der Zeitpunkt ist UTC – zu Kalendertagen
+ * macht ihn erst der Client, in seiner eigenen Zeitzone.
+ */
 export const milestoneLog = sqliteTable(
   'milestone_log',
   {
     milestoneId: text('milestone_id')
       .notNull()
       .references(() => milestones.id, { onDelete: 'cascade' }),
-    /** 'YYYY-MM-DD' */
-    day: text('day').notNull(),
-    /** Umfang an diesem Tag. */
+    /** ISO-Zeitpunkt in UTC. */
+    at: text('at').notNull(),
+    /** Umfang ab diesem Zeitpunkt. */
     scope: integer('scope').notNull(),
     /** Davon erledigt. */
     done: integer('done').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.milestoneId, t.day] })],
+  (t) => [primaryKey({ columns: [t.milestoneId, t.at] })],
 );
 
 /* ------------------------------------------------------- Papierkorb, Konto, Sitzung */
