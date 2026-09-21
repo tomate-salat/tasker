@@ -83,7 +83,14 @@ type State = {
   setTheme: (theme: Settings['theme']) => Promise<void>;
   setView: (view: View) => void;
   select: (id: string | null) => void;
-  edit: (id: string | null) => void;
+  /**
+   * Titel in der Zeile bearbeiten. `isNew` heißt: gerade angelegt – bleibt der
+   * Titel leer oder wird abgebrochen, verschwindet die Zeile wieder (Prototyp).
+   */
+  edit: (id: string | null, isNew?: boolean) => void;
+  editingNew: boolean;
+  /** Eine eben angelegte, leer gebliebene Zeile spurlos entfernen. */
+  discard: (kind: Kind, id: string) => Promise<void>;
 
   /**
    * Mehrfachauswahl. Nur Aufgaben, wie im Prototyp – Milestones und Gruppen
@@ -276,7 +283,22 @@ export const useStore = create<State>((set, get) => ({
   // Den Inspektor zu schließen hebt auch die Auswahl auf (so wie im Prototyp).
   select: (id) => set({ selected: id, editing: null }),
 
-  edit: (editing) => set({ editing, ...(editing ? { selected: editing } : {}) }),
+  editingNew: false,
+  edit: (editing, isNew = false) =>
+    set({ editing, editingNew: !!editing && isNew, ...(editing ? { selected: editing } : {}) }),
+
+  discard: async (kind, id) => {
+    const parent = get().boot?.tasks.find((t) => t.id === id)?.parentId ?? null;
+    try {
+      // Papierkorb und gleich wieder hinaus: so bleibt keine Spur und kein Rückgängig.
+      const { trashId } = await api.remove(kind, id);
+      await api.purgeTrash(trashId);
+      if (get().selected === id) set({ selected: parent });
+      await get().load();
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Entfernen fehlgeschlagen' });
+    }
+  },
 
   /* ------------------------------------------------------ Mehrfachauswahl */
 

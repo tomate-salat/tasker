@@ -79,6 +79,7 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
                 depth={row.depth}
                 dnd={dnd}
                 doc={view === 'docs'}
+                menu={menu}
               />
             );
           }
@@ -319,7 +320,7 @@ function PlanEmpty() {
       vor oder{' '}
       <button
         className="linkish"
-        onClick={() => void addMilestone('').then((id) => id && useStore.getState().edit(id))}
+        onClick={() => void addMilestone('').then((id) => id && useStore.getState().edit(id, true))}
       >
         leg direkt einen an
       </button>

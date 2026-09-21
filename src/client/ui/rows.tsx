@@ -9,7 +9,10 @@ import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import type { Dnd } from './dnd.js';
-import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, LOCK_ICON, PrioIcon, statusMark } from './icons.js';
+import { addChild, addSibling, indent, outdent } from './actions.js';
+import { cellMenu, type CellKind } from './cellMenu.js';
+import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, LOCK_ICON, PrioIcon, statusMark, STATUS_LABEL } from './icons.js';
+import type { Menu } from './Menu.js';
 
 /**
  * Die Zeilen der Liste, Aufbau wie im Prototyp: links die festen Spalten
@@ -22,12 +25,15 @@ export function TaskRow({
   depth,
   dnd,
   doc = false,
+  menu,
 }: {
   ws: Workspace;
   task: Task;
   depth: number;
   dnd?: Dnd;
   doc?: boolean;
+  /** Das Menü der Liste – die Zellen öffnen darin ihre Auswahl. */
+  menu?: Menu;
 }) {
   const { selected, select, collapsed, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } =
     useStore();
@@ -39,6 +45,14 @@ export function TaskRow({
   const done = doneCount(ws, task);
   const cl = checklist(task.desc);
   const showBar = kids.length > 0 || cl.total > 0;
+
+  // Klick auf eine Zelle öffnet ihr Menü darunter, statt die Zeile auszuwählen.
+  const cell =
+    (kind: CellKind) =>
+    (e: React.MouseEvent<HTMLElement>): void => {
+      e.stopPropagation();
+      menu?.openAt(e.currentTarget, cellMenu(kind, task.id));
+    };
 
   // Offener Elternteil, unter dem trotzdem gearbeitet wird.
   const implicit =
@@ -91,15 +105,18 @@ export function TaskRow({
       ) : (
         <>
           <span
-            className="mark-gut"
-            title={mark ? mark.name : 'Aufgabe (keine eigene Markierung)'}
+            className="mark-gut cell"
+            role="button"
+            tabIndex={-1}
+            title={`${mark ? mark.name : 'Aufgabe (keine eigene Markierung)'} – klicken zum Ändern`}
+            onClick={cell('mark')}
           >
             <span className={`mk-emoji ${mark ? '' : 'mk-default'}`}>
               {mark ? mark.emoji : DEFAULT_MARK.emoji}
             </span>
           </span>
-          <span className="prio-gut">
-            <PrioIcon prio={task.prio} />
+          <span className="prio-gut cell" role="button" tabIndex={-1} onClick={cell('prio')}>
+            <PrioIcon prio={task.prio} cell />
           </span>
           <Caret open={open} hasKids={kids.length > 0} onToggle={() => toggle(task.id)} />
           <StatusDot task={task} implicit={implicit} />
@@ -118,8 +135,8 @@ export function TaskRow({
       <DrawingBadge taskId={task.id} />
       {!doc && <LockBadge ws={ws} task={task} />}
 
-      <CategoryCell ws={ws} task={task} />
-      <TagCell ws={ws} task={task} />
+      <CategoryCell ws={ws} task={task} onClick={cell('cat')} />
+      <TagCell ws={ws} task={task} onClick={cell('tags')} />
 
       <span className="meta">
         {doc ? (
@@ -370,13 +387,13 @@ function Caret({
 }
 
 export function StatusDot({ task, implicit }: { task: Task; implicit: boolean }) {
-  const label = implicit ? 'Offen · eine Unteraufgabe ist in Arbeit' : task.status;
+  const label = implicit ? 'Offen · eine Unteraufgabe ist in Arbeit' : STATUS_LABEL[task.status];
   return (
     <span
       className={`check status-dot st-${task.status} ${implicit ? 'implicit-progress' : ''}`}
       role="img"
       title={`${label} · S: nächster Status · Leertaste: erledigt`}
-      aria-label={`Status ${task.status}`}
+      aria-label={`Status ${STATUS_LABEL[task.status]}${implicit ? ', Unteraufgabe in Arbeit' : ''}`}
     >
       {statusMark(task.status)}
     </span>
@@ -438,12 +455,14 @@ function LockBadge({ ws, task }: { ws: Workspace; task: Task }) {
   );
 }
 
-/** Eigene Spalte: die Kategorie, geerbte blass. */
-function CategoryCell({ ws, task }: { ws: Workspace; task: Task }) {
+type CellClick = (e: React.MouseEvent<HTMLElement>) => void;
+
+/** Eigene Spalte: die Kategorie, geerbte blass. Ein Klick öffnet die Auswahl. */
+function CategoryCell({ ws, task, onClick }: { ws: Workspace; task: Task; onClick: CellClick }) {
   const effective = effectiveCategory(ws, task);
   if (!effective) {
     return (
-      <span className="cat-col">
+      <span className="cat-col cell" role="button" tabIndex={-1} title="Kategorie ändern" onClick={onClick}>
         <span className="prio-none" title="Keine Kategorie">
           –
         </span>
@@ -458,8 +477,15 @@ function CategoryCell({ ws, task }: { ws: Workspace; task: Task }) {
 
   return (
     <span
-      className="cat-col"
-      title={effective.from ? `Geerbt von „${effective.from.title}“` : 'Kategorie'}
+      className="cat-col cell"
+      role="button"
+      tabIndex={-1}
+      title={
+        effective.from
+          ? `Geerbt von „${effective.from.title}“ – klicken zum Ändern`
+          : 'Kategorie ändern'
+      }
+      onClick={onClick}
     >
       <span className="cat-sw" style={{ '--h': categoryHue(index) } as React.CSSProperties} />
       <span className={effective.from ? 'inherited-val' : ''}>{effective.category.name}</span>
@@ -468,13 +494,21 @@ function CategoryCell({ ws, task }: { ws: Workspace; task: Task }) {
 }
 
 /** Eigene Spalte: Labels, die aus Unteraufgaben stammen, stehen blass dahinter. */
-function TagCell({ ws, task }: { ws: Workspace; task: Task }) {
+function TagCell({ ws, task, onClick }: { ws: Workspace; task: Task; onClick: CellClick }) {
   const tags = effectiveTags(ws, task);
   return (
     <span
-      className="tags"
-      title={tags.extra.length ? 'Blasse Labels kommen aus Unteraufgaben' : 'Labels'}
+      className="tags cell"
+      role="button"
+      tabIndex={-1}
+      title={
+        tags.extra.length
+          ? 'Blasse Labels kommen aus Unteraufgaben – klicken zum Ändern'
+          : 'Labels ändern'
+      }
+      onClick={onClick}
     >
+      {!tags.own.length && !tags.extra.length && <span className="cell-empty">+ Label</span>}
       {tags.own.map((tag) => (
         <span key={tag} className="tag" style={tagStyle(tag)}>
           {tag}
@@ -495,8 +529,10 @@ function TagCell({ ws, task }: { ws: Workspace; task: Task }) {
 }
 
 /**
- * Titel direkt in der Zeile bearbeiten. Enter bestätigt, Escape verwirft.
- * Gilt für Aufgaben wie für Gruppennamen.
+ * Titel direkt in der Zeile bearbeiten – Tasten wie im Prototyp (`edit-title`):
+ * `Enter` bestätigt und legt bei Aufgaben gleich die nächste an, `⇧ Enter` eine
+ * Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft.
+ * Eine eben angelegte Zeile, die leer bleibt oder abgebrochen wird, verschwindet.
  */
 function TitleEdit({
   kind,
@@ -507,18 +543,52 @@ function TitleEdit({
   id: string;
   title: string;
 }) {
-  const { patch, edit } = useStore();
   const ref = useRef<HTMLInputElement>(null);
+  // Nach Enter, Escape oder Tab kommt noch ein Blur hinterher – der darf nichts mehr tun.
+  const closed = useRef(false);
 
   useEffect(() => {
     ref.current?.focus();
     ref.current?.select();
   }, []);
 
-  const commit = (value: string): void => {
+  /** Beendet die Bearbeitung; gibt den Titel zurück, der danach gilt (leer = keiner). */
+  const finish = async (value: string, cancel = false): Promise<string> => {
+    if (closed.current) return '';
+    closed.current = true;
+    const store = useStore.getState();
     const next = value.trim();
-    edit(null);
-    if (next !== title) void patch(kind, id, { title: next });
+    const isNew = store.editingNew;
+    store.edit(null);
+    if (isNew && (cancel || !next)) {
+      await store.discard(kind, id);
+      return '';
+    }
+    // Ein geleertes Feld lässt den alten Titel stehen, wie im Prototyp.
+    if (!cancel && next && next !== title) await store.patch(kind, id, { title: next });
+    return cancel || !next ? title : next;
+  };
+
+  const next = async (child: boolean, value: string): Promise<void> => {
+    const kept = await finish(value);
+    const ws = useStore.getState().ws;
+    const t = ws?.task(id);
+    if (kind !== 'task' || !kept || !ws || !t) return;
+    await (child ? addChild(t) : addSibling(ws, t));
+  };
+
+  const shift = async (out: boolean, value: string): Promise<void> => {
+    closed.current = true;
+    const store = useStore.getState();
+    const text = value.trim();
+    if (text && text !== title) await store.patch('task', id, { title: text });
+    const ws = useStore.getState().ws;
+    const t = ws?.task(id);
+    if (ws && t) await (out ? outdent(ws, t) : indent(ws, t));
+    // Weiter tippen an der neuen Stelle; die Zeile gilt jetzt nicht mehr als neu.
+    useStore.getState().edit(id);
+    closed.current = false;
+    ref.current?.focus();
   };
 
   return (
@@ -526,15 +596,20 @@ function TitleEdit({
       ref={ref}
       className="title-edit"
       defaultValue={title}
+      aria-label="Name"
       onClick={(e) => e.stopPropagation()}
-      onBlur={(e) => commit(e.target.value)}
+      onBlur={(e) => void finish(e.target.value)}
       onKeyDown={(e) => {
+        const value = e.currentTarget.value;
         if (e.key === 'Enter') {
           e.preventDefault();
-          commit(e.currentTarget.value);
+          void next(e.shiftKey, value);
         } else if (e.key === 'Escape') {
           e.preventDefault();
-          edit(null);
+          void finish(value, true);
+        } else if (e.key === 'Tab' && kind === 'task') {
+          e.preventDefault();
+          void shift(e.shiftKey, value);
         }
       }}
     />

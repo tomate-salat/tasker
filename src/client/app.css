@@ -961,6 +961,34 @@
   }
 }
 
+/* Anklickbare Zellen: Markierung, Priorität, Kategorie, Labels. Steht wie im
+   Prototyp hinter den Spaltenregeln – die Reihenfolge entscheidet mit. */
+.list .task-row .cell {
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 3px 5px;
+  margin-left: -5px;
+}
+
+.list .task-row .cell:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.list .task-row .tags.cell {
+  min-width: 60px;
+  min-height: 20px;
+}
+
+.cell-empty {
+  font-size: 11px;
+  color: var(--faint);
+  opacity: 0;
+}
+
+.list .task-row:hover .cell-empty {
+  opacity: 1;
+}
+
 /* -------------------------------------------------------------- Inhalt */
 
 .caret {

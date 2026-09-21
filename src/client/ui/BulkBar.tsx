@@ -117,6 +117,23 @@ export function bulkMenu(ws: Workspace): MenuItem[] {
   ];
 }
 
+/**
+ * Klick auf eine Zelle einer ausgewählten Zeile: das Menü gilt der ganzen
+ * Auswahl, genau wie im Prototyp (`openCell` mit `bulkItems`).
+ */
+export function bulkCellMenu(ws: Workspace, kind: 'mark' | 'prio' | 'cat' | 'tags'): MenuItem[] {
+  const store = useStore.getState();
+  const tasks = [...store.multi].map((id) => ws.task(id)).filter((t): t is Task => !!t);
+  const word = (k: number): string => (k === 1 ? 'Aufgabe' : 'Aufgaben');
+  const run: Run = (action, what) =>
+    void store.bulk(action, (count) => `${count} ${word(count)}: ${what}`);
+
+  if (kind === 'prio') return prioItems(tasks, run);
+  if (kind === 'mark') return markItems(ws, tasks, run);
+  if (kind === 'cat') return categoryItems(ws, tasks, run);
+  return labelItems(ws, tasks, run);
+}
+
 function Btn({
   menu,
   items,

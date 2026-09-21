@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useStore } from '../store.js';
 
 /**
  * Das Aufklappmenü aus dem Prototyp. Es hängt an einem Knopf, klemmt sich an
@@ -20,15 +21,22 @@ export type MenuItem =
       danger?: boolean;
       /** Das Tastenkürzel, das dasselbe tut – rechts, blass. */
       kbd?: string;
+      /** Das Menü bleibt nach dem Klick offen – im Prototyp die Labels. */
+      keep?: boolean;
       sub?: MenuItem[];
       onSelect?: () => void;
     };
 
-type Placed = { items: MenuItem[]; x: number; y: number };
+/**
+ * Eine Funktion statt einer fertigen Liste baut das Menü bei jeder Änderung im
+ * Speicher neu – so wandern die Häkchen mit, solange es offen bleibt.
+ */
+type Items = MenuItem[] | (() => MenuItem[]);
+type Placed = { items: Items; x: number; y: number };
 
 export type Menu = {
   /** Öffnet unter dem Knopf; ein zweiter Klick auf denselben schließt wieder. */
-  openAt: (el: HTMLElement, items: MenuItem[]) => void;
+  openAt: (el: HTMLElement, items: Items) => void;
   /** Öffnet an einem Punkt – für den Rechtsklick. */
   openAtPoint: (x: number, y: number, items: MenuItem[]) => void;
   close: () => void;
@@ -43,7 +51,7 @@ export function useMenu(): Menu {
     setOpen({ items, x, y });
   }, []);
 
-  const openAt = useCallback((el: HTMLElement, items: MenuItem[]) => {
+  const openAt = useCallback((el: HTMLElement, items: Items) => {
     const r = el.getBoundingClientRect();
     // Derselbe Knopf noch einmal: das offene Menü ist gemeint, nicht ein neues.
     setOpen((cur) => (cur && cur.x === r.left && cur.y === r.bottom + 4 ? null : { items, x: r.left, y: r.bottom + 4 }));
@@ -57,17 +65,20 @@ export function useMenu(): Menu {
 }
 
 function Panel({
-  items,
+  items: source,
   x,
   y,
   onClose,
 }: {
-  items: MenuItem[];
+  items: Items;
   x: number;
   y: number;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Abonniert den Arbeitsstand, damit ein offenes Menü neu gebaut wird.
+  useStore((s) => s.ws);
+  const items = typeof source === 'function' ? source() : source;
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: -9999, top: -9999 });
 
   useLayoutEffect(() => {
@@ -185,7 +196,7 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
             disabled={item.disabled}
             onClick={() => {
               item.onSelect?.();
-              onClose();
+              if (!item.keep) onClose();
             }}
           >
             {hasCheck && <span className="chk">{item.check ? '✓' : ''}</span>}

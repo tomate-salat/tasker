@@ -378,5 +378,5 @@ const archiveTasks = (tasks: Task[]): Promise<void> =>
 async function newGroup(projectId: string): Promise<void> {
   const store = useStore.getState();
   const id = await store.addGroup('', projectId);
-  if (id) store.edit(id);
+  if (id) store.edit(id, true);
 }

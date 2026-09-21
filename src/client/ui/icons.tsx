@@ -55,10 +55,14 @@ export const PRIO_LABEL: Record<1 | 2 | 3, string> = {
 };
 
 /** Signalbalken wie im Prototyp: P1 = drei volle Balken, P0 bleibt blass sichtbar. */
-export function PrioIcon({ prio }: { prio: Prio }) {
+export function PrioIcon({ prio, cell = false }: { prio: Prio; cell?: boolean }) {
   const label = prio ? `Priorität ${PRIO_LABEL[prio]}` : 'Keine Priorität';
+  // In der Listenzelle wie im Prototyp (`prioIconAny`): mit Stufe und Hinweis aufs Klicken.
+  const title = cell
+    ? `${prio ? `Priorität: P${prio} · ${PRIO_LABEL[prio]}` : 'Keine Priorität'} – klicken zum Ändern`
+    : label;
   return (
-    <span className={`prio-ico p${prio}`} role="img" aria-label={label} title={label}>
+    <span className={`prio-ico p${prio}`} role="img" aria-label={label} title={title}>
       <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
         {[0, 1, 2].map((i) => (
           <rect

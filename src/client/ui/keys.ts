@@ -3,7 +3,7 @@ import { TASK_STATUS, isDone, type Status, type Task } from '@shared/model.js';
 import { container, isLooseRoot, siblings, type OutlineRow } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
-import { addAndEdit, addChild, addSibling, toBacklog } from './actions.js';
+import { addAndEdit, addChild, addSibling, indent, outdent, toBacklog } from './actions.js';
 import { focusQuickAdd } from './QuickAdd.js';
 
 /**
@@ -139,7 +139,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
           return;
         case 'Tab':
           e.preventDefault();
-          void (e.shiftKey ? outdent(t) : indent(t));
+          void (e.shiftKey ? outdent(ws, t) : indent(ws, t));
           return;
         case ' ':
           e.preventDefault();
@@ -178,27 +178,6 @@ export function useKeys(ws: Workspace, rows: OutlineRow[]): void {
       if (!row) return;
       store.select(row.id);
       document.querySelector(`[data-row="${row.id}"]`)?.scrollIntoView({ block: 'nearest' });
-    };
-
-    const indent = async (t: Task): Promise<void> => {
-      const list = siblings(ws, t);
-      const before = list[list.indexOf(t) - 1];
-      if (!before) {
-        store.say('Keine Aufgabe darüber, unter die eingerückt werden könnte.');
-        return;
-      }
-      store.setCollapsed(before.id, false);
-      await store.moveTask(t.id, { parentId: before.id, index: ws.kids(before.id).length });
-    };
-
-    const outdent = async (t: Task): Promise<void> => {
-      const parent = ws.task(t.parentId);
-      if (!parent) {
-        store.say('Liegt schon auf der obersten Ebene.');
-        return;
-      }
-      const list = siblings(ws, parent);
-      await store.moveTask(t.id, { ...container(parent), index: list.indexOf(parent) + 1 });
     };
 
     const moveBy = async (t: Task, delta: number): Promise<void> => {

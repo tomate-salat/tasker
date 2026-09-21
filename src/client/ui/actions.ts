@@ -19,7 +19,7 @@ import { useStore } from '../store.js';
 export async function addAndEdit(input: Record<string, unknown>): Promise<void> {
   const store = useStore.getState();
   const id = await store.addTask({ title: '', ...input });
-  if (id) store.edit(id);
+  if (id) store.edit(id, true);
 }
 
 /** Neue Aufgabe direkt unter der aktuellen, nicht am Ende der Liste. */
@@ -29,7 +29,7 @@ export async function addSibling(ws: Workspace, t: Task): Promise<void> {
   const id = await store.addTask({ title: '', projectId: t.projectId, ...container(t) });
   if (!id) return;
   await store.moveTask(id, { ...container(t), index: at });
-  store.edit(id);
+  store.edit(id, true);
 }
 
 export async function addChild(t: Task): Promise<void> {
@@ -53,6 +53,31 @@ export async function addIn(projectId: string, place: Placement): Promise<void> 
     groupId: place.groupId ?? null,
     markId: place.markId ?? null,
   });
+}
+
+/** `Tab`: unter die Aufgabe darüber. */
+export async function indent(ws: Workspace, t: Task): Promise<void> {
+  const store = useStore.getState();
+  const list = siblings(ws, t);
+  const before = list[list.indexOf(t) - 1];
+  if (!before) {
+    store.say('Keine Aufgabe darüber, unter die eingerückt werden könnte.');
+    return;
+  }
+  store.setCollapsed(before.id, false);
+  await store.moveTask(t.id, { parentId: before.id, index: ws.kids(before.id).length });
+}
+
+/** `⇧ Tab`: eine Ebene hinauf, direkt hinter die bisherige Elternaufgabe. */
+export async function outdent(ws: Workspace, t: Task): Promise<void> {
+  const store = useStore.getState();
+  const parent = ws.task(t.parentId);
+  if (!parent) {
+    store.say('Liegt schon auf der obersten Ebene.');
+    return;
+  }
+  const list = siblings(ws, parent);
+  await store.moveTask(t.id, { ...container(parent), index: list.indexOf(parent) + 1 });
 }
 
 /** Aus Milestone oder Gruppe heraus zurück in den losen Backlog. */

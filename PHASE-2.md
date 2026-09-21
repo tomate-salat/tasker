@@ -401,17 +401,22 @@ pixelgleich) und 375 px. Bleibt: die Kopfzeile läuft mobil seitlich über – d
 Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
 
 **Liste**
-- Die Zellen Markierung, Priorität, Kategorie und Labels sind nicht anklickbar (Prototyp: Klick
-  öffnet das passende Menü; das Label-Menü bleibt nach einem Klick offen). „+ Label“ bei leeren
-  Labels fehlt.
-- Titel bearbeiten: `Enter` legt im Prototyp gleich die nächste Aufgabe an, `⇧ Enter` eine
-  Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus; eine neue Aufgabe ohne Titel
-  verschwindet wieder.
+- ~~Zellen nicht anklickbar~~ **Erledigt.** Markierung, Priorität, Kategorie und Labels öffnen
+  ihr Menü unter der Zelle (`cellMenu.ts`, wie `openCell`); in einer Mehrfachauswahl gilt es für
+  alle. Das Label-Menü bleibt offen und baut sich nach jeder Änderung neu (`keep` im Menü,
+  Menü als Funktion), „Neues Label …“ springt ins Labelfeld des Inspektors. „+ Label“ erscheint
+  beim Überfahren leerer Zeilen. Zellmaße gegen den Prototyp gemessen: deckungsgleich.
+- ~~Titel bearbeiten~~ **Erledigt.** `Enter` bestätigt und legt die nächste Aufgabe an, `⇧ Enter`
+  eine Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft. Eine neue
+  Zeile (Aufgabe, Milestone, Gruppe), die leer bleibt oder abgebrochen wird, verschwindet spurlos
+  (`discard`: Papierkorb und gleich endgültig gelöscht, kein Rückgängig-Eintrag). Ein geleertes
+  Feld lässt bei bestehenden Zeilen den alten Titel stehen. `indent`/`outdent` liegen dafür jetzt
+  in `actions.ts`.
 - Milestones und Gruppen lassen sich nicht ziehen; Aufgaben nicht auf die Reiter (Backlog, Doku,
   Archiv) und nicht auf ein Projekt in der Seitenleiste.
 - Klick auf eine Gruppenzeile klappt im Prototyp auf/zu; Doppelklick auf den Gruppennamen benennt um.
 - Das Zeichnungs-Abzeichen öffnet im Prototyp direkt die Zeichnung, hier nur die Aufgabe.
-- Status im Tooltip auf Englisch („done“, „progress“). (In der Schnell-Erfassungs-Vorschau erledigt.)
+- ~~Status auf Englisch~~ **Erledigt** (Tooltip und Vorschau der Schnell-Erfassung).
 
 **Tastatur**
 - Milestones: `S`, `P`, `B`, `F2`/`E`, `Alt ↑/↓` fehlen. Aufgaben: `M` (Verschieben nach …),

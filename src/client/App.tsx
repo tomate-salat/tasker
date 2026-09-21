@@ -191,7 +191,7 @@ function Shell({
                         // In der Planansicht gehört eine neue Aufgabe in einen Milestone,
                         // sonst landet sie unsichtbar im Backlog.
                         ...(view === 'plan' && planTarget ? { milestoneId: planTarget } : {}),
-                      }).then((id) => id && useStore.getState().edit(id))
+                      }).then((id) => id && useStore.getState().edit(id, true))
                     }
                   >
                     + {view === 'docs' ? 'Seite' : 'Aufgabe'}

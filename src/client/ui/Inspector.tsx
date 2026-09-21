@@ -335,6 +335,7 @@ function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
   return (
     <>
       <input
+        id="d-tag"
         className="prop-tag"
         list="tag-list"
         placeholder="+ Label"
