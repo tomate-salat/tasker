@@ -496,7 +496,7 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   zurück im Backlog“. `B` an einer Aufgabe meldet wie im Prototyp („liegt jetzt im Backlog ›
   Unsortiert“ oder „Liegt schon unter „Unsortiert““), `A` meldet „„…“ archiviert“ (am Milestone
   „– samt Tasks“).
-- Offen: „Anzeigen“ an diesen Meldungen – gehört zu „Meldungen und Hilfe“.
+- ~~„Anzeigen“ an diesen Meldungen~~ **Erledigt** (siehe „Meldungen und Hilfe“).
 - ~~Meldung zu `S` am Milestone~~ **Erledigt** (mit dem Burnup). Wie `setMsStatus` im Prototyp
   laufen `S`, Inspektor, Menü, „Als Done markieren“ und „Alle Tasks erledigt – Done?“ über
   `setMilestoneStatus`: „In Progress“ setzt ein fehlendes Startdatum, „Done“ ein fehlendes
@@ -570,8 +570,8 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
 - Nebenbei: Rückgängig, `Escape` und `N`/`/` gelten jetzt in jeder Ansicht (`useGlobalKeys`),
   vorher nur in Plan, Backlog und Doku. `.eta` ist wie im Prototyp in Mono gesetzt (auch im Plan).
   Archiv und Papierkorb laden nach jeder Änderung mit, statt leer stehen zu bleiben.
-- Offen: Die Meldungen nach dem Zurückholen haben noch kein „Anzeigen“ bzw. „Öffnen“ (gehört zu
-  „Meldungen und Hilfe“). Ziehen auf den Reiter „Archiv“ ist mit Drag & Drop erledigt.
+- ~~„Anzeigen“/„Öffnen“ nach dem Zurückholen~~ **Erledigt** (siehe „Meldungen und Hilfe“).
+  Ziehen auf den Reiter „Archiv“ ist mit Drag & Drop erledigt.
 
 **Aus den Notizen des Nutzers (zusätzlich)**
 - ~~Enter legt doppelt an~~ **Erledigt.** Bei allen `NewThing`-Feldern (Projekt, auch beim ersten
@@ -583,7 +583,15 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Seitenleiste).
 
 **Meldungen und Hilfe**
-- Meldungen mit „Anzeigen“ (nach Anlegen außerhalb der Sicht, Wiederherstellen, In den Plan) fehlen.
+- ~~Meldungen mit „Anzeigen“~~ **Erledigt.** Wie im Prototyp: „In den Plan“ / „zurück im
+  Backlog“, Wiederherstellen aus Archiv und Papierkorb sowie Anlegen per Schnellerfassung außerhalb
+  der Sicht bieten „Anzeigen“; ein wiederhergestelltes Projekt „Öffnen“. „Anzeigen“ ist ein Port
+  von `goto`/`reveal`: Projekt und Ansicht wechseln, Behälter aufklappen, Filter weg, wenn er die
+  Aufgabe verstecken würde, auswählen; Archiviertes öffnet das Archiv. Die Schnellerfassung klappt
+  wie `expandTo` den Behälter der neuen Aufgabe auf. Am Planen/Zurücklegen steht dafür jetzt
+  „Anzeigen“ statt „Rückgängig“ (wie im Prototyp; `Strg+Z` geht weiter).
+  Noch nicht wie im Prototyp: Nach der Schnellerfassung heißt die Meldung „Angelegt: …“ statt
+  „Angelegt im Backlog › … · Projekt“, und bei sichtbarer neuer Zeile fehlt dort „Rückgängig“.
 - Die Kürzel-Hilfe ist gekürzt – sie spiegelt die fehlenden Funktionen oben.
 - ~~**Backlog.**~~ **Erledigt.** Die drei Abschnitte des Prototyps: „Vorbereitete Milestones“ (die
   nicht eingeplanten, mit „In den Plan →“ und eigenem „+ Milestone“), „Ideen & Tasks“ (Unsortiert

@@ -268,6 +268,18 @@ function Shell({
                 Rückgängig
               </button>
             )}
+            {state.toastLink?.toast === toast && (
+              <button
+                onClick={() => {
+                  // Wie im Prototyp: die Meldung geht zu, dann geht es dorthin.
+                  const { run } = state.toastLink!;
+                  say(null);
+                  run();
+                }}
+              >
+                {state.toastLink.label}
+              </button>
+            )}
           </div>
         )}
       </div>

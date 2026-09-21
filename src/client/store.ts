@@ -2,12 +2,15 @@ import { create } from 'zustand';
 import type { BulkAction, Kind, Step } from '@shared/api.js';
 import { dayKey } from '@shared/burnup.js';
 import type { ChangeEvent } from '@shared/events.js';
-import type { Milestone, Task } from '@shared/model.js';
+import { isArchived, type Milestone, type Task } from '@shared/model.js';
 import {
   doneCandidates,
   draftMilestones,
   placeLabel,
   plannedMilestones,
+  smartId,
+  unsortedId,
+  visibility,
   type OutlineFilter,
 } from '@shared/outline.js';
 import { schedule } from '@shared/schedule.js';
@@ -128,6 +131,22 @@ type State = {
   undoStack: { label: string; steps: Step[] }[];
   /** Zeigt die Kurzmeldung gerade ein „Rückgängig“ an? */
   toastUndo: boolean;
+  /**
+   * „Anzeigen“ bzw. „Öffnen“ an einer Meldung, wie `toast(msg, {label, fn})` im
+   * Prototyp. Gilt nur für die Meldung, zu der es gehört (`toast`) – eine
+   * neuere Meldung trägt es so nicht versehentlich weiter.
+   */
+  toastLink: { toast: string; label: string; run: () => void } | null;
+  /**
+   * Holt etwas in den Blick und wählt es aus (`goto` im Prototyp): richtiges
+   * Projekt und richtige Ansicht, Behälter aufgeklappt, Filter weg, wenn er es
+   * verstecken würde.
+   */
+  reveal: (id: string) => void;
+  /** Klappt die Behälter einer Aufgabe auf (`expandTo` im Prototyp) – nur die Ansicht bleibt. */
+  expandTo: (id: string) => void;
+  /** Meldung mit eigenem Knopf, etwa „Anzeigen“. */
+  sayLink: (message: string, label: string, run: () => void) => void;
   undo: () => Promise<void>;
   /**
    * Mehrere Schritte in einer Transaktion, mit Meldung und Rücknahme. Ohne
@@ -467,6 +486,79 @@ export const useStore = create<State>((set, get) => ({
 
   undoStack: [],
   toastUndo: false,
+  toastLink: null,
+  sayLink: (message, label, run) => linked(message, label, run),
+
+  expandTo: (id) => {
+    const ws = get().ws;
+    const m = ws?.milestone(id);
+    const t = m ? null : ws?.task(id);
+    if (!ws || (!m && !t)) return;
+    const collapsed = { ...get().collapsed };
+    if (m) collapsed[m.id] = false;
+    if (t) {
+      for (const a of ws.ancestors(t)) collapsed[a.id] = false;
+      const root = ws.root(t);
+      if (root.milestoneId) collapsed[root.milestoneId] = false;
+      else if (root.groupId) collapsed[root.groupId] = false;
+      else if (!ws.isDoc(root)) {
+        collapsed[root.markId ? smartId(root.projectId, root.markId) : unsortedId(root.projectId)] = false;
+      }
+    }
+    writeLocal(COLLAPSED_KEY, collapsed);
+    set({ collapsed });
+  },
+
+  reveal: (id) => {
+    const s = get();
+    const ws = s.ws;
+    const m = ws?.milestone(id) ?? null;
+    const t = m ? null : (ws?.task(id) ?? null);
+    const x = m ?? t;
+    if (!ws) return;
+    const scope = x && s.scope !== 'all' && s.scope !== x.projectId ? x.projectId : s.scope;
+    const scoped =
+      scope !== s.scope
+        ? { scope, lastProject: scope, filter: { ...s.filter, categoryId: null }, archive: null }
+        : {};
+    if (scope !== s.scope) writeLocal(SCOPE_KEY, scope);
+
+    // Archiviertes zeigt das Archiv – ungefiltert und mit aufgeklappten Behältern.
+    // Was nicht im aktiven Bestand liegt, ist archiviert.
+    if (!x || (m && isArchived(m)) || (t && !ws.isActive(t))) {
+      const archOpen = { ...s.archOpen };
+      if (t) {
+        for (const a of ws.ancestors(t)) archOpen[a.id] = true;
+        const root = ws.root(t);
+        if (root.milestoneId) archOpen[root.milestoneId] = true;
+      }
+      writeLocal(ARCH_OPEN_KEY, archOpen);
+      set({ ...scoped, view: 'archive', archiveQuery: '', archOpen, selected: id, editing: null, sideOpen: false });
+      return;
+    }
+
+    get().expandTo(id);
+    const collapsed = get().collapsed;
+    const ms = m ?? (t ? ws.milestone(ws.root(t).milestoneId) : null);
+
+    // Im Zeitplan bleibt ein Milestone dort, wo er schon zu sehen ist.
+    const view: View =
+      s.view === 'timeline' && m ? 'timeline' : ms?.planned ? 'plan' : t && ws.isDoc(t) ? 'docs' : 'backlog';
+    const filter = scoped.filter ?? s.filter;
+    const hidden = t && !visibility(ws, filter)(t);
+    set({
+      ...scoped,
+      ...(hidden ? { filter: { tag: null, categoryId: null, markId: null } } : {}),
+      view,
+      collapsed,
+      selected: id,
+      editing: null,
+      sideOpen: false,
+    });
+    requestAnimationFrame(() =>
+      document.querySelector(`[data-row="${id}"]`)?.scrollIntoView({ block: 'nearest' }),
+    );
+  },
 
   undo: async () => {
     const stack = get().undoStack;
@@ -541,7 +633,7 @@ export const useStore = create<State>((set, get) => ({
     set({ collapsed });
   },
 
-  say: (toast) => set({ toast, toastUndo: false }),
+  say: (toast) => set({ toast, toastUndo: false, toastLink: null }),
 
   /**
    * Ändern mit Vorgriff: die Zeile ändert sich sofort, die Antwort des Servers
@@ -770,12 +862,14 @@ export const useStore = create<State>((set, get) => ({
     const line = planned
       ? schedule(now, { velocity: get().settings.velocity }).byId.get(id)
       : undefined;
-    set({
-      toast: planned
+    // Wie im Prototyp mit „Anzeigen“ – der Milestone ist gerade aus der Ansicht gewandert.
+    linked(
+      planned
         ? `„${m.title}“ ist im Plan${line && line.open ? ` · fertig ca. ${inWeeks(line.end)}` : ''}`
         : `„${m.title}“ ist zurück im Backlog`,
-      toastUndo: true,
-    });
+      'Anzeigen',
+      () => get().reveal(id),
+    );
   },
 
   setMilestoneStatus: async (id, status) => {
@@ -899,10 +993,11 @@ export const useStore = create<State>((set, get) => ({
       const m = kind === 'milestone' ? ws?.milestone(id) : null;
       const t = kind === 'task' ? ws?.task(id) : null;
       const where = m ? (m.planned ? 'im Plan' : 'im Backlog') : ws && t ? whereLabel(ws, t) : '';
-      set({
-        toast: `Wiederhergestellt ${where}${r.moved ? ' (der ursprüngliche Ort ist archiviert)' : ''}`,
-        toastUndo: false,
-      });
+      linked(
+        `Wiederhergestellt ${where}${r.moved ? ' (der ursprüngliche Ort ist archiviert)' : ''}`,
+        'Anzeigen',
+        () => get().reveal(id),
+      );
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen' });
     }
@@ -923,13 +1018,13 @@ export const useStore = create<State>((set, get) => ({
       const r = await api.restoreTrash(id);
       await get().load();
       const title = entry?.title ?? '';
-      set({
-        toast:
-          r.kind === 'project'
-            ? `Projekt „${title}“ ${r.label} wiederhergestellt`
-            : `„${title || 'Ohne Titel'}“ wiederhergestellt ${r.label}`.trim(),
-        toastUndo: false,
-      });
+      if (r.kind === 'project') {
+        linked(`Projekt „${title}“ ${r.label} wiederhergestellt`, 'Öffnen', () => get().setScope(r.id));
+      } else {
+        const message = `„${title || 'Ohne Titel'}“ wiederhergestellt ${r.label}`.trim();
+        if (r.kind === 'task' || r.kind === 'milestone') linked(message, 'Anzeigen', () => get().reveal(r.id));
+        else set({ toast: message, toastUndo: false });
+      }
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen', toastUndo: false });
     }
@@ -1016,11 +1111,16 @@ const UNDO_DEPTH = 25;
  */
 function remember(message: string, steps: Step[]): void {
   if (!steps.length) {
-    useStore.setState({ toast: message, toastUndo: false });
+    useStore.setState({ toast: message, toastUndo: false, toastLink: null });
     return;
   }
   pushUndo(steps, message);
-  useStore.setState({ toast: message, toastUndo: true });
+  useStore.setState({ toast: message, toastUndo: true, toastLink: null });
+}
+
+/** Meldung mit „Anzeigen“ oder „Öffnen“ statt „Rückgängig“. */
+function linked(message: string, label: string, run: () => void): void {
+  useStore.setState({ toast: message, toastUndo: false, toastLink: { toast: message, label, run } });
 }
 
 /** Nur den Stapel füllen, ohne Meldung – für Änderungen, die man ohnehin sieht. */

@@ -7,7 +7,7 @@ import { tagStyle } from './rows.js';
 
 /** Die Zeile über der Liste: eine Zeile Text wird zu einer Aufgabe. */
 export function QuickAdd({ ws, projectId }: { ws: Workspace; projectId: string }) {
-  const { addTask, select, say } = useStore();
+  const { addTask, select, say, expandTo } = useStore();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -24,8 +24,17 @@ export function QuickAdd({ ws, projectId }: { ws: Workspace; projectId: string }
     setBusy(false);
     if (!id) return;
     setText('');
+    expandTo(id);
     select(id);
-    say(`Angelegt: ${targetLabel(parsed.target)}`);
+    const message = `Angelegt: ${targetLabel(parsed.target)}`;
+    say(message);
+    // Wie im Prototyp: Landet die Aufgabe außerhalb der aktuellen Ansicht, holt
+    // „Anzeigen“ sie in den Blick.
+    requestAnimationFrame(() => {
+      if (!document.querySelector(`[data-row="${id}"]`)) {
+        useStore.getState().sayLink(message, 'Anzeigen', () => useStore.getState().reveal(id));
+      }
+    });
   }
 
   return (

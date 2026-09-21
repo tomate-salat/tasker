@@ -221,7 +221,7 @@ const isFiltering = (f: OutlineFilter | undefined): boolean =>
  * Ein Task ist sichtbar, wenn er selbst passt oder eine seiner Unteraufgaben –
  * sonst verschwände der Ast, in dem der Treffer hängt.
  */
-function visibility(ws: Workspace, f: OutlineFilter | undefined): (t: Task) => boolean {
+export function visibility(ws: Workspace, f: OutlineFilter | undefined): (t: Task) => boolean {
   if (!isFiltering(f)) return () => true;
 
   const matches = (t: Task): boolean => {
