@@ -7,3 +7,6 @@ data/
 .env
 .env.local
 .DS_Store
+
+# Eigene Exporte zum Import – bleiben lokal
+import/

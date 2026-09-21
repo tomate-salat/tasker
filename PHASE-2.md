@@ -327,6 +327,14 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
    `POST /api/bulk` kam mit der Mehrfachauswahl, der Undo-Stack aus Abschnitt 5 mit `POST
    /api/steps` – beides steht unter „Angleichen an den Prototyp“.
 10. Import: erst der Prototyp-Export (damit die eigenen Daten mitkommen), dann Codecks.
+   - **Codecks (Server fertig):** `POST /api/import/codecks` liest den CSV-Export („Export as CSV“
+     über die Mehrfachauswahl), mit `dryRun` als Vorschau. Zuordnung in `src/server/codecks.ts`:
+     Deck einer Karte ohne Hero-Card → Kategorie, Deck unter einer Hero-Card → Label, Deck
+     „Backlog“ → nichts; Hero-Card → Aufgabe mit Unteraufgaben; Milestone → geplant mit festem
+     Ende; Doc-Karte → Doku; Priorität 3/2/1 → hoch/mittel/niedrig; `unclear` → Status Unklar;
+     Effort und Owner fallen weg. Der Export kennt keinen Arbeitsstand – alles kommt offen an.
+     Ein vorhandenes Projekt gleichen Namens bricht den Import ab.
+   - **Offen:** Import-Dialog in der App (Datei wählen, Vorschau, bestätigen).
 11. Gamification, dezent.
 
 ### Angleichen an den Prototyp

@@ -3,6 +3,7 @@ import { streamSSE } from 'hono/streaming';
 import {
   archiveQuery,
   bulkBody,
+  codecksImportBody,
   createSchemas,
   drawingCreate,
   drawingPatch,
@@ -18,6 +19,7 @@ import {
 } from '../shared/api.js';
 import { CLIENT_HEADER, type ChangeEvent } from '../shared/events.js';
 import { loadLogs, logScopes } from './burnup.js';
+import { importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
@@ -188,6 +190,16 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
 
     return run(c, bus, () => applySteps(ctx, body.data.steps), {
       event: () => ({ type: 'reload', reason: 'Mehrere Änderungen' }),
+    });
+  });
+
+  // Vorschau und Import laufen denselben Weg; nur der echte Import meldet sich im Strom.
+  app.post('/import/codecks', async (c) => {
+    const body = codecksImportBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    const { csv, dryRun } = body.data;
+    return run(c, bus, () => importCodecks(ctx, csv, { dryRun }), {
+      ...(dryRun ? {} : { event: () => ({ type: 'reload', reason: 'Aus Codecks importiert' }) as const }),
     });
   });
 

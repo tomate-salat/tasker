@@ -109,6 +109,12 @@ export const moveTarget = z.object({
   index: z.number().int().min(0).optional(),
 });
 
+/** Codecks-Export als CSV-Text; mit `dryRun` nur zählen, was ankäme. */
+export const codecksImportBody = z.object({
+  csv: z.string().min(1).max(20_000_000),
+  dryRun: z.boolean().optional(),
+});
+
 /** „Duplizieren“ aus dem Kontextmenü: eine Aufgabe samt allem, was daran hängt. */
 export const duplicateBody = z.object({ id });
 
