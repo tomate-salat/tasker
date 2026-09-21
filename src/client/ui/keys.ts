@@ -268,8 +268,12 @@ const hidden = (ws: Workspace, id: string | null): OutlineRow | undefined => {
 
 const rowEl = (id: string): HTMLElement | null => document.querySelector(`[data-row="${id}"]`);
 
-/** Die Reihenfolge von `S` im Prototyp – nicht die der Datenbank. */
-const STATUS_CYCLE: Status[] = ['open', 'unclear', 'progress', 'blocked', 'done'];
+/**
+ * `S` schaltet nur durch den normalen Ablauf. Unklar und Blockiert sind
+ * Sonderstatus, die ausdrücklich gesetzt werden – von dort führt `S` zurück
+ * auf Offen. (Abweichung vom Prototyp, auf Wunsch.)
+ */
+const STATUS_CYCLE: Status[] = ['open', 'progress', 'done'];
 
 const nextStatus = (s: Status): Status =>
   STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length] ?? 'open';

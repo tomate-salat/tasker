@@ -430,7 +430,9 @@ Prototyp auch, bei uns wegen „+ Aufgabe“ etwas mehr (siehe Kopf).
 - ~~`M` und `Kontextmenü`/`⇧ F10` fehlen~~ **Erledigt.** `M` öffnet unter der Zeile das Ortsmenü
   (`propMenu(x, 'loc')`: Behälter, „Unter einen Task“, „In anderes Projekt“), die Kontextmenü-Taste
   das Zeilenmenü; der Fokus steht jeweils auf dem ersten Eintrag.
-- ~~`S`-Reihenfolge~~ **Erledigt:** Offen → Unklar → In Progress → Blockiert → Erledigt.
+- ~~`S`-Reihenfolge~~ **Erledigt:** Offen → In Progress → Erledigt. Bewusste Abweichung vom
+  Prototyp auf Wunsch: Unklar und Blockiert sind Sonderstatus und werden nur ausdrücklich gesetzt;
+  `S` führt von dort zurück auf Offen.
 - ~~Leertaste und `S` auf Dokumentationsseiten~~ **Erledigt:** wirken dort nicht mehr.
 - ~~`Esc` schließt immer~~ **Erledigt:** den Inspektor nur bis 1240 px Breite.
 - ~~Menüs ohne Pfeiltasten~~ **Erledigt** (`ctxKey`): ↑/↓ reihum, → bzw. `Enter` öffnet ein
