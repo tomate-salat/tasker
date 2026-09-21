@@ -17,12 +17,15 @@ function Modal({
   onClose,
   children,
   wide = false,
+  closeLabel = 'Fertig',
 }: {
   title: string;
   sub?: string;
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  /** Die Hilfe schließt im Prototyp mit „Schließen“, die übrigen Dialoge mit „Fertig“. */
+  closeLabel?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -48,7 +51,7 @@ function Modal({
         {children}
         <p className="dlg-foot">
           <button className="btn" onClick={onClose}>
-            Fertig
+            {closeLabel}
           </button>
         </p>
       </div>
@@ -383,6 +386,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
       title="Tastenkürzel & Schnell-Erfassung"
       sub="Kürzel wirken, wenn die Liste aktiv ist (Task oder Milestone anklicken)."
       onClose={onClose}
+      closeLabel="Schließen"
       wide
     >
       <h3>Liste</h3>
@@ -410,7 +414,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <dt>
           <kbd>Alt</kbd>+<kbd>↑</kbd> <kbd>↓</kbd>
         </dt>
-        <dd>Verschieben</dd>
+        <dd>Verschieben (auch Milestones)</dd>
         <dt>
           <kbd>Leertaste</kbd>
         </dt>
@@ -418,19 +422,56 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <dt>
           <kbd>S</kbd>
         </dt>
-        <dd>Nächster Status</dd>
+        {/* Abweichung vom Prototyp, auf Wunsch: Unklar und Blockiert nur ausdrücklich. */}
+        <dd>Nächster Status: Offen → In Progress → Erledigt</dd>
         <dt>
           <kbd>F2</kbd> / <kbd>E</kbd>
         </dt>
         <dd>Titel bearbeiten</dd>
         <dt>
+          <kbd>P</kbd>
+        </dt>
+        <dd>Milestone in den Plan / zurück in den Backlog</dd>
+        <dt>
+          <kbd>B</kbd>
+        </dt>
+        <dd>Task in den Backlog (Unsortiert)</dd>
+        <dt>
+          <kbd>M</kbd>
+        </dt>
+        <dd>Task verschieben nach …</dd>
+        <dt>
           <kbd>A</kbd>
         </dt>
-        <dd>Archivieren</dd>
+        <dd>Archivieren (im Archiv: wiederherstellen)</dd>
         <dt>
           <kbd>Entf</kbd>
         </dt>
-        <dd>In den Papierkorb</dd>
+        <dd>Löschen</dd>
+        <dt>
+          <kbd>Strg</kbd>+Klick
+        </dt>
+        <dd>Task zur Auswahl hinzufügen / entfernen</dd>
+        <dt>
+          <kbd>Shift</kbd>+Klick
+        </dt>
+        <dd>Bereich auswählen</dd>
+        <dt>
+          <kbd>Shift</kbd>+<kbd>↑</kbd> <kbd>↓</kbd>
+        </dt>
+        <dd>Auswahl erweitern</dd>
+        <dt>
+          <kbd>Strg</kbd>+<kbd>A</kbd>
+        </dt>
+        <dd>Alle sichtbaren Tasks auswählen</dd>
+        <dt>
+          Rechtsklick / <kbd>Shift</kbd>+<kbd>F10</kbd>
+        </dt>
+        <dd>Kontextmenü für Task, Milestone oder Gruppe</dd>
+        <dt>
+          <kbd>Strg</kbd>+<kbd>Z</kbd>
+        </dt>
+        <dd>Rückgängig</dd>
         <dt>
           <kbd>N</kbd> / <kbd>/</kbd>
         </dt>
@@ -439,6 +480,13 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <kbd>[</kbd>
         </dt>
         <dd>Seitenleiste ein-/ausklappen</dd>
+        <dt>Zeichnung</dt>
+        {/* Der Editor ist Excalidraw: dort gehört Esc dem Editor, fertig ist man mit „Fertig“. */}
+        <dd>
+          „+ Zeichnung“ im Detail-Panel · im Editor: <kbd>P</kbd> Stift, <kbd>R</kbd> Rechteck,{' '}
+          <kbd>O</kbd> Ellipse, <kbd>A</kbd> Pfeil, <kbd>T</kbd> Text, <kbd>Strg</kbd>+<kbd>Z</kbd>,
+          „Fertig“ schließt
+        </dd>
       </dl>
 
       <h3>Schnell-Erfassung</h3>
@@ -459,7 +507,8 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <code>%bug</code>
         </dt>
         <dd>
-          Markierung – oder den Titel direkt mit dem Emoji beginnen: <code>🐞 Absturz beim Laden</code>
+          Markierung (Name oder Anfang davon) – oder den Titel direkt mit dem Emoji beginnen:{' '}
+          <code>🐞 Absturz beim Laden</code>
         </dd>
         <dt>
           <code>~progress</code>
@@ -472,7 +521,8 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <code>&gt;Demo</code>
         </dt>
         <dd>
-          In Milestone, Gruppe oder unter einen Task (mit Leerzeichen: <code>&gt;"Nice to"</code>)
+          In Milestone, Backlog-Gruppe oder unter einen Task (Teil des Namens reicht; mit Leerzeichen:{' '}
+          <code>&gt;"Nice to"</code>)
         </dd>
         <dt>
           <code>@nach:Hitbox</code>
@@ -483,11 +533,21 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>In dieses Projekt</dd>
       </dl>
+      <p className="muted" style={{ fontSize: 13 }}>
+        Ohne <code>&gt;</code> landet ein neuer Task im Backlog unter „Unsortiert“.
+      </p>
 
       <h3>Ziehen &amp; Ablegen</h3>
       <dl>
         <dt>Task</dt>
-        <dd>auf Task: oben/unten = davor/danach, Mitte = hinein · auf Milestone oder Gruppe = hinein</dd>
+        <dd>
+          auf Task: oben/unten = davor/danach, Mitte = hinein · auf Milestone oder Gruppe = hinein · auf
+          Tab „Backlog“ = Unsortiert · auf Projekt = in dessen Backlog
+        </dd>
+        <dt>Milestone</dt>
+        <dd>auf Milestone = Reihenfolge · auf Tab „Plan“ / „Backlog“ = einplanen / zurückholen</dd>
+        <dt>Gruppe</dt>
+        <dd>auf Gruppe = Reihenfolge</dd>
       </dl>
     </Modal>
   );

@@ -592,7 +592,10 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   „Anzeigen“ statt „Rückgängig“ (wie im Prototyp; `Strg+Z` geht weiter).
   Noch nicht wie im Prototyp: Nach der Schnellerfassung heißt die Meldung „Angelegt: …“ statt
   „Angelegt im Backlog › … · Projekt“, und bei sichtbarer neuer Zeile fehlt dort „Rückgängig“.
-- Die Kürzel-Hilfe ist gekürzt – sie spiegelt die fehlenden Funktionen oben.
+- ~~Die Kürzel-Hilfe ist gekürzt~~ **Erledigt.** Vollständig wie im Prototyp (Text Zeile für Zeile
+  verglichen, Knopf „Schließen“). Zwei gewollte Abweichungen: `S` nennt den Ablauf Offen → In
+  Progress → Erledigt (Unklar/Blockiert nur ausdrücklich, auf Wunsch), und die Zeile „Zeichnung“
+  beschreibt „+ Zeichnung“ und Excalidraw, wo „Fertig“ statt `Esc` schließt.
 - ~~**Backlog.**~~ **Erledigt.** Die drei Abschnitte des Prototyps: „Vorbereitete Milestones“ (die
   nicht eingeplanten, mit „In den Plan →“ und eigenem „+ Milestone“), „Ideen & Tasks“ (Unsortiert
   plus die eigenen Gruppen, mit „+ Gruppe“) und „Smarte Gruppen“ – eine je Markierung. Der Plan
