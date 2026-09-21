@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { CodecksSummary } from '@shared/api.js';
+import type { CodecksRefsResult, CodecksSummary } from '@shared/api.js';
 import type { Settings } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account } from '../api.js';
@@ -326,6 +326,9 @@ export function ProfileDialog({
       <h3>Import aus Codecks</h3>
       <CodecksImport onDone={onClose} />
 
+      <h3>Codecks-Verweise umwandeln</h3>
+      <CodecksRefs onDone={onClose} />
+
       <h3>Sitzung</h3>
       <button className="btn ghost" onClick={onLogout}>
         Abmelden
@@ -459,6 +462,104 @@ function PasswordForm() {
         Passwort ändern
       </button>
     </form>
+  );
+}
+
+/**
+ * Codecks-Verweise ($3yw) in schon importierten Texten zu Tasker-Nummern machen.
+ * Alle Exporte auf einmal, damit auch Verweise über Projekte hinweg ein Ziel
+ * finden. Erst die Vorschau mit jeder einzelnen Änderung, dann umwandeln.
+ */
+function CodecksRefs({ onDone }: { onDone: () => void }) {
+  const { say, load } = useStore();
+  const [csvs, setCsvs] = useState<string[] | null>(null);
+  const [preview, setPreview] = useState<CodecksRefsResult | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function pick(files: FileList | null): Promise<void> {
+    setPreview(null);
+    setCsvs(null);
+    if (!files?.length) return;
+    setBusy(true);
+    try {
+      const texts = await Promise.all([...files].map((f) => f.text()));
+      setPreview(await api.convertCodecksRefs(texts, true));
+      setCsvs(texts);
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Dateien konnten nicht gelesen werden');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function run(): Promise<void> {
+    if (!csvs) return;
+    setBusy(true);
+    try {
+      const r = await api.convertCodecksRefs(csvs, false);
+      await load();
+      say(`Verweise in ${count(r.texts.length, 'Text', 'Texten')} umgewandelt`);
+      onDone();
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Umwandeln fehlgeschlagen');
+      setBusy(false);
+    }
+  }
+
+  const changes = preview?.texts.flatMap((t) => t.changes) ?? [];
+  const linked = changes.filter((c) => c.ref === null).length;
+
+  return (
+    <>
+      <label className="field">
+        <span>Alle CSV-Exporte aus Codecks (mehrere auswählbar)</span>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          multiple
+          disabled={busy}
+          onChange={(e) => void pick(e.target.files)}
+        />
+      </label>
+      {!preview && (
+        <p className="pf-hint">
+          Macht aus Codecks-Verweisen wie $3yw in importierten Beschreibungen Tasker-Verweise. Die
+          Karte wird über Projekt und Titel gefunden; gibt es sie nicht eindeutig, wird daraus ein
+          Link zur Karte in Codecks. Jedes Projekt wird nur einmal umgewandelt.
+        </p>
+      )}
+      {preview && (
+        <>
+          <p className="pf-hint">
+            {count(changes.length - linked, 'Verweis wird', 'Verweise werden')} zum Tasker-Verweis,{' '}
+            {count(linked, 'Verweis wird', 'Verweise werden')} zum Codecks-Link – in{' '}
+            {count(preview.texts.length, 'Text', 'Texten')}.
+            {preview.skipped.length > 0 && <> Schon umgewandelt: {preview.skipped.join(', ')}.</>}
+            {preview.unknownProjects.length > 0 && (
+              <> Nicht in Tasker: {preview.unknownProjects.join(', ')}.</>
+            )}
+          </p>
+          {preview.texts.length > 0 && (
+            <ul className="refs-preview">
+              {preview.texts.map((t) => (
+                <li key={t.id}>
+                  <b>{t.title || 'Ohne Titel'}</b>
+                  {t.changes.map((c, i) => (
+                    <div key={i} className={c.ref === null ? 'muted' : ''}>
+                      ${c.code} →{' '}
+                      {c.ref !== null ? `$${c.ref} „${c.target}“` : `Codecks-Link (${c.reason})`}
+                    </div>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+          <button className="btn" disabled={busy || !preview.texts.length} onClick={() => void run()}>
+            Umwandeln
+          </button>
+        </>
+      )}
+    </>
   );
 }
 

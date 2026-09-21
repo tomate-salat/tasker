@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, beforeEach, describe, it } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { importCodecks, parseCsv } from './codecks.js';
+import { convertCodecksRefs, importCodecks, parseCsv } from './codecks.js';
 import { createDbCtx, type DbCtx } from './db.js';
-import { create, loadBootstrap } from './repo.js';
+import { archive, create, loadBootstrap, patch } from './repo.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tasker-codecks-'));
 const opened: DbCtx[] = [];
@@ -46,7 +46,7 @@ const row = (o: Record<string, string>): string =>
     o.date ?? '',
     '2026-08-30T09:45:02.772Z',
     '0',
-    'https://x.codecks.io/card/1',
+    `https://x.codecks.io/card/${o.code ?? o.id}-titel`,
   ]
     .map((f = '') => `"${f.replace(/"/g, '""')}"`)
     .join(';');
@@ -146,5 +146,64 @@ describe('Codecks-Import', () => {
 
   it('lehnt eine Datei ohne die nötigen Spalten ab', () => {
     assert.throws(() => importCodecks(ctx, '"Title";"Content"\n"a";"b"'), /es fehlt/);
+  });
+});
+
+describe('Codecks-Verweise umwandeln', () => {
+  const CARDS = [
+    HEAD,
+    row({ id: 'c1', code: '3yw', title: 'Absturz', content: 'Absturz\n\nBehebt $3z6 und $3sv, siehe `$3yw`.' }),
+    row({ id: 'c2', code: '3z6', title: 'Ausgang öffnen', content: 'Ausgang öffnen\n\nBehebt auch $3yw' }),
+    row({ id: 'c3', code: '345', title: 'Alte Idee', content: 'Alte Idee\n\nVon $345 und $12, kostet 5$.' }),
+  ].join('\r\n');
+
+  const setup = () => {
+    importCodecks(ctx, CARDS);
+    const data = loadBootstrap(ctx);
+    const task = (title: string) => data.tasks.find((t) => t.title === title)!;
+    return { task, ref: (title: string) => task(title).ref };
+  };
+  const descOf = (title: string) => loadBootstrap(ctx).tasks.find((t) => t.title === title)!.desc;
+  const archivedDesc = (title: string) =>
+    (ctx.sqlite.prepare('SELECT desc FROM task WHERE title = ?').get(title) as { desc: string }).desc;
+
+  it('macht aus bekannten Karten Tasker-Nummern, aus unbekannten Codecks-Links', () => {
+    const { ref } = setup();
+    const preview = convertCodecksRefs(ctx, [CARDS], { dryRun: true });
+    assert.equal(descOf('Absturz'), 'Behebt $3z6 und $3sv, siehe `$3yw`.');
+    assert.deepEqual(
+      preview.texts.find((t) => t.title === 'Absturz')?.changes.map((c) => [c.code, c.ref, c.link]),
+      [
+        ['3z6', ref('Ausgang öffnen'), null],
+        ['3sv', null, 'https://x.codecks.io/card/3sv'],
+      ],
+    );
+
+    convertCodecksRefs(ctx, [CARDS]);
+    assert.equal(
+      descOf('Absturz'),
+      `Behebt $${ref('Ausgang öffnen')} und [$3sv](https://x.codecks.io/card/3sv), siehe \`$3yw\`.`,
+    );
+    assert.equal(descOf('Ausgang öffnen'), `Behebt auch $${ref('Absturz')}`);
+  });
+
+  it('Ziffern-Kürzel nur, wenn der Export die Karte kennt – und jedes Projekt nur einmal', () => {
+    const { ref } = setup();
+    convertCodecksRefs(ctx, [CARDS]);
+    // $345 ist eine bekannte Karte, $12 nicht – das könnte schon eine Tasker-Nummer sein.
+    assert.equal(descOf('Alte Idee'), `Von $${ref('Alte Idee')} und $12, kostet 5$.`);
+
+    const again = convertCodecksRefs(ctx, [CARDS], { dryRun: true });
+    assert.deepEqual(again.skipped, ['Spiel']);
+    assert.deepEqual(again.texts, []);
+  });
+
+  it('findet Ziele auch im Archiv und erfasst archivierte Texte, lässt Umbenanntes als Link', () => {
+    const { task } = setup();
+    archive(ctx, 'task', task('Ausgang öffnen').id);
+    patch(ctx, 'task', task('Absturz').id, task('Absturz').version, { title: 'Absturz beim Laden' });
+    convertCodecksRefs(ctx, [CARDS]);
+    assert.match(archivedDesc('Ausgang öffnen'), /\[\$3yw\]\(https:\/\/x\.codecks\.io\/card\/3yw\)/);
+    assert.ok(descOf('Absturz beim Laden').startsWith(`Behebt $${task('Ausgang öffnen').ref} `));
   });
 });

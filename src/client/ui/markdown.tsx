@@ -21,7 +21,11 @@ const PLACEHOLDER = /<p>DRAWEMBED([A-Za-z0-9_-]+)END<\/p>/;
  */
 export function markdownHtml(src: string, resolve?: RefResolver): string {
   const raw = marked.parse(src ?? '', { async: false, gfm: true }) as string;
-  const sanitized = DOMPurify.sanitize(raw);
+  // Links nach draußen öffnen einen neuen Tab – sonst verlässt ein Klick die Anwendung.
+  const sanitized = DOMPurify.sanitize(raw).replace(
+    /<a href="(https?:[^"]*)"/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer"',
+  );
   const clean = resolve ? linkRefs(sanitized, resolve) : sanitized;
   let n = 0;
   return clean.replace(

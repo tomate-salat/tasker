@@ -581,6 +581,8 @@ function Content({
         title="Klicken zum Bearbeiten"
         onClick={(e) => {
           if (refClick(e)) return;
+          // Ein gewöhnlicher Link öffnet sein Ziel, nicht den Editor.
+          if ((e.target as HTMLElement).closest('a[href]')) return;
           const next = checkboxClick(e, item.desc);
           if (next !== null) {
             void patch(kind, item.id, { desc: next });

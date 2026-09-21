@@ -1,4 +1,4 @@
-import type { CodecksSummary } from '../shared/api.js';
+import type { CodecksRefChange, CodecksRefsResult, CodecksSummary } from '../shared/api.js';
 import type { Prio, Status } from '../shared/model.js';
 import type { DbCtx } from './db.js';
 import { create } from './repo.js';
@@ -32,6 +32,8 @@ export type CodecksCard = {
   project: string;
   milestone: string;
   milestoneDate: string;
+  /** Adresse der Karte, etwa `https://team.codecks.io/card/3yw-titel` – darin das Kürzel. */
+  link: string;
 };
 
 const COLUMNS = {
@@ -46,7 +48,11 @@ const COLUMNS = {
   project: 'Project name',
   milestone: 'Milestone name',
   milestoneDate: 'Milestone date',
+  link: 'Card link',
 } as const;
+
+/** Spalten, ohne die der Import trotzdem geht. */
+const OPTIONAL = new Set(['parentId', 'milestone', 'milestoneDate', 'link']);
 
 /** Das Deck, in dem Codecks neue Karten ablegt – kein inhaltlicher Ort. */
 const PLAIN_DECK = 'Backlog';
@@ -89,7 +95,7 @@ export function readCodecksCsv(text: string): CodecksCard[] {
     Object.entries(COLUMNS).map(([key, name]) => [key, head.indexOf(name)]),
   ) as Record<keyof typeof COLUMNS, number>;
   const missing = Object.entries(index)
-    .filter(([key, i]) => i < 0 && key !== 'parentId' && key !== 'milestone' && key !== 'milestoneDate')
+    .filter(([key, i]) => i < 0 && !OPTIONAL.has(key))
     .map(([key]) => COLUMNS[key as keyof typeof COLUMNS]);
   if (missing.length) {
     throw new Error(`Das ist kein Codecks-Export mit allen nötigen Spalten – es fehlt: ${missing.join(', ')}.`);
@@ -112,6 +118,7 @@ export function readCodecksCsv(text: string): CodecksCard[] {
     project: get(r, 'project'),
     milestone: get(r, 'milestone'),
     milestoneDate: get(r, 'milestoneDate'),
+    link: get(r, 'link'),
   }));
 }
 
@@ -259,4 +266,132 @@ function write(ctx: DbCtx, cards: CodecksCard[]): CodecksSummary {
   }
 
   return summary;
+}
+
+/* ------------------------------------------- Verweise in importierten Texten */
+
+/** Das Kürzel einer Karte aus ihrer Adresse: `…/card/3yw-titel` → `3yw`. */
+export const codeOf = (link: string): string | null =>
+  /\/card\/([0-9a-z]+)(?:-|\/|$)/.exec(link)?.[1] ?? null;
+
+/**
+ * Ein Codecks-Verweis im Text. Nicht direkt hinter `[`, damit die Links, die die
+ * Umwandlung selbst schreibt (`[$3sv](…)`), nicht noch einmal erfasst werden.
+ */
+const CODECKS_REF = /(^|[^\w$[])\$([0-9a-z]{2,6})(?![\w$])/g;
+
+/** Code-Blöcke und Inline-Code; als Gruppe, damit `split` sie behält. */
+const CODE = /(```[\s\S]*?```|`[^`\n]*`)/;
+
+/** Merkt sich je Projekt, dass die Umwandlung gelaufen ist – danach stehen dort Tasker-Nummern. */
+const convertedKey = (projectId: string): string => `codecks.refs.${projectId}`;
+
+/**
+ * Wandelt Codecks-Verweise (`$3yw`) in schon importierten Beschreibungen um:
+ * gibt es die Karte in Tasker eindeutig (gleiches Projekt, gleicher Titel),
+ * wird daraus `$142`, sonst ein Link auf die Karte in Codecks.
+ *
+ * Kürzel aus reinen Ziffern sehen aus wie Tasker-Nummern. Umgewandelt werden sie
+ * nur, wenn der Export die Karte kennt – und jedes Projekt nur einmal, denn
+ * danach könnten dort echte Tasker-Nummern stehen. Mit `dryRun` wird nur
+ * gezeigt, was sich ändern würde.
+ */
+export function convertCodecksRefs(
+  ctx: DbCtx,
+  csvs: string[],
+  o: { dryRun?: boolean } = {},
+): CodecksRefsResult {
+  const cards = csvs.flatMap((csv) => readCodecksCsv(csv));
+  if (!cards.length) throw new Error('Die Dateien enthalten keine Karten.');
+  const all = <T>(sql: string, ...p: unknown[]): T[] => ctx.sqlite.prepare(sql).all(...p) as T[];
+
+  const byCode = new Map<string, CodecksCard>();
+  for (const c of cards) {
+    const code = codeOf(c.link);
+    if (code) byCode.set(code, c);
+  }
+  if (!byCode.size) {
+    throw new Error('Im Export fehlt die Spalte „Card link“ – ohne sie sind die Kürzel nicht bekannt.');
+  }
+  const base = cards.map((c) => /^(https?:\/\/[^/]+)\/card\//.exec(c.link)?.[1]).find(Boolean) ?? null;
+
+  // Projekte aus dem Export, die es in Tasker gibt – und die noch nicht umgewandelt sind.
+  const names = [...new Set(cards.map((c) => c.project).filter(Boolean))];
+  const projects = all<{ id: string; name: string }>('SELECT id, name FROM project');
+  const unknownProjects = names.filter((n) => !projects.some((p) => p.name === n));
+  const matched = projects.filter((p) => names.includes(p.name));
+  const done = (p: { id: string }): boolean =>
+    !!ctx.sqlite.prepare('SELECT 1 FROM setting WHERE key = ?').get(convertedKey(p.id));
+  const skipped = matched.filter(done).map((p) => p.name);
+  const open = matched.filter((p) => !done(p));
+
+  // Ziele: gleiches Projekt, gleicher Titel – aktiv oder archiviert.
+  type Row = { id: string; ref: number; title: string; desc: string; project_id: string; kind: 'task' | 'milestone' };
+  const rows = all<Row>(
+    `SELECT id, ref, title, desc, project_id, 'task' AS kind FROM task
+     UNION ALL SELECT id, ref, title, desc, project_id, 'milestone' AS kind FROM milestone`,
+  );
+  const idsOf = (name: string): string[] => projects.filter((p) => p.name === name).map((p) => p.id);
+
+  const resolve = (code: string): CodecksRefChange => {
+    const card = byCode.get(code);
+    const link = base ? `${base}/card/${code}` : null;
+    if (!card) return { code, ref: null, target: null, link, reason: 'Karte nicht im Export' };
+    const pids = idsOf(card.project);
+    const hits = rows.filter((r) => pids.includes(r.project_id) && r.title.trim() === card.title.trim());
+    if (hits.length === 1) {
+      const hit = hits[0] as Row;
+      return { code, ref: hit.ref, target: hit.title, link: null, reason: null };
+    }
+    return {
+      code,
+      ref: null,
+      target: null,
+      link,
+      reason: hits.length ? `${hits.length} Einträge heißen „${card.title}“` : `„${card.title}“ nicht gefunden`,
+    };
+  };
+
+  const openIds = new Set(open.map((p) => p.id));
+  const texts: CodecksRefsResult['texts'] = [];
+  const updates: { kind: 'task' | 'milestone'; id: string; desc: string }[] = [];
+
+  for (const r of rows) {
+    if (!openIds.has(r.project_id) || !r.desc.includes('$')) continue;
+    const changes: CodecksRefChange[] = [];
+    const replace = (text: string): string =>
+      text.replace(CODECKS_REF, (m, lead: string, code: string) => {
+        // Reine Ziffern, die der Export nicht kennt, könnten schon Tasker-Nummern sein.
+        if (/^\d+$/.test(code) && !byCode.has(code)) return m;
+        const change = resolve(code);
+        changes.push(change);
+        if (change.ref !== null) return `${lead}$${change.ref}`;
+        return change.link ? `${lead}[$${code}](${change.link})` : m;
+      });
+    // Code bleibt, wie er ist – dort zeigt auch die Anzeige keine Verweise.
+    const desc = r.desc
+      .split(CODE)
+      .map((part, i) => (i % 2 ? part : replace(part)))
+      .join('');
+    if (!changes.length) continue;
+    texts.push({ kind: r.kind, id: r.id, title: r.title, changes });
+    if (desc !== r.desc) updates.push({ kind: r.kind, id: r.id, desc });
+  }
+
+  if (!o.dryRun) {
+    ctx.sqlite.transaction(() => {
+      const now = new Date().toISOString();
+      for (const u of updates) {
+        ctx.sqlite
+          .prepare(`UPDATE ${u.kind} SET desc = ?, version = version + 1, updated_at = ? WHERE id = ?`)
+          .run(u.desc, now, u.id);
+      }
+      const mark = ctx.sqlite.prepare(
+        'INSERT INTO setting (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      );
+      for (const p of open) mark.run(convertedKey(p.id), now);
+    })();
+  }
+
+  return { texts, skipped, unknownProjects };
 }

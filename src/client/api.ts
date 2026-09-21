@@ -1,6 +1,7 @@
 import type {
   BulkAction,
   BulkItem,
+  CodecksRefsResult,
   CodecksSummary,
   Kind,
   Step,
@@ -169,6 +170,9 @@ export const api = {
 
   importCodecks: (csv: string, dryRun: boolean) =>
     post<CodecksSummary>('/api/import/codecks', { csv, dryRun }),
+
+  convertCodecksRefs: (csvs: string[], dryRun: boolean) =>
+    post<CodecksRefsResult>('/api/import/codecks-refs', { csvs, dryRun }),
 
   archivePage: (params: { q?: string; projectId?: string; offset?: number }) => {
     const q = new URLSearchParams();

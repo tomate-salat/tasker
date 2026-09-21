@@ -115,6 +115,33 @@ export const codecksImportBody = z.object({
   dryRun: z.boolean().optional(),
 });
 
+/** Codecks-Verweise ($3yw) in schon importierten Texten umwandeln – mit allen Exporten auf einmal. */
+export const codecksRefsBody = z.object({
+  csvs: z.array(z.string().min(1).max(20_000_000)).min(1).max(20),
+  dryRun: z.boolean().optional(),
+});
+
+/** Ein Codecks-Verweis in einem Text und was aus ihm wird. */
+export type CodecksRefChange = {
+  code: string;
+  /** Die Tasker-Nummer des Ziels – oder null, wenn es keins eindeutig gibt. */
+  ref: number | null;
+  /** Titel des Ziels in Tasker. */
+  target: string | null;
+  /** Ohne Ziel: Link auf die Karte in Codecks. */
+  link: string | null;
+  /** Warum es kein Ziel gibt. */
+  reason: string | null;
+};
+
+export type CodecksRefsResult = {
+  texts: { kind: 'task' | 'milestone'; id: string; title: string; changes: CodecksRefChange[] }[];
+  /** Projekte, deren Verweise schon umgewandelt wurden – sie bleiben unberührt. */
+  skipped: string[];
+  /** Projekte aus dem Export, die es in Tasker nicht gibt. */
+  unknownProjects: string[];
+};
+
 /** Was ein Codecks-Import anlegt – bei der Vorschau: anlegen würde. */
 export type CodecksSummary = {
   projects: string[];

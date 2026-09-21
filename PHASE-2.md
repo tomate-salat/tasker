@@ -352,6 +352,13 @@ Aufgabe oder den Milestone mit dieser Nummer.
 - Beim Schreiben öffnet `$` eine Suche (Titel oder Nummer, eigenes Projekt zuerst); ↑/↓, Enter/Tab,
   Escape schließt nur die Liste.
 - Die Nummer steht oben rechts im Inspektor; ein Klick kopiert `$142`.
+- **Codecks-Verweise** (`$3yw`) in importierten Texten wandelt „Codecks-Verweise umwandeln“ im
+  Profil-Dialog um (`POST /api/import/codecks-refs`, erst Vorschau): das Kürzel steht im „Card
+  link“ des Exports, das Ziel wird über Projekt und Titel gefunden (auch im Archiv). Ohne
+  eindeutiges Ziel wird daraus ein Link zur Karte in Codecks. Code bleibt unberührt. Kürzel aus
+  reinen Ziffern nur, wenn der Export die Karte kennt, und jedes Projekt nur einmal
+  (`setting codecks.refs.<projectId>`) – danach könnten dort echte Tasker-Nummern stehen.
+- Links nach draußen öffnen einen neuen Tab und nicht den Editor.
 11. Gamification, dezent.
 
 ### Angleichen an den Prototyp

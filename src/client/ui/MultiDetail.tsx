@@ -126,7 +126,8 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
           title="Klicken zum Bearbeiten · Text markieren zum Kopieren"
           aria-label={`Beschreibung von ${task.title} bearbeiten`}
           onClick={(e) => {
-            if (!refClick(e)) setEditing(true);
+            if (refClick(e) || (e.target as HTMLElement).closest('a[href]')) return;
+            setEditing(true);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') setEditing(true);
