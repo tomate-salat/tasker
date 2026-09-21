@@ -81,6 +81,52 @@ const keyOf = (t: Target): string => {
 
 const clear = (): void => useDrag.setState({ drag: null, over: null });
 
+/* ------------------------------------------------------ Mitscrollen */
+
+/**
+ * Über den Prototyp hinaus (Wunsch des Nutzers): Hält man eine gezogene Zeile
+ * an den oberen oder unteren Rand der Liste, scrollt sie langsam mit – je
+ * näher am Rand, desto schneller. Oben beginnt der Rand unter dem stehenden
+ * Kopf, damit das Ablegen auf den Reitern ungestört bleibt.
+ */
+const EDGE = 60;
+const MAX_STEP = 8;
+
+let pointerY: number | null = null;
+let frame = 0;
+
+const track = (e: DragEvent): void => {
+  pointerY = e.clientY;
+};
+
+function scrollStep(): void {
+  const main = document.querySelector<HTMLElement>('.main');
+  if (main && pointerY !== null) {
+    const box = main.getBoundingClientRect();
+    const head = main.querySelector('.mhead')?.getBoundingClientRect();
+    const top = head ? head.bottom : box.top;
+    const speed = (d: number): number => Math.ceil(MAX_STEP * (1 - d / EDGE) ** 2);
+    if (pointerY >= top && pointerY < top + EDGE) main.scrollTop -= speed(pointerY - top);
+    else if (pointerY <= box.bottom && pointerY > box.bottom - EDGE) {
+      main.scrollTop += speed(box.bottom - pointerY);
+    }
+  }
+  frame = requestAnimationFrame(scrollStep);
+}
+
+useDrag.subscribe((s, prev) => {
+  if (!!s.drag === !!prev.drag) return;
+  // In der Einfangphase – die Ablageziele halten das Ereignis sonst unterwegs an.
+  if (s.drag) {
+    document.addEventListener('dragover', track, true);
+    frame = requestAnimationFrame(scrollStep);
+  } else {
+    document.removeEventListener('dragover', track, true);
+    cancelAnimationFrame(frame);
+    pointerY = null;
+  }
+});
+
 /** Die Zone, die gerade über diesem Ziel angezeigt wird. */
 export const useZone = (target: Target): Zone | null => {
   const key = keyOf(target);
