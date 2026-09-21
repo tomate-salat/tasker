@@ -528,8 +528,10 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   (soweit geladen), im Zeitplan wie im Plan nur das Geplante. Plan und Backlog unverändert.
 
 **Inspektor**
-- Dokumentationsseiten zeigen Status, Fortschritt, Priorität und Abhängigkeiten; im Prototyp nur
-  Kategorie, Markierung und Labels.
+- ~~Inspektor für Dokumentationsseiten~~ **Erledigt.** Wie im Prototyp nur Kategorie, Markierung,
+  Labels, Inhalt und Unterseiten – kein Status, Fortschritt, Priorität und keine Abhängigkeiten.
+  Nebenbei: Im Pfad stand das Seiten-Symbol über „Dokumentation“; jetzt wie im Prototyp
+  „📄 Dokumentation“ in einer Zeile.
 - Der Inhalts-Editor übernimmt beim Verlassen des Feldes nicht (Prototyp: Fokus weg = fertig).
 - Trefferliste der Abhängigkeiten nicht mit Pfeiltasten wählbar.
 - ~~Zeichnungen lassen sich nicht löschen~~ **Erledigt** (vom Nutzer gemeldet). „Löschen“ sitzt

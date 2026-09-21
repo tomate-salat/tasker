@@ -87,7 +87,8 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
       {milestone && <Burnup ws={ws} milestone={milestone} />}
       {milestone && <MilestoneChildren ws={ws} milestone={milestone} />}
 
-      <Deps ws={ws} kind={kind} item={item} />
+      {/* Doku-Seiten haben wie im Prototyp keine Abhängigkeiten. */}
+      {!(task && ws.isDoc(task)) && <Deps ws={ws} kind={kind} item={item} />}
 
       {menu.node}
     </aside>
@@ -127,12 +128,8 @@ function Crumbs({
     const root = ws.root(task);
     const ms = ws.milestone(root.milestoneId);
     if (ms) middle.push(link(ms, `◆ ${ms.title || 'Ohne Titel'}`));
-    else if (root.doc)
-      middle.push(
-        <span key="doc">
-          <span className="doc-ico">{DOC_ICON}</span> Dokumentation
-        </span>,
-      );
+    // Wie im Prototyp als Text – das Symbol-Raster brach hier die Zeile um.
+    else if (root.doc) middle.push(<span key="doc">📄 Dokumentation</span>);
     else {
       middle.push(<span key="bl">Backlog</span>);
       middle.push(<span key="grp">{placeLabel(ws, root)}</span>);
@@ -226,41 +223,49 @@ function TaskHead({
         .findIndex((c) => c.id === cat.category.id)
     : 0;
 
+  // Wie im Prototyp hat eine Doku-Seite keinen Status, keinen Fortschritt und
+  // keine Priorität – nur Kategorie, Markierung und Labels.
+  const doc = ws.isDoc(task);
+
   return (
     <>
-      <MetaRow k="status" label="Status">
-        <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
-      </MetaRow>
+      {!doc && (
+        <MetaRow k="status" label="Status">
+          <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
+        </MetaRow>
+      )}
 
-      {(cl.total > 0 || kids.length > 0) && (
+      {!doc && (cl.total > 0 || kids.length > 0) && (
         <MetaRow k="prog" label="Fortschritt">
           <SegBar segments={statusSegments(ws, task)} />
         </MetaRow>
       )}
 
-      <MetaRow k="prio" label="Priorität">
-        <PropButton
-          menu={menu}
-          empty={!task.prio}
-          title="Priorität"
-          items={() =>
-            ([0, 1, 2, 3] as const).map((v) => ({
-              label: v ? `P${v} · ${PRIO_LABEL[v]}` : 'Keine',
-              check: task.prio === v,
-              onSelect: () => void patch('task', task.id, { prio: v }),
-            }))
-          }
-        >
-          {task.prio ? (
-            <>
-              <PrioIcon prio={task.prio} />
-              {PRIO_LABEL[task.prio]}
-            </>
-          ) : (
-            'Keine'
-          )}
-        </PropButton>
-      </MetaRow>
+      {!doc && (
+        <MetaRow k="prio" label="Priorität">
+          <PropButton
+            menu={menu}
+            empty={!task.prio}
+            title="Priorität"
+            items={() =>
+              ([0, 1, 2, 3] as const).map((v) => ({
+                label: v ? `P${v} · ${PRIO_LABEL[v]}` : 'Keine',
+                check: task.prio === v,
+                onSelect: () => void patch('task', task.id, { prio: v }),
+              }))
+            }
+          >
+            {task.prio ? (
+              <>
+                <PrioIcon prio={task.prio} />
+                {PRIO_LABEL[task.prio]}
+              </>
+            ) : (
+              'Keine'
+            )}
+          </PropButton>
+        </MetaRow>
+      )}
 
       <MetaRow k="cat" label="Kategorie">
         <PropButton
@@ -683,7 +688,7 @@ function ChildList({ ws, tasks, doc }: { ws: Workspace; tasks: Task[]; doc: bool
         return (
           <button
             key={k.id}
-            className={`child ${done ? 'done' : ''}`}
+            className={`child ${done && !doc ? 'done' : ''}`}
             onClick={() => select(k.id)}
           >
             {doc ? (
