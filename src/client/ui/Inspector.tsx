@@ -22,7 +22,8 @@ import {
   StatusIcon,
 } from './icons.js';
 import { markdownParts, checkboxClick } from './markdown.js';
-import { refClick, useRefPicker, useRefResolver } from './refs.js';
+import { useSmartEditor } from './editor.js';
+import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
 
@@ -516,7 +517,7 @@ function Content({
   const drawings = useDrawings({ kind, id: item.id }, item.desc);
   const ref = useRef<HTMLTextAreaElement>(null);
   const resolve = useRefResolver();
-  const picker = useRefPicker(ws, ref, { projectId: item.projectId, self: item.id });
+  const picker = useSmartEditor(ws, ref, { projectId: item.projectId, self: item.id });
 
   const { parts, embedded } = markdownParts(item.desc, drawings.list, resolve);
   const loose = drawings.list.filter((d) => !embedded.has(d.id));

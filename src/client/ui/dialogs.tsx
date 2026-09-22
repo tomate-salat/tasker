@@ -680,6 +680,33 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dd>
       </dl>
 
+      <h3>Beschreibung</h3>
+      <dl>
+        <dt>
+          <kbd>Enter</kbd>
+        </dt>
+        <dd>
+          In einer Liste (<code>- </code>, <code>1. </code>, <code>- [ ] </code>) den nächsten Punkt
+          beginnen · im leeren Punkt die Liste beenden
+        </dd>
+        <dt>
+          <kbd>Shift</kbd>+<kbd>Enter</kbd>
+        </dt>
+        <dd>Neue Zeile ohne neuen Punkt</dd>
+        <dt>
+          <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd>
+        </dt>
+        <dd>Listenpunkt ein-/ausrücken</dd>
+        <dt>
+          <kbd>$</kbd>
+        </dt>
+        <dd>Verweis auf Task oder Milestone</dd>
+        <dt>
+          <kbd>/</kbd>
+        </dt>
+        <dd>Befehle: TodoListe, Liste</dd>
+      </dl>
+
       <h3>Schnell-Erfassung</h3>
       <dl>
         <dt>

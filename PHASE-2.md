@@ -361,6 +361,22 @@ Aufgabe oder den Milestone mit dieser Nummer.
   Aufgabe); unbekannte darunter bleiben stehen und heißen in der Vorschau „unklar“. Jedes Projekt
   nur einmal (`setting codecks.refs.<projectId>`) – danach könnten dort echte Tasker-Nummern stehen.
 - Links nach draußen öffnen einen neuen Tab und nicht den Editor.
+
+### Beschreibung schreiben (über den Prototyp hinaus)
+
+Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `useSmartEditor` in
+`src/client/ui/editor.tsx`):
+
+- **Enter** in einem Listenpunkt (`- `, `* `, `1. `, mit oder ohne `[ ]`/`[x]`) beginnt den
+  nächsten; eine Checkbox kommt immer offen mit, Nummern zählen weiter. Enter im leeren Punkt
+  beendet die Liste (eingerückt: eine Ebene hinauf). **Shift+Enter** bricht ohne neuen Punkt um.
+- **Tab / Shift+Tab** rücken Listenpunkte ein und aus (alle markierten), unter den Inhalt des
+  Punktes darüber; nummerierte zählen auf der neuen Ebene neu. Außerhalb von Listen bleibt Tab,
+  was es war. Die Textlogik steht rein in `src/shared/listEdit.ts`.
+- **`/`** öffnet ein Befehlsmenü wie `$` (gemeinsame Mechanik in `caretMenu.tsx`). Befehle stehen
+  in `SLASH_COMMANDS` – bisher „TodoListe“ und „Liste“; weitere kommen dort dazu. Auf einer leeren
+  Zeile beginnt der Befehl diese, hinter Text eine neue.
+- Änderungen gehen über `insertText`, damit Strg+Z sie wie Getipptes zurücknimmt.
 11. Gamification, dezent.
 
 ### Angleichen an den Prototyp

@@ -5,7 +5,8 @@ import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PrioIcon } from './icons.js';
 import { markdownHtml } from './markdown.js';
-import { refClick, useRefPicker, useRefResolver } from './refs.js';
+import { useSmartEditor } from './editor.js';
+import { refClick, useRefResolver } from './refs.js';
 import { ChecklistBadge, StatusDot } from './rows.js';
 
 /**
@@ -64,7 +65,7 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
   const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const resolve = useRefResolver();
-  const picker = useRefPicker(ws, ref, { projectId: task.projectId, self: task.id });
+  const picker = useSmartEditor(ws, ref, { projectId: task.projectId, self: task.id });
 
   const implicit =
     !isDone(task) &&

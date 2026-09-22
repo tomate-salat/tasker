@@ -1,8 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
 import { isArchived, isDone } from '@shared/model.js';
 import { REF_PATTERN, type RefStub } from '@shared/refs.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
+import { replaceText, useCaretMenu } from './caretMenu.js';
 
 /**
  * Verweise im Text ($142): in der Anzeige ein Link mit dem aktuellen Titel,
@@ -136,8 +136,6 @@ function search(ws: Workspace, q: string, projectId: string | null, self: string
     .map((h) => h.target);
 }
 
-type Query = { start: number; text: string };
-
 /**
  * Tippt man `$`, erscheint unter der Schreibmarke eine Liste. ↑/↓ wählen,
  * Enter oder Tab fügen `$142` ein, Escape schließt nur die Liste.
@@ -147,129 +145,20 @@ export function useRefPicker(
   area: React.RefObject<HTMLTextAreaElement | null>,
   o: { projectId: string | null; self: string | null },
 ) {
-  const [query, setQuery] = useState<Query | null>(null);
-  const [active, setActive] = useState(0);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  // Mit Escape geschlossen: an dieser Stelle nicht gleich wieder öffnen – `onSelect`
-  // kommt auch beim Loslassen der Taste noch einmal.
-  const dismissed = useRef<number | null>(null);
-  const hits = query ? search(ws, query.text, o.projectId, o.self) : [];
-
-  const update = (): void => {
-    const el = area.current;
-    if (!el) return;
-    const caret = el.selectionStart;
-    const m = /(^|[^\w$])\$([^\s$]{0,40})$/.exec(el.value.slice(0, caret));
-    const start = m ? caret - (m[2]?.length ?? 0) - 1 : null;
-    if (start === null || start !== dismissed.current) dismissed.current = null;
-    const next = m && start !== null && dismissed.current === null ? { start, text: m[2] ?? '' } : null;
-    // Nur bei echter Änderung – sonst springt die Markierung bei jeder Bewegung zurück.
-    setQuery((q) => (q?.start === next?.start && q?.text === next?.text ? q : next));
-    if (next?.text !== query?.text) setActive(0);
-  };
-
-  useLayoutEffect(() => {
-    const el = area.current;
-    setPos(query && el ? caretPoint(el, query.start) : null);
-  }, [query, area]);
-
-  const insert = (t: RefTarget): void => {
-    const el = area.current;
-    if (!el || !query) return;
-    el.setRangeText(`$${t.ref} `, query.start, el.selectionStart, 'end');
-    el.focus();
-    setQuery(null);
-  };
-
-  /** Gibt `true` zurück, wenn die Taste der Liste galt. */
-  const onKeyDown = (e: React.KeyboardEvent): boolean => {
-    if (!query || !hits.length) return false;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActive((i) => (i + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length);
-      return true;
-    }
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      if (e.ctrlKey || e.metaKey) return false;
-      e.preventDefault();
-      const hit = hits[active];
-      if (hit) insert(hit);
-      return true;
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      dismissed.current = query.start;
-      setQuery(null);
-      return true;
-    }
-    return false;
-  };
-
-  const node =
-    query && hits.length && pos ? (
-      <div className="ref-pick" role="listbox" style={{ left: pos.left, top: pos.top }}>
-        {hits.map((t, i) => (
-          <button
-            key={t.id}
-            role="option"
-            aria-selected={i === active}
-            className={`ref-pick-i${i === active ? ' on' : ''}${t.done ? ' done' : ''}`}
-            // mousedown statt click: sonst verliert das Textfeld vorher den Fokus.
-            onMouseDown={(e) => {
-              e.preventDefault();
-              insert(t);
-            }}
-          >
-            <span className="lab">
-              {icon(t)}
-              {t.title || 'Ohne Titel'}
-            </span>
-            <span className="no">${t.ref}</span>
-          </button>
-        ))}
-      </div>
-    ) : null;
-
-  return {
-    onKeyDown,
-    onInput: update,
-    onSelect: update,
-    onBlur: () => setQuery(null),
-    node,
-  };
-}
-
-/**
- * Bildschirmposition unter einer Stelle im Textfeld. Ein unsichtbarer Zwilling
- * mit gleicher Schrift und Breite zeigt, wo die Zeile umbricht.
- */
-function caretPoint(el: HTMLTextAreaElement, index: number): { left: number; top: number } {
-  const style = getComputedStyle(el);
-  const twin = document.createElement('div');
-  for (const p of [
-    'boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
-    'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize',
-  ] as const) {
-    twin.style[p] = style[p];
-  }
-  twin.style.position = 'absolute';
-  twin.style.visibility = 'hidden';
-  twin.style.whiteSpace = 'pre-wrap';
-  twin.style.overflowWrap = 'break-word';
-  twin.textContent = el.value.slice(0, index);
-  const mark = document.createElement('span');
-  mark.textContent = '$';
-  twin.append(mark);
-  document.body.append(twin);
-  const box = el.getBoundingClientRect();
-  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4;
-  const left = box.left + mark.offsetLeft - el.scrollLeft;
-  const top = box.top + mark.offsetTop - el.scrollTop + lineHeight;
-  twin.remove();
-  return {
-    left: Math.max(8, Math.min(left, window.innerWidth - 328)),
-    top: Math.min(top, window.innerHeight - 40),
-  };
+  return useCaretMenu<RefTarget>(area, {
+    trigger: /(^|[^\w$])\$([^\s$]{0,40})$/,
+    items: (q) => search(ws, q, o.projectId, o.self),
+    key: (t) => t.id,
+    itemClass: (t) => (t.done ? 'done' : ''),
+    render: (t) => (
+      <>
+        <span className="lab">
+          {icon(t)}
+          {t.title || 'Ohne Titel'}
+        </span>
+        <span className="no">${t.ref}</span>
+      </>
+    ),
+    apply: (el, start, end, t) => replaceText(el, start, end, `$${t.ref} `),
+  });
 }
