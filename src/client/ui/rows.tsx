@@ -4,7 +4,7 @@ import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
 import type { OutlineRow } from '@shared/outline.js';
-import { progressPct, subtaskCounts } from '@shared/progress.js';
+import { doneCount, progressPct, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { drawingsOf } from '../api.js';
 import { useStore } from '../store.js';
@@ -42,7 +42,8 @@ export function TaskRow({
   const target = { type: 'task', task } as const;
   const zone = useZone(target);
   const dragging = useDragging(task.id);
-  const { done, total: tot } = subtaskCounts(ws, task);
+  const tot = total(ws, task);
+  const done = doneCount(ws, task);
   const cl = checklist(task.desc);
   const showBar = kids.length > 0 || cl.total > 0;
 
@@ -142,7 +143,7 @@ export function TaskRow({
           </span>
         ) : (
           <>
-            <span className="pts sum" title={`${done} von ${tot} Unteraufgaben erledigt`}>
+            <span className="pts sum" title={`${done} von ${tot} Aufgaben erledigt`}>
               {kids.length ? `${done}/${tot}` : ''}
             </span>
             <span

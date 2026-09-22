@@ -58,7 +58,7 @@ export function Sidebar({
   const countBy = (f: (t: Task) => boolean): number => viewTasks.filter(f).length;
   const openOf = (pid: string): number =>
     ws.tasks.filter(
-      (t) => t.projectId === pid && !isDone(t) && ws.isActive(t) && !ws.isDoc(t),
+      (t) => t.projectId === pid && !isDone(t) && !ws.kids(t.id).length && ws.isActive(t) && !ws.isDoc(t),
     ).length;
 
   // Labels: alle des Bereichs, sortiert nach Häufigkeit in dieser Ansicht.

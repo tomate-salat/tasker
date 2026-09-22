@@ -421,17 +421,10 @@ Funktion** – CSS und Aufbau werden übernommen, nicht nachempfunden.
   Kurve jeder Änderung sofort folgt. Rückgängig braucht nichts Eigenes: die Rücknahme ist selbst
   eine Änderung und schreibt den Stand neu.
 
-  **Abweichung, auf Wunsch – Zählweise:** Im Prototyp zählt eine Sammel-Aufgabe nur ihre
-  Unteraufgaben (eine erledigte Aufgabe mit einer erledigten Unteraufgabe war 1 von 1). Hier
-  zählt jede Aufgabe, die Sammel-Aufgabe selbst eingeschlossen (`total` in
-  `src/shared/progress.ts`), und zwar überall: Burnup, „x/y“ am Milestone, Balken und
-  Segmente, Prognose und Zeitplan, offene Aufgaben in der Seitenleiste. Nur das „x/y“ an einer
-  Aufgabe (Zeile und Aufgabenlisten im Inspektor) zählt ihre Unteraufgaben ohne sie selbst
-  (`subtaskCounts`) – eine erledigte Aufgabe mit einer erledigten Unteraufgabe zeigt 1/1. Eine offene
-  Sammel-Aufgabe mit lauter erledigten Unteraufgaben steht damit nicht mehr auf 100 %. Die
-  bis dahin geschriebenen Burnup-Protokolle leert Migration `0004_burnup_neu_zaehlen`; sie
-  werden aus den Abschlusszeitpunkten neu aufgebaut. Der Paritätstest vergleicht Zahlen nur noch
-  dort mit dem Prototyp, wo keine Sammel-Aufgabe im Spiel ist.
+  Zählweise wie im Prototyp: eine Sammel-Aufgabe zählt nur ihre Unteraufgaben, nicht sich
+  selbst. Zwischenzeitlich zählte sie auf Wunsch selbst mit (Migration `0004_burnup_neu_zaehlen`);
+  das ist wieder zurückgenommen, `0006_burnup_blaetter_zaehlen` leert die in der Zeit
+  geschriebenen Protokolle, damit sie neu aufgebaut werden.
 
   **Abweichung, auf Wunsch:** Der Prototyp führt einen Eintrag pro Kalendertag. Hier trägt jeder
   Eintrag stattdessen den Zeitpunkt der Änderung in UTC (Spalte `at`, Migration

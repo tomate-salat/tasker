@@ -43,6 +43,13 @@
       "when": 1790021667533,
       "tag": "0005_verweis_nummern",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790061101703,
+      "tag": "0006_burnup_blaetter_zaehlen",
+      "breakpoints": true
     }
   ]
 }
