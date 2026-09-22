@@ -28,7 +28,16 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Labels je Projekt:** Beim Vergeben (Inspektor, Zellmenü, Mehrfachauswahl) werden nur die Labels
   vorgeschlagen, die im Projekt der Aufgabe schon vorkommen (`projectTags`) – Wunsch des Nutzers.
 - **Abhängigkeiten** gibt es für Tasks und für Milestones, mit identischer Bedienung, und sie dürfen
-  Projektgrenzen überschreiten.
+  Projektgrenzen überschreiten. Ein Task darf zusätzlich auf einen ganzen **Milestone** warten
+  (erledigt heißt: Status „erledigt“ oder alle seine Aufgaben erledigt, `milestoneDone`); die
+  Gegenrichtung gibt es bewusst nicht. Im Prototyp fehlt das – Wunsch des Nutzers, Grundlage für
+  „In Milestone umwandeln“.
+- **In Milestone umwandeln:** Ein Task mit Unteraufgaben wird zum vorbereiteten Milestone
+  (`POST /api/convert`). Er übernimmt Titel, Beschreibung und Verweis-Nummer, die Unteraufgaben
+  werden seine Wurzelaufgaben, der Task wandert in den Papierkorb. Was der Milestone nicht kennt,
+  wird vorher weitergereicht: Kategorie an Unteraufgaben ohne eigene, Labels dazu, eigene Blocker
+  an alle Unteraufgaben (sie hatten sie ohnehin geerbt). Wer auf den Task gewartet hat, wartet
+  danach auf den Milestone. Priorität, Markierung und Status fallen weg.
 - **Markierungen** (Emoji + Name) sind projektübergreifend und erzeugen im Backlog je eine Sammelgruppe.
 - **Dokumente** sind technisch normale Tasks in einer eigenen Ansicht; ihr Inspektor ist bewusst anders.
 - **Papierkorb** mit Ablauffrist statt sofortigem Löschen.
@@ -136,6 +145,8 @@ Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit fe
 Reihenfolge, in der die Routen registriert werden, und kippte beim nächsten eingefügten Endpunkt.
 - `POST /api/bulk` – Mehrfachauswahl als eine Transaktion
 - `POST /api/duplicate` – eine Aufgabe samt Unterbaum, Labels und Abhängigkeiten kopieren
+- `POST /api/convert` – aus einem Task mit Unteraufgaben einen vorbereiteten Milestone machen;
+  gibt den neuen Milestone und die Gegen-Schritte zurück
 - `POST /api/steps` – mehrere kleine Schritte als eine Transaktion. Das braucht „Erledigte
   archivieren“ (Milestones und Aufgaben gemischt) und die Rücknahme: jede schreibende Route liefert
   die Gegen-Schritte mit, der Client schickt sie hierher zurück.

@@ -162,6 +162,9 @@ export type CodecksSummary = {
 /** „Duplizieren“ aus dem Kontextmenü: eine Aufgabe samt allem, was daran hängt. */
 export const duplicateBody = z.object({ id });
 
+/** „In Milestone umwandeln“: aus dem Task wird ein vorbereiteter Milestone. */
+export const convertBody = z.object({ id, version: z.number().int().positive() });
+
 /** Verschieben innerhalb des Baums: neuer Platz plus neue Reihenfolge. */
 export const moveBody = moveTarget.extend({
   id,
@@ -243,6 +246,12 @@ export const stepSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('archive'), kind: z.enum(['task', 'milestone']), id }),
   z.object({ op: z.literal('unarchive'), kind: z.enum(['task', 'milestone']), id }),
   z.object({ op: z.literal('trash'), kind: kindSchema, id }),
+  /**
+   * Weg, ohne Umweg über den Papierkorb – für Zwischenstände, die nur eine
+   * Rücknahme wieder loswerden muss, etwa der Milestone aus „In Milestone
+   * umwandeln“. Im Papierkorb wäre er nur Ballast.
+   */
+  z.object({ op: z.literal('purge'), kind: kindSchema, id }),
   z.object({ op: z.literal('untrash'), trashId: id }),
   /**
    * Endgültig Gelöschtes zurück in den Papierkorb – wie im Prototyp, wo auch

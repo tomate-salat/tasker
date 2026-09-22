@@ -198,6 +198,11 @@ type State = {
   /** Kopiert eine Aufgabe samt Unterbaum und wählt die Kopie aus. */
   duplicateTask: (id: string) => Promise<void>;
   /**
+   * Macht aus einem Task mit Unteraufgaben einen vorbereiteten Milestone –
+   * die Unteraufgaben werden seine Wurzelaufgaben.
+   */
+  convertToMilestone: (id: string) => Promise<void>;
+  /**
    * Ohne `message` still (nur Rückgängig auf dem Stapel). Mit `message` gibt es
    * eine Meldung mit „Rückgängig“; sie bekommt die Aufgabe am neuen Ort.
    */
@@ -803,6 +808,25 @@ export const useStore = create<State>((set, get) => ({
       set({ selected: copy.id, toast: 'Dupliziert', toastUndo: false });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Duplizieren fehlgeschlagen' });
+    }
+  },
+
+  convertToMilestone: async (id) => {
+    const task = get().ws?.task(id);
+    if (!task) return;
+    try {
+      const { id: msId, count, undo } = await api.convert(id, task.version);
+      await get().load();
+      // Der neue Milestone steht im Backlog bzw. in „Ready“ – gleich hinschauen.
+      get().reveal(msId);
+      remember(
+        `„${task.title || 'Ohne Titel'}“ ist jetzt ein Milestone mit ${count} ${
+          count === 1 ? 'Task' : 'Tasks'
+        }`,
+        undo,
+      );
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Umwandeln fehlgeschlagen' });
     }
   },
 

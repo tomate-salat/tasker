@@ -164,6 +164,10 @@ export const api = {
 
   duplicate: (id: string) => post<{ id: string }>('/api/duplicate', { id }),
 
+  /** „In Milestone umwandeln“ – gibt den neuen Milestone und die Rücknahme zurück. */
+  convert: (id: string, version: number) =>
+    post<{ id: string; count: number; undo: Step[] }>('/api/convert', { id, version }),
+
   bulk: (items: BulkItem[], action: BulkAction) => post<Undoable>('/api/bulk', { items, action }),
 
   steps: (steps: Step[]) => post<Undoable>('/api/steps', { steps }),

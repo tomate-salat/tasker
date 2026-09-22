@@ -12,6 +12,7 @@ import {
   applySteps,
   archive,
   bulk,
+  convertToMilestone,
   create,
   duplicate,
   hiddenMismatches,
@@ -856,6 +857,111 @@ describe('Duplizieren', () => {
     const made = loadBootstrap(ctx).tasks.find((t) => t.id === copy.id) as Task;
     assert.equal(made.parentId, a.id);
     assert.equal(made.title, 'A1 (Kopie)');
+  });
+});
+
+describe('In Milestone umwandeln', () => {
+  /** Armor mit zwei Unteraufgaben, dazu Kategorie, Label und Abhängigkeiten. */
+  const scene = () => {
+    const p = mkProject();
+    const cat = create(ctx, 'category', { projectId: p.id, name: 'Feature' }) as { id: string };
+    const vorher = mkTask({ projectId: p.id, title: 'Vorher' });
+    const armor = mkTask({
+      projectId: p.id,
+      title: 'Armor',
+      categoryId: cat.id,
+      tags: ['art'],
+      deps: [vorher.id],
+    });
+    const a = mkTask({ projectId: p.id, title: 'Actors', parentId: armor.id, tags: ['ui'] });
+    const b = mkTask({ projectId: p.id, title: 'Repair', parentId: armor.id });
+    const wartet = mkTask({ projectId: p.id, title: 'Wartet', deps: [armor.id] });
+    return { p, cat, vorher, armor, a, b, wartet };
+  };
+
+  it('macht aus dem Task einen vorbereiteten Milestone mit seiner Verweis-Nummer', () => {
+    const s = scene();
+    const out = convertToMilestone(ctx, s.armor.id, s.armor.version);
+    const boot = loadBootstrap(ctx);
+    const ms = boot.milestones.find((m) => m.id === out.id) as Milestone;
+
+    assert.equal(ms.title, 'Armor');
+    assert.equal(ms.planned, false);
+    assert.equal(ms.ref, s.armor.ref, 'Verweise im Text zeigen weiter aufs Richtige');
+    assert.equal(out.count, 2);
+    assert.equal(boot.tasks.some((t) => t.id === s.armor.id), false, 'der Task ist weg');
+    assert.deepEqual(
+      boot.tasks.filter((t) => t.milestoneId === ms.id).map((t) => t.title),
+      ['Actors', 'Repair'],
+    );
+  });
+
+  it('gibt Kategorie, Labels und Blocker an die Unteraufgaben weiter', () => {
+    const s = scene();
+    convertToMilestone(ctx, s.armor.id, s.armor.version);
+    const boot = loadBootstrap(ctx);
+    const a = boot.tasks.find((t) => t.id === s.a.id) as Task;
+    const b = boot.tasks.find((t) => t.id === s.b.id) as Task;
+
+    assert.equal(a.categoryId, s.cat.id);
+    assert.deepEqual(a.tags, ['art', 'ui']);
+    assert.deepEqual(a.deps, [s.vorher.id], 'geerbte Blocker bleiben erhalten');
+    assert.deepEqual(b.deps, [s.vorher.id]);
+  });
+
+  it('wer auf den Task gewartet hat, wartet danach auf den Milestone', () => {
+    const s = scene();
+    const out = convertToMilestone(ctx, s.armor.id, s.armor.version);
+    const wartet = loadBootstrap(ctx).tasks.find((t) => t.id === s.wartet.id) as Task;
+    assert.deepEqual(wartet.deps, [out.id]);
+  });
+
+  it('nimmt eigene Kategorie und Labels der Unteraufgabe nicht weg', () => {
+    const p = mkProject();
+    const eigene = create(ctx, 'category', { projectId: p.id, name: 'Bug' }) as { id: string };
+    const andere = create(ctx, 'category', { projectId: p.id, name: 'Feature' }) as { id: string };
+    const armor = mkTask({ projectId: p.id, title: 'Armor', categoryId: andere.id });
+    const kid = mkTask({ projectId: p.id, title: 'Kind', parentId: armor.id, categoryId: eigene.id });
+
+    convertToMilestone(ctx, armor.id, armor.version);
+    assert.equal(one(kid.id).categoryId, eigene.id);
+  });
+
+  it('ohne Unteraufgaben geht es nicht', () => {
+    const p = mkProject();
+    const t = mkTask({ projectId: p.id, title: 'Allein' });
+    assert.throws(() => convertToMilestone(ctx, t.id, t.version), /Unteraufgaben/);
+  });
+
+  it('auf einem überholten Stand gibt es einen Konflikt', () => {
+    const s = scene();
+    assert.throws(() => convertToMilestone(ctx, s.armor.id, s.armor.version + 1), Conflict);
+  });
+
+  it('die Rücknahme stellt Task, Unteraufgaben und Abhängigkeiten wieder her', () => {
+    const s = scene();
+    const out = convertToMilestone(ctx, s.armor.id, s.armor.version);
+    applySteps(ctx, out.undo);
+
+    const boot = loadBootstrap(ctx);
+    const armor = boot.tasks.find((t) => t.id === s.armor.id) as Task;
+    assert.ok(armor, 'der Task ist zurück');
+    assert.equal(armor.ref, s.armor.ref);
+    assert.deepEqual(armor.deps, [s.vorher.id]);
+    assert.equal(boot.milestones.some((m) => m.id === out.id), false, 'der Milestone ist weg');
+    assert.equal(loadTrash(ctx).length, 0, 'und liegt auch nicht im Papierkorb');
+    assert.deepEqual(
+      boot.tasks.filter((t) => t.parentId === s.armor.id).map((t) => t.title),
+      ['Actors', 'Repair'],
+    );
+    const a = boot.tasks.find((t) => t.id === s.a.id) as Task;
+    assert.deepEqual(a.tags, ['ui'], 'die weitergegebenen Labels sind wieder weg');
+    assert.equal(a.categoryId, null);
+    assert.deepEqual(
+      boot.tasks.find((t) => t.id === s.wartet.id)?.deps,
+      [s.armor.id],
+      'wer gewartet hat, wartet wieder auf den Task',
+    );
   });
 });
 

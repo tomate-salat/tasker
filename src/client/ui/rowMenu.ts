@@ -83,6 +83,12 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
     { label: 'In den Backlog', kbd: 'B', disabled: isLooseRoot(t) && !t.ready, onSelect: () => void toBacklog(t) },
     { sep: true },
     { label: 'Duplizieren', onSelect: () => void store.duplicateTask(t.id) },
+    {
+      // Nur mit Unteraufgaben – sie werden die Aufgaben des Milestones.
+      label: 'In Milestone umwandeln',
+      disabled: ws.kids(t.id).length === 0,
+      onSelect: () => void store.convertToMilestone(t.id),
+    },
     { label: 'Archivieren', kbd: 'A', onSelect: () => void store.archiveItem('task', t.id) },
     { sep: true },
     {

@@ -719,6 +719,114 @@ export function duplicate(ctx: DbCtx, id: string): { id: string } {
 }
 
 /**
+ * Aus einem Task mit Unteraufgaben wird ein vorbereiteter Milestone: er
+ * übernimmt Titel, Beschreibung und Verweis-Nummer, die Unteraufgaben werden
+ * seine Wurzelaufgaben, der Task selbst wandert in den Papierkorb.
+ *
+ * Was der Milestone nicht kennt, wird vorher weitergereicht, damit in der
+ * Liste nichts verschwindet: seine Kategorie erben Unteraufgaben ohne eigene,
+ * seine Labels kommen zu ihren dazu, und worauf er selbst gewartet hat, warten
+ * sie – sie haben es ohnehin von ihm geerbt. Wer auf ihn gewartet hat, wartet
+ * danach auf den Milestone. Priorität, Markierung und Status fallen weg.
+ */
+export function convertToMilestone(
+  ctx: DbCtx,
+  id: string,
+  version: number,
+): { id: string; count: number; undo: Step[] } {
+  return ctx.sqlite.transaction(() => {
+    const row = readRow(ctx, 'task', id);
+    if (!row) throw new NotFound();
+    if (row['version'] !== version) throw new Conflict(read(ctx, 'task', id));
+    if (row['doc']) throw new Error('Eine Doku-Seite lässt sich nicht in einen Milestone umwandeln');
+    const kids = childIds(ctx, id);
+    if (!kids.length) throw new Error('Nur ein Task mit Unteraufgaben wird zum Milestone');
+
+    const undo: Step[] = [];
+    const deps = depsOf(ctx, 'task', id);
+    const isMs = (x: string): boolean => !!readRow(ctx, 'milestone', x);
+    const tags = tagsOf(ctx, id);
+
+    // Der Milestone kann die Nummer übernehmen: der Task verschwindet gleich.
+    const ms = create(ctx, 'milestone', {
+      projectId: row['project_id'],
+      title: row['title'],
+      desc: row['desc'],
+      planned: false,
+      ref: row['ref'],
+      deps: deps.filter(isMs),
+    }) as { id: string };
+
+    // Erst verschieben, dann nachtragen – so steht in beiden Gegen-Schritten
+    // die Version, die beim Zurücknehmen tatsächlich gilt.
+    const taskDeps = deps.filter((d) => !isMs(d));
+    for (const kidId of kids) {
+      undo.push(
+        moveBack(ctx, kidId, versionOf(ctx, 'task', kidId), {
+          parentId: null,
+          milestoneId: ms.id,
+          index: Number.MAX_SAFE_INTEGER,
+        }),
+      );
+      const kid = read(ctx, 'task', kidId) as Task;
+      const changes = {
+        ...(row['category_id'] && !kid.categoryId ? { categoryId: row['category_id'] } : {}),
+        ...(tags.length ? { tags: [...new Set([...kid.tags, ...tags])] } : {}),
+        ...(taskDeps.length ? { deps: [...new Set([...kid.deps, ...taskDeps])] } : {}),
+      };
+      if (Object.keys(changes).length) {
+        undo.push(patchBack(ctx, 'task', kidId, versionOf(ctx, 'task', kidId), changes));
+      }
+    }
+
+    // Wer auf den Task gewartet hat, wartet jetzt auf den Milestone.
+    for (const from of incomingDeps(ctx, id)) {
+      const before = depsOf(ctx, 'task', from);
+      undo.push(
+        patchBack(ctx, 'task', from, versionOf(ctx, 'task', from), {
+          deps: before.map((d) => (d === id ? ms.id : d)),
+        }),
+      );
+    }
+
+    const { trashId } = remove(ctx, 'task', id);
+
+    // In dieser Reihenfolge zurück: erst ist der Task wieder da, dann hängen
+    // die Unteraufgaben wieder unter ihm, zuletzt geht der Milestone.
+    const back: Step[] = [
+      { op: 'untrash', trashId },
+      ...undo.reverse(),
+      { op: 'purge', kind: 'milestone', id: ms.id },
+    ];
+    return { id: ms.id, count: kids.length, undo: stampVersions(ctx, back) };
+  })();
+}
+
+/** Wer wartet auf diesen Task oder Milestone? */
+const incomingDeps = (ctx: DbCtx, id: string): string[] =>
+  (
+    ctx.sqlite
+      .prepare(`SELECT from_id FROM dependency WHERE kind = 'task' AND to_id = ?`)
+      .all(id) as { from_id: string }[]
+  ).map((r) => r.from_id);
+
+/**
+ * Trägt in eine Kette von Gegen-Schritten die Versionen ein, die beim Ausführen
+ * gelten: jeder Schritt auf derselben Zeile zählt sie um eins hoch. Ohne das
+ * würde der zweite Schritt auf einer Aufgabe an der Versionsprüfung scheitern.
+ */
+function stampVersions(ctx: DbCtx, steps: Step[]): Step[] {
+  const seen = new Map<string, number>();
+  return steps.map((s) => {
+    if (s.op !== 'patch' && s.op !== 'move') return s;
+    const kind = s.op === 'patch' ? s.kind : 'task';
+    const done = seen.get(s.id) ?? 0;
+    seen.set(s.id, done + 1);
+    return { ...s, version: versionOf(ctx, kind, s.id) + done };
+  });
+}
+
+/**
  * Spalten, die die Kopie nicht erbt: Kennung, Verweis-Nummer (vergibt der
  * Trigger neu), Titel, Zeitstempel, Version.
  */
@@ -901,6 +1009,13 @@ export function applySteps(ctx: DbCtx, steps: Step[]): Undoable {
           break;
         case 'trash':
           undo.push({ op: 'untrash', trashId: remove(ctx, s.kind, s.id).trashId });
+          break;
+        case 'purge':
+          // Erst wie beim Löschen, dann auch den Papierkorb-Eintrag weg – der
+          // Zwischenstand soll nichts hinterlassen. Damit endet die Kette.
+          ctx.sqlite
+            .prepare('DELETE FROM trash WHERE id = ?')
+            .run(remove(ctx, s.kind, s.id).trashId);
           break;
         case 'untrash':
           // Was aus dem Papierkorb kommt, bekommt neue Zeilen – ein sauberes

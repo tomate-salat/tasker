@@ -5,6 +5,7 @@ import {
   bulkBody,
   codecksImportBody,
   codecksRefsBody,
+  convertBody,
   createSchemas,
   drawingCreate,
   drawingPatch,
@@ -30,6 +31,7 @@ import {
   applySteps,
   archive,
   bulk,
+  convertToMilestone,
   create,
   duplicate,
   inBootstrap,
@@ -160,6 +162,16 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     return run(c, bus, () => duplicate(ctx, body.data.id), {
       status: 201,
       event: () => ({ type: 'reload', reason: 'Dupliziert' }),
+    });
+  });
+
+  app.post('/convert', async (c) => {
+    const body = convertBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    // Aus einem Task wird ein Milestone, die Unteraufgaben ziehen um – neu laden.
+    return run(c, bus, () => convertToMilestone(ctx, body.data.id, body.data.version), {
+      status: 201,
+      event: () => ({ type: 'reload', reason: 'In Milestone umgewandelt' }),
     });
   });
 
