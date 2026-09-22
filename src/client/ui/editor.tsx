@@ -81,6 +81,22 @@ function applySlash(el: HTMLTextAreaElement, start: number, end: number, cmd: Sl
   replaceText(el, from, end, `\n${indent}${cmd.line}`);
 }
 
+/** Beim Öffnen steht die Schreibmarke am Ende, nicht am Anfang (Wunsch des Nutzers). */
+export function focusAtEnd(el: HTMLTextAreaElement | null): void {
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  el.setSelectionRange(el.value.length, el.value.length);
+  el.scrollTop = el.scrollHeight;
+  // Das Feld wächst mit dem Text – dann soll der Inspektor so weit scrollen, dass das Ende sichtbar ist.
+  let box = el.parentElement;
+  while (box && !(box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY))) {
+    box = box.parentElement;
+  }
+  if (!box) return;
+  const over = el.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom + 56;
+  if (over > 0) box.scrollTop += over;
+}
+
 export function useSmartEditor(
   ws: Workspace,
   area: React.RefObject<HTMLTextAreaElement | null>,

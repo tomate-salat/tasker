@@ -1,11 +1,11 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isDone, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PrioIcon } from './icons.js';
 import { markdownHtml } from './markdown.js';
-import { useSmartEditor } from './editor.js';
+import { focusAtEnd, useSmartEditor } from './editor.js';
 import { refClick, useRefResolver } from './refs.js';
 import { ChecklistBadge, StatusDot } from './rows.js';
 
@@ -67,6 +67,10 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
   const resolve = useRefResolver();
   const picker = useSmartEditor(ws, ref, { projectId: task.projectId, self: task.id });
 
+  useEffect(() => {
+    if (editing) focusAtEnd(ref.current);
+  }, [editing]);
+
   const implicit =
     !isDone(task) &&
     task.status === 'open' &&
@@ -104,7 +108,6 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
           placeholder="Markdown …"
           aria-label={`Beschreibung von ${task.title}`}
           defaultValue={task.desc}
-          autoFocus
           onInput={picker.onInput}
           onSelect={picker.onSelect}
           onBlur={(e) => {

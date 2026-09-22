@@ -22,7 +22,7 @@ import {
   StatusIcon,
 } from './icons.js';
 import { markdownParts, checkboxClick } from './markdown.js';
-import { useSmartEditor } from './editor.js';
+import { focusAtEnd, useSmartEditor } from './editor.js';
 import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
@@ -523,7 +523,7 @@ function Content({
   const loose = drawings.list.filter((d) => !embedded.has(d.id));
 
   useEffect(() => {
-    if (editing) ref.current?.focus();
+    if (editing) focusAtEnd(ref.current);
   }, [editing]);
 
   const commit = (text: string): void => {
