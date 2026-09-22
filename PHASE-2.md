@@ -25,6 +25,8 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Vererbung:** Kategorien wirken **nach unten** (ein Kind ohne eigene Kategorie erbt die des Elternteils),
   Labels wirken **nach oben** (ein Elternteil zeigt zusätzlich die Labels seiner Unteraufgaben).
   Beides ist abgeleitet, nichts davon wird gespeichert.
+- **Labels je Projekt:** Beim Vergeben (Inspektor, Zellmenü, Mehrfachauswahl) werden nur die Labels
+  vorgeschlagen, die im Projekt der Aufgabe schon vorkommen (`projectTags`) – Wunsch des Nutzers.
 - **Abhängigkeiten** gibt es für Tasks und für Milestones, mit identischer Bedienung, und sie dürfen
   Projektgrenzen überschreiten.
 - **Markierungen** (Emoji + Name) sind projektübergreifend und erzeugen im Backlog je eine Sammelgruppe.
@@ -479,7 +481,10 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   alle. Das Label-Menü bleibt offen und baut sich nach jeder Änderung neu (`keep` im Menü,
   Menü als Funktion), „Neues Label …“ springt ins Labelfeld des Inspektors. „+ Label“ erscheint
   beim Überfahren leerer Zeilen. Zellmaße gegen den Prototyp gemessen: deckungsgleich.
-- ~~Titel bearbeiten~~ **Erledigt.** `Enter` bestätigt und legt die nächste Aufgabe an, `⇧ Enter`
+- ~~Titel bearbeiten~~ **Erledigt.** `Enter` bestätigt und legt die nächste Aufgabe an – bei
+  einer eben angelegten nicht mehr (Wunsch des Nutzers, Abweichung vom Prototyp): sie bleibt
+  ausgewählt und im Inspektor offen, der Fokus liegt wieder auf der Liste, `Enter` dort legt die
+  nächste an. `⇧ Enter`
   eine Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft. Eine neue
   Zeile (Aufgabe, Milestone, Gruppe), die leer bleibt oder abgebrochen wird, verschwindet spurlos
   (`discard`: Papierkorb und gleich endgültig gelöscht, kein Rückgängig-Eintrag). Ein geleertes

@@ -593,7 +593,10 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <dt>
           <kbd>Enter</kbd>
         </dt>
-        <dd>Neuer Task auf gleicher Ebene (auf einem Milestone: neuer Task darin)</dd>
+        <dd>
+          Neuer Task auf gleicher Ebene (auf einem Milestone: neuer Task darin). Nach dem Namen
+          bestätigt Enter und öffnet ihn im Inspektor – noch ein Enter legt den nächsten an.
+        </dd>
         <dt>
           <kbd>Shift</kbd>+<kbd>Enter</kbd>
         </dt>

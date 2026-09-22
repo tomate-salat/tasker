@@ -565,7 +565,8 @@ function TagCell({ ws, task, onClick }: { ws: Workspace; task: Task; onClick: Ce
 
 /**
  * Titel direkt in der Zeile bearbeiten – Tasten wie im Prototyp (`edit-title`):
- * `Enter` bestätigt und legt bei Aufgaben gleich die nächste an, `⇧ Enter` eine
+ * `Enter` bestätigt und legt bei Aufgaben gleich die nächste an – außer bei einer
+ * eben angelegten, die bleibt zum Füllen im Inspektor offen –, `⇧ Enter` eine
  * Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft.
  * Eine eben angelegte Zeile, die leer bleibt oder abgebrochen wird, verschwindet.
  */
@@ -605,10 +606,14 @@ function TitleEdit({
   };
 
   const next = async (child: boolean, value: string): Promise<void> => {
+    // Eine eben angelegte Aufgabe bleibt nach Enter ausgewählt und im Inspektor
+    // offen, statt gleich die nächste anzulegen (Wunsch des Nutzers). Der Fokus
+    // geht an die Liste zurück: noch ein Enter legt dann die nächste an.
+    const chain = child || !useStore.getState().editingNew;
     const kept = await finish(value);
     const ws = useStore.getState().ws;
     const t = ws?.task(id);
-    if (kind !== 'task' || !kept || !ws || !t) return;
+    if (kind !== 'task' || !kept || !ws || !t || !chain) return;
     await (child ? addChild(t) : addSibling(ws, t));
   };
 
