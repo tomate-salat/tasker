@@ -368,7 +368,9 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  setView: (view) => set({ view, selected: null, editing: null, sideOpen: false }),
+  // Die Auswahl bleibt beim Reiterwechsel stehen (Wunsch des Nutzers): so kann
+  // man Tasks aus einer anderen Ansicht auf die Abhängigkeiten im Inspektor ziehen.
+  setView: (view) => set({ view, editing: null, sideOpen: false }),
 
   setVelocity: async (velocity) => {
     try {

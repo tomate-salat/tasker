@@ -17,6 +17,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
 import { categoryHue, tagHue } from './colors.js';
+import { dropTarget, useDrag, useZone } from './dnd.js';
 import { DrawingEmbed, useDrawings } from './Drawings.js';
 import {
   DEFAULT_MARK,
@@ -775,6 +776,8 @@ function Deps({
   item: Task | Milestone;
 }) {
   const { patch, select } = useStore();
+  // Solange etwas gezogen wird, zeigt der Bereich seine beiden Ablagefelder.
+  const dragging = useDrag((s) => !!s.drag);
   const isMs = kind === 'milestone';
   const [dir, setDir] = useState<'by' | 'blocks'>('by');
   // Wonach die Suche sucht, hängt an der Richtung: ein Milestone wartet nur auf
@@ -893,6 +896,14 @@ function Deps({
         </>
       )}
 
+      {/* Während gezogen wird, nimmt der Bereich die Zeile entgegen – je Richtung ein Feld. */}
+      {dragging && (
+        <div className="dep-drops">
+          <DepDrop dir="by" item={item} />
+          <DepDrop dir="blocks" item={item} />
+        </div>
+      )}
+
       <div className="dep-add">
         <div className="seg small" role="radiogroup" aria-label="Richtung der neuen Abhängigkeit">
           <button
@@ -957,6 +968,20 @@ function Deps({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Ein Feld, auf das sich eine Zeile aus der Liste ziehen lässt – eines je
+ * Richtung, damit schon beim Ablegen feststeht, wer auf wen wartet.
+ */
+function DepDrop({ dir, item }: { dir: 'by' | 'blocks'; item: Task | Milestone }) {
+  const target = { type: 'dep', dir, item } as const;
+  const zone = useZone(target);
+  return (
+    <div className={`dep-drop ${zone ? 'on' : ''}`} {...dropTarget(target)}>
+      {dir === 'by' ? 'Wird blockiert durch' : 'Blockiert'}
+    </div>
   );
 }
 

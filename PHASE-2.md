@@ -31,7 +31,10 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Projektgrenzen überschreiten. Ein Task darf zusätzlich auf einen ganzen **Milestone** warten
   (erledigt heißt: Status „erledigt“ oder alle seine Aufgaben erledigt, `milestoneDone`); die
   Gegenrichtung gibt es bewusst nicht. Im Prototyp fehlt das – Wunsch des Nutzers, Grundlage für
-  „In Milestone umwandeln“.
+  „In Milestone umwandeln“. Setzen lassen sie sich auch per Ziehen: über einer gezogenen Zeile
+  zeigt der Bereich „Abhängigkeiten“ im Inspektor zwei Felder, eines je Richtung. Damit man dabei
+  die Ansicht wechseln kann, **bleibt die Auswahl beim Reiterwechsel stehen** (auch das ein Wunsch
+  des Nutzers; im Prototyp schloss sich der Inspektor).
 - **In Milestone umwandeln:** Ein Task mit Unteraufgaben wird zum vorbereiteten Milestone
   (`POST /api/convert`). Er übernimmt Titel, Beschreibung und Verweis-Nummer, die Unteraufgaben
   werden seine Wurzelaufgaben, der Task wandert in den Papierkorb. Was der Milestone nicht kennt,

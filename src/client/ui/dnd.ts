@@ -9,6 +9,8 @@ import {
   type OutlineRow,
   type Placement,
 } from '@shared/outline.js';
+import type { Step } from '@shared/api.js';
+import { dependsOn } from '@shared/blocking.js';
 import type { Milestone, Project, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore, whereLabel, type View } from '../store.js';
@@ -61,7 +63,9 @@ export type Target =
   | { type: 'group'; row: GroupRowT }
   | { type: 'empty'; row: EmptyRowT }
   | { type: 'tab'; view: View }
-  | { type: 'project'; project: Project };
+  | { type: 'project'; project: Project }
+  /** Die beiden Felder im Inspektor: Ablegen setzt eine Abhängigkeit. */
+  | { type: 'dep'; dir: 'by' | 'blocks'; item: Task | Milestone };
 
 const keyOf = (t: Target): string => {
   switch (t.type) {
@@ -76,8 +80,21 @@ const keyOf = (t: Target): string => {
       return `tab:${t.view}`;
     case 'project':
       return `proj:${t.project.id}`;
+    case 'dep':
+      return `dep:${t.dir}:${t.item.id}`;
   }
 };
+
+/**
+ * Darf `from` auf `to` warten? Ein Milestone wartet nur auf Milestones, ein
+ * Task auch auf einen Milestone. Schon Verknüpftes und Kreise fallen raus.
+ */
+export function canDepend(ws: Workspace, from: Task | Milestone, to: Task | Milestone): boolean {
+  if (from.id === to.id) return false;
+  if ('planned' in from && !('planned' in to)) return false;
+  if (from.deps.includes(to.id)) return false;
+  return !dependsOn(ws, to, from.id);
+}
 
 const clear = (): void => useDrag.setState({ drag: null, over: null });
 
@@ -269,6 +286,9 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
   const y = (e.clientY - box.top) / box.height;
   const half: Zone = y < 0.5 ? 'before' : 'after';
 
+  // Die Felder im Inspektor nehmen, was dort eine Abhängigkeit ergibt.
+  if (target.type === 'dep') return depPairs(drag, target).length ? 'into' : null;
+
   switch (drag.kind) {
     case 'task':
       if (target.type === 'task') {
@@ -299,6 +319,7 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
 async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> {
   const ws = useStore.getState().ws;
   if (!ws) return;
+  if (target.type === 'dep') return dropDep(drag, target);
   switch (drag.kind) {
     case 'task':
       return dropTasks(ws, drag, target, zone);
@@ -309,6 +330,55 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
     case 'group':
       return dropGroup(ws, drag.id, target, zone);
   }
+}
+
+type DepTarget = Extract<Target, { type: 'dep' }>;
+
+/** Die Paare „wartet auf“, die dieses Ablegen ergeben würde – leere Liste heißt: geht nicht. */
+function depPairs(drag: Drag, target: DepTarget): { from: Task | Milestone; to: Task | Milestone }[] {
+  const ws = useStore.getState().ws;
+  if (!ws || (drag.kind !== 'task' && drag.kind !== 'milestone')) return [];
+  const item = ws.task(target.item.id) ?? ws.milestone(target.item.id);
+  if (!item) return [];
+
+  return drag.ids
+    .map((id) => (drag.kind === 'task' ? ws.task(id) : ws.milestone(id)))
+    .filter((x): x is Task | Milestone => !!x)
+    .map((x) => (target.dir === 'by' ? { from: item, to: x } : { from: x, to: item }))
+    .filter((p) => canDepend(ws, p.from, p.to));
+}
+
+async function dropDep(drag: Drag, target: DepTarget): Promise<void> {
+  const store = useStore.getState();
+  const pairs = depPairs(drag, target);
+  if (!pairs.length) {
+    store.say('Daraus wird hier keine Abhängigkeit');
+    return;
+  }
+
+  // Alles, was auf dasselbe wartet, in einem Schritt – sonst stolpern die Versionen.
+  const byFrom = new Map<string, { from: Task | Milestone; to: string[] }>();
+  for (const p of pairs) {
+    const entry = byFrom.get(p.from.id) ?? { from: p.from, to: [] };
+    entry.to.push(p.to.id);
+    byFrom.set(p.from.id, entry);
+  }
+
+  const steps: Step[] = [...byFrom.values()].map(({ from, to }) => ({
+    op: 'patch',
+    kind: 'planned' in from ? 'milestone' : 'task',
+    id: from.id,
+    version: from.version,
+    changes: { deps: [...new Set([...from.deps, ...to])] },
+  }));
+
+  const first = pairs[0] as { from: Task | Milestone; to: Task | Milestone };
+  const name = (x: Task | Milestone): string => x.title || 'Ohne Titel';
+  await store.runSteps(steps, () =>
+    pairs.length === 1
+      ? `„${name(first.from)}“ wartet jetzt auf „${name(first.to)}“`
+      : `${pairs.length} Abhängigkeiten gesetzt`,
+  );
 }
 
 const loose = { parentId: null, milestoneId: null, groupId: null };

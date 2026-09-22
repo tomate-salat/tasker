@@ -2227,6 +2227,29 @@ button.prop:hover {
   font-size: 11px;
 }
 
+/* Ablegen aus der Liste: je Richtung ein Feld, nur während des Ziehens. */
+.dep-drops {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dep-drop {
+  flex: 1;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dep-drop.on {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
 .dep-add {
   display: flex;
   flex-wrap: wrap;
