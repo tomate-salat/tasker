@@ -372,8 +372,13 @@ export const useStore = create<State>((set, get) => ({
   select: (id) => set({ selected: id, editing: null }),
 
   editingNew: false,
+  // Eine Gruppe hat keinen Inspektor – sie umzubenennen wählt nichts aus.
   edit: (editing, isNew = false) =>
-    set({ editing, editingNew: !!editing && isNew, ...(editing ? { selected: editing } : {}) }),
+    set({
+      editing,
+      editingNew: !!editing && isNew,
+      ...(editing && !get().boot?.groups.some((g) => g.id === editing) ? { selected: editing } : {}),
+    }),
 
   discard: async (kind, id) => {
     const parent = get().boot?.tasks.find((t) => t.id === id)?.parentId ?? null;
