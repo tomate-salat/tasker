@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  categoriesOf,
+  categoryColorIndex,
   categoryTasks,
   container,
   doneCandidates,
@@ -53,6 +55,33 @@ const backlog = (ws: ReturnType<typeof build>, collapsed: Record<string, boolean
 
 const ready = (ws: ReturnType<typeof build>, collapsed: Record<string, boolean> = {}) =>
   outline(ws, { view: 'ready', projectIds: ['p'], collapsed });
+
+describe('Kategorien', () => {
+  const ws = new Builder()
+    .project('p1')
+    .project('p2')
+    .category('c1', 'p1', 'Arena')
+    .category('c2', 'p1', 'battle')
+    .category('c3', 'p1', 'Cell')
+    .category('c4', 'p1', 'Actors')
+    .category('c5', 'p2', 'Zoo')
+    .build();
+
+  it('stehen alphabetisch, ohne Rücksicht auf Groß- und Kleinschreibung', () => {
+    assert.deepEqual(
+      categoriesOf(ws, 'p1').map((c) => c.name),
+      ['Actors', 'Arena', 'battle', 'Cell'],
+    );
+  });
+
+  it('behalten ihre Farbe aus der Anlage-Reihenfolge', () => {
+    assert.deepEqual(
+      categoriesOf(ws, 'p1').map((c) => categoryColorIndex(ws, c)),
+      [3, 0, 1, 2],
+    );
+    assert.equal(categoryColorIndex(ws, ws.category('c5')!), 0);
+  });
+});
 
 describe('Backlog-Aufbau', () => {
   it('teilt in Abschnitte und zeigt jede Gruppe genau einmal', () => {

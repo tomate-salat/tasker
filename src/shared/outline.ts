@@ -294,8 +294,22 @@ export const looseBoxId = (t: Task, ws: Workspace): string =>
       ? smartId(t.projectId, t.markId)
       : categoryGroupId(t.projectId, readyCategory(ws, t));
 
+/** Die Kategorien eines Projekts, alphabetisch (Wunsch des Nutzers). */
 export const categoriesOf = (ws: Workspace, projectId: string): Category[] =>
-  ws.categories.filter((c) => c.projectId === projectId).sort((a, b) => a.order - b.order);
+  ws.categories
+    .filter((c) => c.projectId === projectId)
+    .sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }) || a.order - b.order);
+
+/**
+ * Die Stelle in der Anlage-Reihenfolge – daran hängt die Farbe. Die Anzeige
+ * ist alphabetisch, die Farbe soll sich aber nicht verschieben, sobald eine
+ * neue Kategorie dazwischen einsortiert wird.
+ */
+export const categoryColorIndex = (ws: Workspace, c: Category): number =>
+  ws.categories
+    .filter((x) => x.projectId === c.projectId)
+    .sort((a, b) => a.order - b.order)
+    .findIndex((x) => x.id === c.id);
 
 export const plannedMilestones = (ws: Workspace, projectId: string): Milestone[] =>
   ws.milestones

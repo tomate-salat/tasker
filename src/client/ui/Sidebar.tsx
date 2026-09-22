@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Project, type Task } from '@shared/model.js';
-import { isLooseRoot } from '@shared/outline.js';
+import { categoriesOf, categoryColorIndex, isLooseRoot } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
 import { archiveWorkspace, currentProjectId, useStore } from '../store.js';
@@ -80,7 +80,7 @@ export function Sidebar({
   const tags = [...tagCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 
   const categories = projectId
-    ? ws.categories.filter((c) => c.projectId === projectId).sort((a, b) => a.order - b.order)
+    ? categoriesOf(ws, projectId)
     : [];
 
   const trashCount = state.trash?.length ?? 0;
@@ -178,7 +178,7 @@ export function Sidebar({
               Verwalten
             </button>
           </div>
-          {categories.map((c, i) => {
+          {categories.map((c) => {
             const n = countBy((t) => effectiveCategory(vws, t)?.category.id === c.id);
             return (
               <button
@@ -187,7 +187,10 @@ export function Sidebar({
                 onClick={() => setFilter({ categoryId: filter.categoryId === c.id ? null : c.id })}
               >
                 <span className="hash mk">
-                  <span className="cat-sw" style={{ '--h': categoryHue(i) } as React.CSSProperties} />
+                  <span
+                    className="cat-sw"
+                    style={{ '--h': categoryHue(categoryColorIndex(ws, c)) } as React.CSSProperties}
+                  />
                 </span>
                 <span>{c.name}</span>
                 <span className={n ? 'n' : 'n zero'}>{n}</span>

@@ -321,9 +321,7 @@ const statusSub = (t: Task): MenuItem[] =>
 export function categorySub(ws: Workspace, t: Task): MenuItem[] {
   const store = useStore.getState();
   const effective = effectiveCategory(ws, t);
-  const own = ws.categories
-    .filter((c) => c.projectId === t.projectId)
-    .sort((a, b) => a.order - b.order);
+  const own = categoriesOf(ws, t.projectId);
 
   return [
     ...(effective?.from

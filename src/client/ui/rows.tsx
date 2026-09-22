@@ -3,7 +3,7 @@ import { inheritedBlock, ownBlockers } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
-import { categoriesOf, type OutlineRow } from '@shared/outline.js';
+import { categoryColorIndex, type OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { drawingsOf } from '../api.js';
@@ -258,7 +258,7 @@ export function GroupRow({
   const target = { type: 'group', row } as const;
   const zone = useZone(target);
   const dragging = useDragging(group?.id ?? id);
-  const hue = category && ws ? categoryHue(categoriesOf(ws, row.projectId).indexOf(category)) : null;
+  const hue = category && ws ? categoryHue(categoryColorIndex(ws, category)) : null;
   const smartTitle = mark
     ? `Smarte Gruppe: Tasks hier bekommen automatisch ${mark.emoji} ${mark.name}`
     : smart

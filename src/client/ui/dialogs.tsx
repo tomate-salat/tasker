@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CodecksRefsResult, CodecksSummary } from '@shared/api.js';
 import type { Settings } from '@shared/model.js';
+import { categoriesOf, categoryColorIndex } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account } from '../api.js';
 import { useStore } from '../store.js';
@@ -73,9 +74,7 @@ export function CategoriesDialog({
 }) {
   const { patch, remove, say, load } = useStore();
   const project = ws.project(projectId);
-  const categories = ws.categories
-    .filter((c) => c.projectId === projectId)
-    .sort((a, b) => a.order - b.order);
+  const categories = categoriesOf(ws, projectId);
   const [name, setName] = useState('');
 
   async function add(): Promise<void> {
@@ -100,9 +99,12 @@ export function CategoriesDialog({
     >
       {categories.length ? (
         <div className="mk-list">
-          {categories.map((c, i) => (
+          {categories.map((c) => (
             <div className="mk-row" key={c.id}>
-              <span className="cat-sw" style={{ '--h': categoryHue(i) } as React.CSSProperties} />
+              <span
+                className="cat-sw"
+                style={{ '--h': categoryHue(categoryColorIndex(ws, c)) } as React.CSSProperties}
+              />
               <NameInput
                 value={c.name}
                 onCommit={(next) => void patch('category', c.id, { name: next })}

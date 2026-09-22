@@ -1,7 +1,7 @@
 import type { BulkAction } from '@shared/api.js';
 import { projectTags } from '@shared/inherit.js';
 import type { Status, Task } from '@shared/model.js';
-import { draftMilestones, groupsOf, plannedMilestones } from '@shared/outline.js';
+import { categoriesOf, draftMilestones, groupsOf, plannedMilestones } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PRIO_LABEL, STATUS_LABEL } from './icons.js';
@@ -185,9 +185,7 @@ function categoryItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
   if (projectIds.length !== 1) {
     return [{ label: 'Nur für Aufgaben aus einem Projekt', disabled: true }];
   }
-  const own = ws.categories
-    .filter((c) => c.projectId === projectIds[0])
-    .sort((a, b) => a.order - b.order);
+  const own = categoriesOf(ws, projectIds[0] as string);
 
   return [
     {
