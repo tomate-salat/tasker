@@ -559,25 +559,7 @@ export const useStore = create<State>((set, get) => ({
 
     get().expandTo(id);
     const collapsed = get().collapsed;
-    const ms = m ?? (t ? ws.milestone(ws.root(t).milestoneId) : null);
-
-    // Im Zeitplan bleibt ein Milestone dort, wo er schon zu sehen ist.
-    // Ein vorbereiteter Milestone steht in Backlog und „Ready“ – dann bleibt, wo man ist.
-    const root = t ? ws.root(t) : null;
-    const view: View =
-      s.view === 'timeline' && m
-        ? 'timeline'
-        : ms?.planned
-          ? 'plan'
-          : t && ws.isDoc(t)
-            ? 'docs'
-            : ms
-              ? s.view === 'ready'
-                ? 'ready'
-                : 'backlog'
-              : root && isLooseRoot(root) && root.ready
-                ? 'ready'
-                : 'backlog';
+    const view = homeView(ws, id, s.view);
     const filter = scoped.filter ?? s.filter;
     const hidden = t && !visibility(ws, filter)(t);
     set({
@@ -1174,6 +1156,28 @@ export const scopeProjectIds = (s: State): string[] =>
   s.scope === 'all' ? (s.boot?.projects.map((p) => p.id) ?? []) : [s.scope];
 
 /** Wohin Neues gehört: bei „Alle Projekte“ das zuletzt gewählte. */
+/**
+ * Die Ansicht, in der ein aktiver Task oder Milestone steht. `hint` ist die
+ * Ansicht, in der man gerade ist, und entscheidet nur, wo es mehrere gibt:
+ * ein Milestone im Plan steht auch im Zeitplan, ein vorbereiteter Milestone
+ * in Backlog und „Ready“. Ohne Hinweis (`null`) gilt dort „Ready“.
+ */
+export function homeView(ws: Workspace, id: string, hint: View | null): View {
+  const m = ws.milestone(id);
+  const t = m ? null : ws.task(id);
+  const ms = m ?? (t ? ws.milestone(ws.root(t).milestoneId) : null);
+  const root = t ? ws.root(t) : null;
+  if (hint === 'timeline' && m) return 'timeline';
+  if (ms?.planned) return 'plan';
+  if (t && ws.isDoc(t)) return 'docs';
+  if (ms) return hint === 'ready' || hint === null ? 'ready' : 'backlog';
+  return root && isLooseRoot(root) && root.ready ? 'ready' : 'backlog';
+}
+
+/** Steht es in mehr als einer Ansicht? Dann gehört die Ansicht in die Adresse. */
+export const ambiguousView = (ws: Workspace, id: string): boolean =>
+  new Set(VIEWS.map((v) => homeView(ws, id, v))).size > 1;
+
 export const currentProjectId = (s: State): string | null =>
   s.scope === 'all' ? (s.lastProject ?? s.boot?.projects[0]?.id ?? null) : s.scope;
 
