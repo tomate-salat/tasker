@@ -896,52 +896,56 @@ function Deps({
         </>
       )}
 
-      {/* Während gezogen wird, nimmt der Bereich die Zeile entgegen – je Richtung ein Feld. */}
-      {dragging && (
+      {/*
+        Während gezogen wird, nimmt der Bereich die Zeile entgegen – je Richtung
+        ein Feld. Richtung und Suche treten so lange zurück: beim Ablegen steht
+        beides ohnehin fest. Danach sind sie wieder da.
+      */}
+      {dragging ? (
         <div className="dep-drops">
           <DepDrop dir="by" item={item} />
           <DepDrop dir="blocks" item={item} />
         </div>
-      )}
-
-      <div className="dep-add">
-        <div className="seg small" role="radiogroup" aria-label="Richtung der neuen Abhängigkeit">
-          <button
-            className={dir === 'by' ? 'on' : ''}
-            role="radio"
-            aria-checked={dir === 'by'}
-            title={`Kann erst starten, wenn der gewählte ${word} erledigt ist`}
-            onClick={() => setDir('by')}
-          >
-            Wird blockiert durch
-          </button>
-          <button
-            className={dir === 'blocks' ? 'on' : ''}
-            role="radio"
-            aria-checked={dir === 'blocks'}
-            title={`Der gewählte ${word} muss hierauf warten`}
-            onClick={() => setDir('blocks')}
-          >
-            Blockiert
-          </button>
+      ) : (
+        <div className="dep-add">
+          <div className="seg small" role="radiogroup" aria-label="Richtung der neuen Abhängigkeit">
+            <button
+              className={dir === 'by' ? 'on' : ''}
+              role="radio"
+              aria-checked={dir === 'by'}
+              title={`Kann erst starten, wenn der gewählte ${word} erledigt ist`}
+              onClick={() => setDir('by')}
+            >
+              Wird blockiert durch
+            </button>
+            <button
+              className={dir === 'blocks' ? 'on' : ''}
+              role="radio"
+              aria-checked={dir === 'blocks'}
+              title={`Der gewählte ${word} muss hierauf warten`}
+              onClick={() => setDir('blocks')}
+            >
+              Blockiert
+            </button>
+          </div>
+          <input
+            type="search"
+            autoComplete="off"
+            spellCheck={false}
+            className="dep-q"
+            placeholder={`${word} suchen …`}
+            aria-label={`${word} für Abhängigkeit suchen`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && candidates[0]) {
+                e.preventDefault();
+                addDep(candidates[0]);
+              }
+            }}
+          />
         </div>
-        <input
-          type="search"
-          autoComplete="off"
-          spellCheck={false}
-          className="dep-q"
-          placeholder={`${word} suchen …`}
-          aria-label={`${word} für Abhängigkeit suchen`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && candidates[0]) {
-              e.preventDefault();
-              addDep(candidates[0]);
-            }
-          }}
-        />
-      </div>
+      )}
 
       {query.trim() && (
         <div className="dep-results" role="listbox">
