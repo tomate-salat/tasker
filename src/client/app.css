@@ -2013,7 +2013,9 @@ button.prop:hover {
   margin: 0 0 10px;
 }
 
-.md li:has(> input) {
+/* Mit Leerzeile zwischen den Punkten steckt der Inhalt in einem <p> – dann auch. */
+.md li:has(> input),
+.md li:has(> p:first-child > input:first-child) {
   list-style: none;
   margin-left: -18px;
 }
