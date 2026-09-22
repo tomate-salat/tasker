@@ -4,12 +4,13 @@ import { dayKey } from '@shared/burnup.js';
 import type { ChangeEvent } from '@shared/events.js';
 import { isArchived, type Milestone, type Task } from '@shared/model.js';
 import {
+  areaLabel,
   doneCandidates,
   draftMilestones,
+  isLooseRoot,
+  looseBoxId,
   placeLabel,
   plannedMilestones,
-  smartId,
-  unsortedId,
   visibility,
   type OutlineFilter,
 } from '@shared/outline.js';
@@ -26,11 +27,12 @@ import {
 } from './api.js';
 import { MS_STATUS } from './ui/icons.js';
 
-export const VIEWS = ['plan', 'backlog', 'docs', 'timeline', 'archive', 'trash'] as const;
+export const VIEWS = ['plan', 'ready', 'backlog', 'docs', 'timeline', 'archive', 'trash'] as const;
 export type View = (typeof VIEWS)[number];
 
 export const VIEW_LABEL: Record<View, string> = {
   plan: 'Plan',
+  ready: 'Ready',
   backlog: 'Backlog',
   docs: 'Doku',
   timeline: 'Zeitplan',
@@ -38,8 +40,11 @@ export const VIEW_LABEL: Record<View, string> = {
   trash: 'Papierkorb',
 };
 
-/** Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste. */
-export const TABS: View[] = ['plan', 'backlog', 'docs', 'timeline', 'archive'];
+/**
+ * Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste.
+ * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
+ */
+export const TABS: View[] = ['plan', 'ready', 'backlog', 'docs', 'timeline', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help';
 
@@ -518,9 +523,7 @@ export const useStore = create<State>((set, get) => ({
       const root = ws.root(t);
       if (root.milestoneId) collapsed[root.milestoneId] = false;
       else if (root.groupId) collapsed[root.groupId] = false;
-      else if (!ws.isDoc(root)) {
-        collapsed[root.markId ? smartId(root.projectId, root.markId) : unsortedId(root.projectId)] = false;
-      }
+      else if (!ws.isDoc(root)) collapsed[looseBoxId(root, ws)] = false;
     }
     writeLocal(COLLAPSED_KEY, collapsed);
     set({ collapsed });
@@ -559,8 +562,22 @@ export const useStore = create<State>((set, get) => ({
     const ms = m ?? (t ? ws.milestone(ws.root(t).milestoneId) : null);
 
     // Im Zeitplan bleibt ein Milestone dort, wo er schon zu sehen ist.
+    // Ein vorbereiteter Milestone steht in Backlog und „Ready“ – dann bleibt, wo man ist.
+    const root = t ? ws.root(t) : null;
     const view: View =
-      s.view === 'timeline' && m ? 'timeline' : ms?.planned ? 'plan' : t && ws.isDoc(t) ? 'docs' : 'backlog';
+      s.view === 'timeline' && m
+        ? 'timeline'
+        : ms?.planned
+          ? 'plan'
+          : t && ws.isDoc(t)
+            ? 'docs'
+            : ms
+              ? s.view === 'ready'
+                ? 'ready'
+                : 'backlog'
+              : root && isLooseRoot(root) && root.ready
+                ? 'ready'
+                : 'backlog';
     const filter = scoped.filter ?? s.filter;
     const hidden = t && !visibility(ws, filter)(t);
     set({
@@ -628,7 +645,7 @@ export const useStore = create<State>((set, get) => ({
   archiveDone: async () => {
     const state = get();
     const { ws, view } = state;
-    if (!ws || (view !== 'plan' && view !== 'backlog')) return;
+    if (!ws || (view !== 'plan' && view !== 'ready' && view !== 'backlog')) return;
 
     const found = doneCandidates(ws, { view, projectIds: scopeProjectIds(state) });
     const steps: Step[] = [
@@ -825,6 +842,8 @@ export const useStore = create<State>((set, get) => ({
             milestoneId: current.milestoneId,
             groupId: current.groupId,
             markId: current.markId,
+            ready: current.ready,
+            categoryId: current.categoryId,
             projectId: current.projectId,
             doc: current.doc,
             order: current.order,
@@ -1088,7 +1107,7 @@ export function whereLabel(ws: Workspace, t: Task): string {
   const m = ws.milestone(t.milestoneId);
   if (m) return `in ◆ ${m.title}${m.planned ? '' : ' (Backlog)'}`;
   if (t.doc) return `in Dokumentation · ${project}`;
-  return `im Backlog › ${placeLabel(ws, t)} · ${project}`;
+  return `${areaLabel(ws, t) === 'Ready' ? 'in Ready' : 'im Backlog'} › ${placeLabel(ws, t)} · ${project}`;
 }
 
 /**

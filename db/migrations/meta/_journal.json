@@ -50,6 +50,13 @@
       "when": 1790061101703,
       "tag": "0006_burnup_blaetter_zaehlen",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790062920333,
+      "tag": "0007_ready",
+      "breakpoints": true
     }
   ]
 }

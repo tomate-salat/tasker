@@ -177,6 +177,13 @@ function SectionAction({ row }: { row: Extract<OutlineRow, { type: 'section' }> 
       </button>
     );
   }
+  if (row.action === 'manage-categories') {
+    return (
+      <button className="linkish" onClick={() => useStore.getState().setDialog('categories')}>
+        Kategorien verwalten
+      </button>
+    );
+  }
   // Wie im Prototyp (`addGroup`, `addMilestone`): sofort anlegen und den Namen in
   // der neuen Zeile bearbeiten – bleibt er leer, verschwindet die Zeile wieder.
   const store = useStore.getState;
@@ -303,6 +310,7 @@ function MilestoneRight({
 
 const EMPTY: Record<OutlineView, string> = {
   plan: 'Nichts im Plan.',
+  ready: 'Noch nichts ready.',
   backlog: 'Der Backlog ist leer.',
   docs: 'Noch keine Dokumente in diesem Projekt.',
 };

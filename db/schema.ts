@@ -150,6 +150,12 @@ export const tasks = sqliteTable(
     order: integer('sort_order').notNull().default(0),
     categoryId: text('category_id').references(() => categories.id, { onDelete: 'set null' }),
     markId: text('mark_id').references(() => marks.id, { onDelete: 'set null' }),
+    /**
+     * Fertig vorbereitet: eine lose Wurzel mit diesem Kennzeichen steht nicht im
+     * Backlog, sondern im Reiter „Ready“. An Aufgaben in Milestone, Gruppe oder
+     * unter einer anderen Aufgabe ist es immer aus.
+     */
+    ready: integer('ready', { mode: 'boolean' }).notNull().default(false),
     /** Gesetzt nur beim ausdrücklich archivierten Eintrag. */
     archivedAt: text('archived_at'),
     /**

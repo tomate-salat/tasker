@@ -77,6 +77,7 @@ export class Builder {
       order: this.n++,
       categoryId: null,
       markId: null,
+      ready: false,
       archivedAt: null,
       tags: [],
       deps: [],

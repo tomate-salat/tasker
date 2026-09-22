@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
-import { placeLabel } from '@shared/outline.js';
+import { areaLabel, placeLabel } from '@shared/outline.js';
 import { allDone } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { ArchiveEntry, TrashEntry } from '../api.js';
@@ -184,7 +184,7 @@ function from(ws: Workspace, e: ArchiveEntry, x: Task | Milestone): string {
   if ('planned' in x) return `aus dem ${x.planned ? 'Plan' : 'Backlog'} · ${msTasks(ws, x.id).length} Tasks`;
   if (x.parentId) return `aus „${e.parentTitle ?? '?'}“`;
   if (x.milestoneId) return `aus ◆ ${e.milestoneTitle ?? '?'}`;
-  return `aus Backlog › ${placeLabel(ws, x)}`;
+  return `aus ${areaLabel(ws, x)} › ${placeLabel(ws, x)}`;
 }
 
 function archMenu(ws: Workspace, id: string): MenuItem[] {

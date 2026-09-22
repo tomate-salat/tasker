@@ -5,6 +5,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PRIO_LABEL, STATUS_LABEL } from './icons.js';
 import { useMenu, type Menu, type MenuItem } from './Menu.js';
+import { readyTargets } from './rowMenu.js';
 
 const STATUSES: Status[] = ['open', 'progress', 'done', 'unclear', 'blocked'];
 const PRIOS = [0, 1, 2, 3] as const;
@@ -244,8 +245,8 @@ function labelItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
 }
 
 /**
- * Die Ziele wie im Prototyp: Dokumentation, Backlog mit Unsortiert und den
- * smarten Gruppen, die eigenen Gruppen, dann die Milestones. Ganz unten der
+ * Die Ziele wie im Kontextmenü: Dokumentation, „Ready“ mit den smarten
+ * Gruppen, Backlog mit Unsortiert und den eigenen Gruppen, dann die Milestones. Ganz unten der
  * Weg in ein anderes Projekt, der immer im Unsortierten landet.
  */
 function moveItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
@@ -262,7 +263,7 @@ function moveItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
             parentId: null,
             milestoneId: null,
             groupId: null,
-            markId: null,
+            ready: false,
             doc: false,
             projectId: p.id,
           },
@@ -288,12 +289,14 @@ function moveItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
 
   const items: MenuItem[] = [
     { head: 'Dokumentation' },
-    to({ ...loose, markId: null, doc: true }, '📄 Dokumentation'),
+    to({ ...loose, doc: true }, '📄 Dokumentation'),
+    ...readyTargets(ws, projectId).map(([target, label]) =>
+      'head' in target ? { head: label } : to({ ...loose, doc: false, ...target }, label),
+    ),
     { head: 'Backlog' },
-    to({ ...loose, markId: null, doc: false }, 'Unsortiert'),
-    ...ws.marks.map((k) => to({ ...loose, markId: k.id, doc: false }, `${k.emoji} ${k.name}`)),
+    to({ ...loose, ready: false, doc: false }, 'Unsortiert'),
     ...groupsOf(ws, projectId).map((g) =>
-      to({ ...loose, groupId: g.id, markId: null, doc: false }, g.title || 'Neue Gruppe'),
+      to({ ...loose, groupId: g.id, doc: false }, g.title || 'Neue Gruppe'),
     ),
   ];
 

@@ -338,44 +338,77 @@ describe('Reihenfolge beim Verschieben', () => {
   });
 
   /**
-   * Im Backlog sind „Unsortiert“ und jede smarte Gruppe eigene Behälter,
-   * obwohl alle Aufgaben darin lose an keinem Milestone und keiner Gruppe
-   * hängen. Unterschieden werden sie an der Markierung.
+   * Lose Aufgaben hängen an keinem Milestone und keiner Gruppe, stehen aber in
+   * verschiedenen Behältern: „Unsortiert“ im Backlog (nicht ready) und in
+   * „Ready“ je Markierung, ohne Markierung je Kategorie.
    */
-  it('nummeriert Unsortiert und smarte Gruppe getrennt', () => {
+  it('nummeriert Unsortiert und die Gruppen in „Ready“ getrennt', () => {
     const p = mkProject();
     const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
-    for (const title of ['A', 'B']) mkTask({ projectId: p.id, title });
-    for (const title of ['X', 'Y']) mkTask({ projectId: p.id, title, markId: k.id });
-    const y = loadBootstrap(ctx).tasks.find((t) => t.title === 'Y')!;
+    const c = create(ctx, 'category', { projectId: p.id, name: 'Arena' }) as { id: string };
+    for (const title of ['A', 'B']) mkTask({ projectId: p.id, title, markId: k.id });
+    for (const title of ['X', 'Y']) mkTask({ projectId: p.id, title, ready: true, markId: k.id });
+    for (const title of ['R', 'S']) mkTask({ projectId: p.id, title, ready: true, categoryId: c.id });
+    const byTitle = (title: string) => loadBootstrap(ctx).tasks.find((t) => t.title === title)!;
 
-    move(ctx, y.id, y.version, { projectId: p.id, markId: k.id, index: 0 });
+    move(ctx, byTitle('Y').id, byTitle('Y').version, { projectId: p.id, ready: true, markId: k.id, index: 0 });
+    move(ctx, byTitle('S').id, byTitle('S').version, {
+      projectId: p.id,
+      ready: true,
+      markId: null,
+      categoryId: c.id,
+      index: 0,
+    });
+    move(ctx, byTitle('B').id, byTitle('B').version, { projectId: p.id, ready: false, index: 0 });
 
-    const loose = (markId: string | null) =>
+    const titles = (where: string, ...params: unknown[]) =>
       (
         ctx.sqlite
           .prepare(
             `SELECT title FROM task WHERE parent_id IS NULL AND milestone_id IS NULL
-               AND group_id IS NULL AND mark_id IS ? ORDER BY sort_order`,
+               AND group_id IS NULL AND ${where} ORDER BY sort_order`,
           )
-          .all(markId) as { title: string }[]
+          .all(...params) as { title: string }[]
       ).map((r) => r.title);
 
-    assert.deepEqual(loose(k.id), ['Y', 'X']);
-    // Die unmarkierten daneben bleiben unberührt.
-    assert.deepEqual(loose(null), ['A', 'B']);
+    assert.deepEqual(titles('ready = 0'), ['B', 'A']);
+    assert.deepEqual(titles('ready = 1 AND mark_id = ?', k.id), ['Y', 'X']);
+    assert.deepEqual(titles('ready = 1 AND category_id = ?', c.id), ['S', 'R']);
   });
 
-  it('setzt beim Verschieben in eine smarte Gruppe die Markierung, im Backlog wieder weg', () => {
+  it('in eine Gruppe von „Ready“ setzt ready, Markierung oder Kategorie; zurück nach Unsortiert lässt beides', () => {
     const p = mkProject();
     const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const c = create(ctx, 'category', { projectId: p.id, name: 'Arena' }) as { id: string };
     const t = mkTask({ projectId: p.id, title: 'A' });
 
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, markId: k.id, index: 0 });
-    assert.equal(one(t.id).markId, k.id);
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, ready: true, markId: k.id, index: 0 });
+    assert.deepEqual([one(t.id).ready, one(t.id).markId], [true, k.id]);
 
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, markId: null, index: 0 });
-    assert.equal(one(t.id).markId, null);
+    // In eine Kategorie-Gruppe: die Markierung geht, sonst stünde sie bei der Markierung.
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, ready: true, markId: null, categoryId: c.id, index: 0 });
+    assert.deepEqual([one(t.id).ready, one(t.id).markId, one(t.id).categoryId], [true, null, c.id]);
+
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, markId: k.id, index: 0 });
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, ready: false, index: 0 });
+    assert.deepEqual([one(t.id).ready, one(t.id).markId, one(t.id).categoryId], [false, k.id, c.id]);
+  });
+
+  it('ready gibt es nur für lose Wurzeln – in Gruppe, Milestone oder unter eine Aufgabe fällt es weg', () => {
+    const p = mkProject();
+    const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
+    const t = mkTask({ projectId: p.id, title: 'A', ready: true });
+    assert.equal(one(t.id).ready, true);
+
+    move(ctx, t.id, one(t.id).version, { groupId: g.id, index: 0 });
+    assert.equal(one(t.id).ready, false);
+
+    // Zurück lose ohne Angabe: bleibt im Backlog.
+    move(ctx, t.id, one(t.id).version, { projectId: p.id, index: 0 });
+    assert.equal(one(t.id).ready, false);
+
+    const inGroup = mkTask({ projectId: p.id, title: 'B', groupId: g.id, ready: true });
+    assert.equal(one(inGroup.id).ready, false);
   });
 
   it('lässt die Markierung stehen, wenn keine mitgeschickt wird', () => {

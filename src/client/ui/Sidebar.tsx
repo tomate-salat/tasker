@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Project, type Task } from '@shared/model.js';
+import { isLooseRoot } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
 import { archiveWorkspace, currentProjectId, useStore } from '../store.js';
@@ -49,9 +50,16 @@ export function Sidebar({
     if (view === 'archive') return !vws.isActive(t);
     if (view === 'docs') return ws.isActive(t) && ws.isDoc(t);
     if (!ws.isActive(t) || ws.isDoc(t)) return false;
-    const inPlan = !!ws.milestoneOf(t)?.planned;
+    const ms = ws.milestoneOf(t);
+    const inPlan = !!ms?.planned;
     // Der Zeitplan zeigt nur geplante Milestones, zählt also wie der Plan.
-    return view === 'plan' || view === 'timeline' ? inPlan : view === 'backlog' ? !inPlan : true;
+    if (view === 'plan' || view === 'timeline') return inPlan;
+    if (inPlan) return false;
+    // Vorbereitete Milestones stehen in Backlog und „Ready“, lose Wurzeln in einem von beiden.
+    if (ms) return true;
+    const root = ws.root(t);
+    const ready = isLooseRoot(root) && root.ready;
+    return view === 'ready' ? ready : view === 'backlog' ? !ready : true;
   };
 
   const viewTasks = vws.tasks.filter(inView);

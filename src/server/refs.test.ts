@@ -89,11 +89,36 @@ describe('Verweis-Nummern', () => {
     assert.deepEqual([refOf('task', a.id), refOf('milestone', m.id), refOf('task', b.id)], [1, 2, 3]);
 
     const after = (ctx.sqlite.prepare('SELECT * FROM task ORDER BY id').all() as Record<string, unknown>[]).map(
-      ({ ref: _ref, ...rest }) => rest,
+      // `ready` kommt mit einer späteren Migration dazu.
+      ({ ref: _ref, ready: _ready, ...rest }) => rest,
     );
     assert.deepEqual(after, before);
 
     const c = create(ctx, 'task', { projectId: p.id, title: 'C' }) as Task;
     assert.equal(c.ref, 4);
+  });
+});
+
+describe('Migration „ready“', () => {
+  it('was in einer smarten Gruppe stand, steht danach in „Ready“ – sonst bleibt alles im Backlog', () => {
+    const ctx = open(migrationsUpTo(6));
+    const p = create(ctx, 'project', { name: 'Spiel' }) as { id: string };
+    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
+    const task = (o: Record<string, unknown>) => (create(ctx, 'task', { projectId: p.id, ...o }) as Task).id;
+    const smart = task({ title: 'smart', markId: k.id });
+    const plain = task({ title: 'lose' });
+    const grouped = task({ title: 'in Gruppe', groupId: g.id, markId: k.id });
+    const child = task({ title: 'Kind', parentId: smart, markId: k.id });
+    const page = task({ title: 'Seite', doc: true, markId: k.id });
+
+    migrate(ctx.db, { migrationsFolder: 'db/migrations' });
+
+    const readyOf = (id: string) =>
+      (ctx.sqlite.prepare('SELECT ready FROM task WHERE id = ?').get(id) as { ready: number }).ready;
+    assert.deepEqual(
+      [smart, plain, grouped, child, page].map(readyOf),
+      [1, 0, 0, 0, 0],
+    );
   });
 });

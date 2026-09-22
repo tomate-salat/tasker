@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { isDone, type Task } from '@shared/model.js';
-import { placeLabel } from '@shared/outline.js';
+import { areaLabel, placeLabel } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PrioIcon } from './icons.js';
@@ -151,5 +151,5 @@ function whereShort(ws: Workspace, t: Task): string {
   const ms = ws.milestone(t.milestoneId);
   if (ms) return `◆ ${ms.title}`;
   if (t.doc) return 'Dokumentation';
-  return placeLabel(ws, t);
+  return areaLabel(ws, t) === 'Ready' ? `Ready › ${placeLabel(ws, t)}` : placeLabel(ws, t);
 }

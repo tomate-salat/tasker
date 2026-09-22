@@ -650,6 +650,19 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Neunummerierung zählt Unsortiert, Dokumentation und jede smarte Gruppe getrennt. Außerdem nehmen
   **Milestone und Gruppe ihre Aufgaben nicht mehr mit in den Papierkorb** – wie im Prototyp sind sie
   eine Ablage, kein Besitzer; die Aufgaben liegen danach unter „Unsortiert“.
+
+  **Abweichung vom Prototyp (Wunsch des Nutzers) – Reiter „Ready“:** zwischen Plan und Backlog
+  steht ein Reiter für fertig vorbereitete Aufgaben. Er zeigt dieselben vorbereiteten Milestones
+  wie der Backlog, dann „Smarte Gruppen (Kategorien)“ – eine je Kategorie des Projekts plus „Ohne
+  Kategorie“ – und „Smarte Gruppen (Markierungen)“. Der Backlog kennt keine smarten Gruppen mehr.
+  Ob eine lose Wurzel dort steht, entscheidet ein eigenes Kennzeichen `ready` (Spalte `task.ready`,
+  Migration `0007_ready`), nicht Kategorie oder Markierung – beide darf eine Aufgabe schon im
+  Backlog haben; dort steht sie dann unter „Unsortiert“ oder in einer eigenen Gruppe. In „Ready“
+  gewinnt die Markierung vor der Kategorie. Hineinziehen in eine Gruppe von „Ready“ setzt `ready`
+  und ihre Markierung beziehungsweise Kategorie (eine Kategorie-Gruppe nimmt die Markierung weg);
+  zurück in den Backlog nimmt nur `ready` weg. In Milestone, eigene Gruppe oder unter eine Aufgabe
+  verliert eine Aufgabe `ready`. Die Migration setzt `ready` bei allem, was bis dahin in einer
+  smarten Gruppe stand.
 - ~~**Zeitplan.**~~ **Erledigt.** Der eigene Reiter mit Hinweistext, Wochenachse (KW-Beschriftung,
   Schrittweite nach Spannweite), einer Zeile je eingeplantem Milestone und dem Balken aus dem
   Prototyp: blasser Vorlauf bei einem Startdatum in der Vergangenheit, schraffierter Überhang über

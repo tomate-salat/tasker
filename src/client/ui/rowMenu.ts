@@ -8,11 +8,13 @@ import {
   type Task,
 } from '@shared/model.js';
 import {
+  categoriesOf,
   doneInContainer,
   draftMilestones,
   groupsOf,
   isLooseRoot,
   plannedMilestones,
+  readyCategory,
   type OutlineRow,
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
@@ -78,7 +80,7 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
     { sep: true },
     { label: 'Verschieben nach', sub: moveSub(ws, t) },
     { label: 'In anderes Projekt', sub: taskProjectSub(ws, t) },
-    { label: 'In den Backlog', kbd: 'B', disabled: isLooseRoot(t), onSelect: () => void toBacklog(t) },
+    { label: 'In den Backlog', kbd: 'B', disabled: isLooseRoot(t) && !t.ready, onSelect: () => void toBacklog(t) },
     { sep: true },
     { label: 'Duplizieren', onSelect: () => void store.duplicateTask(t.id) },
     { label: 'Archivieren', kbd: 'A', onSelect: () => void store.archiveItem('task', t.id) },
@@ -210,12 +212,14 @@ export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group
     },
   ];
 
-  if (row.mark) {
+  if (row.smart) {
     return [
       { label: 'Neuer Task hier', onSelect: () => void addIn(row.projectId, row.place) },
       ...common,
       { sep: true },
-      { label: 'Markierungen verwalten …', onSelect: () => store.setDialog('marks') },
+      row.smart === 'mark'
+        ? { label: 'Markierungen verwalten …', onSelect: () => store.setDialog('marks') }
+        : { label: 'Kategorien verwalten …', onSelect: () => store.openCategories(row.projectId) },
     ];
   }
 
@@ -360,16 +364,16 @@ export function markSub(ws: Workspace, t: Task): MenuItem[] {
 }
 
 /**
- * Die Ziele innerhalb des Projekts: Dokumentation, Backlog mit Unsortiert und
- * den smarten Gruppen, die eigenen Gruppen, dann die Milestones. Das Häkchen
- * steht beim Behälter, in dem die Aufgabe schon liegt.
+ * Die Ziele innerhalb des Projekts: Dokumentation, „Ready“ mit den smarten
+ * Gruppen, Backlog mit Unsortiert und den eigenen Gruppen, dann die
+ * Milestones. Das Häkchen steht beim Behälter, in dem die Aufgabe schon liegt.
  */
 function moveSub(ws: Workspace, t: Task): MenuItem[] {
   const store = useStore.getState();
   const projectId = t.projectId;
   const loose = { parentId: null, milestoneId: null, groupId: null };
   // Eine Unteraufgabe liegt in keinem Behälter – dann passt nirgends ein Haken.
-  const here = t.parentId ? null : key(t);
+  const here = t.parentId ? null : key(ws, t);
 
   const to = (target: Record<string, unknown>, label: string): MenuItem => ({
     label,
@@ -382,12 +386,14 @@ function moveSub(ws: Workspace, t: Task): MenuItem[] {
 
   const items: MenuItem[] = [
     { head: 'Dokumentation' },
-    to({ ...loose, markId: null, doc: true }, '📄 Dokumentation'),
+    to({ ...loose, doc: true }, '📄 Dokumentation'),
+    ...readyTargets(ws, projectId).map(([target, label]) =>
+      'head' in target ? { head: label } : to({ ...loose, doc: false, ...target }, label),
+    ),
     { head: 'Backlog' },
-    to({ ...loose, markId: null, doc: false }, 'Unsortiert'),
-    ...ws.marks.map((k) => to({ ...loose, markId: k.id, doc: false }, `${k.emoji} ${k.name}`)),
+    to({ ...loose, ready: false, doc: false }, 'Unsortiert'),
     ...groupsOf(ws, projectId).map((g) =>
-      to({ ...loose, groupId: g.id, markId: null, doc: false }, g.title || 'Neue Gruppe'),
+      to({ ...loose, groupId: g.id, doc: false }, g.title || 'Neue Gruppe'),
     ),
   ];
 
@@ -452,7 +458,7 @@ function taskProjectSub(ws: Workspace, t: Task, o: { doc?: boolean } = {}): Menu
         parentId: null,
         milestoneId: null,
         groupId: null,
-        markId: null,
+        ready: false,
         doc: !!o.doc,
         projectId: p.id,
         index: Number.MAX_SAFE_INTEGER,
@@ -463,6 +469,24 @@ function taskProjectSub(ws: Workspace, t: Task, o: { doc?: boolean } = {}): Menu
 
 /* ----------------------------------------------------------------- Hilfen */
 
+/**
+ * Die Gruppen von „Ready“ als Ziele: je Kategorie, „Ohne Kategorie“, je
+ * Markierung – mit den Feldern, die sie an der Aufgabe setzen (`placeFields`).
+ */
+export function readyTargets(ws: Workspace, projectId: string): [Record<string, unknown>, string][] {
+  return [
+    [{ head: true }, 'Ready'],
+    ...categoriesOf(ws, projectId).map(
+      (c): [Record<string, unknown>, string] => [{ ready: true, markId: null, categoryId: c.id }, c.name],
+    ),
+    [{ ready: true, markId: null, categoryId: null }, 'Ohne Kategorie'],
+    ...ws.marks.map((k): [Record<string, unknown>, string] => [
+      { ready: true, markId: k.id },
+      `${k.emoji} ${k.name}`,
+    ]),
+  ];
+}
+
 /** Ein Behälter als Zeichenkette, damit sich Ziel und Ist vergleichen lassen. */
 const keyOf = (t: Record<string, unknown>): string =>
   t['doc']
@@ -471,10 +495,21 @@ const keyOf = (t: Record<string, unknown>): string =>
       ? `m:${String(t['milestoneId'])}`
       : t['groupId']
         ? `g:${String(t['groupId'])}`
-        : `k:${String(t['markId'] ?? '')}`;
+        : !t['ready']
+          ? 'u'
+          : t['markId']
+            ? `k:${String(t['markId'])}`
+            : `c:${String(t['categoryId'] ?? '')}`;
 
-const key = (t: Task): string =>
-  keyOf({ doc: t.doc, milestoneId: t.milestoneId, groupId: t.groupId, markId: t.markId });
+const key = (ws: Workspace, t: Task): string =>
+  keyOf({
+    doc: t.doc,
+    milestoneId: t.milestoneId,
+    groupId: t.groupId,
+    ready: t.ready,
+    markId: t.markId,
+    categoryId: readyCategory(ws, t),
+  });
 
 /** Mehrere Aufgaben in einem Zug archivieren – ein Eintrag im Rücknahme-Stapel. */
 const archiveTasks = (tasks: Task[]): Promise<void> =>

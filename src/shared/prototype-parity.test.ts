@@ -99,6 +99,9 @@ function toData(d: Dump['data']): Data {
       order: t['order'] as number,
       categoryId: (t['cat'] as string | null) ?? null,
       markId: (t['mark'] as string | null) ?? null,
+      // Im Prototyp steht eine lose Aufgabe mit Markierung in der smarten Gruppe –
+      // hier heißt das: ready (die smarten Gruppen stehen im Reiter „Ready“).
+      ready: String(t['group'] ?? '').startsWith('k:'),
       archivedAt: (t['archived'] as string | null) ?? null,
       tags: t['tags'] as string[],
       deps: t['deps'] as string[],

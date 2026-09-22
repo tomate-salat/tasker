@@ -223,7 +223,7 @@ function Shell({
           <QuickAdd ws={ws} projectId={projectId} />
           <FilterBar ws={ws} />
 
-          {(view === 'plan' || view === 'backlog' || view === 'docs') && (
+          {(view === 'plan' || view === 'ready' || view === 'backlog' || view === 'docs') && (
             <Outline ws={ws} view={view} />
           )}
           {view === 'timeline' && <Timeline ws={ws} />}
@@ -294,6 +294,7 @@ function Shell({
 /** Was man auf einen Reiter ziehen kann – die Titel aus dem Prototyp. */
 const TAB_DROP_TITLE: Partial<Record<View, string>> = {
   plan: 'Milestone hierher ziehen = einplanen',
+  ready: 'Task hierher ziehen = ready',
   backlog: 'Hierher ziehen = zurück in den Backlog',
   docs: 'Task hierher ziehen = in die Dokumentation',
   archive: 'Hierher ziehen = archivieren',
@@ -322,7 +323,7 @@ function Tab({ view, on, onClick }: { view: View; on: boolean; onClick: () => vo
 function ArchiveDone({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   const state = useStore();
   const { view, archiveDone } = state;
-  if (view !== 'plan' && view !== 'backlog') return null;
+  if (view !== 'plan' && view !== 'ready' && view !== 'backlog') return null;
 
   const found = doneCandidates(ws, { view, projectIds: scopeProjectIds(state) });
   const n = found.milestones.length + found.tasks.length;

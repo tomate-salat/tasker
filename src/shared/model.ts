@@ -89,6 +89,8 @@ export type Task = {
   order: number;
   categoryId: string | null;
   markId: string | null;
+  /** Fertig vorbereitet – nur an losen Wurzeln: steht dann in „Ready“ statt im Backlog. */
+  ready: boolean;
   archivedAt: string | null;
   tags: string[];
   /** IDs anderer Tasks, von denen dieser abhängt. */

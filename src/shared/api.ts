@@ -42,6 +42,8 @@ export const createSchemas = {
     status: z.enum(TASK_STATUS).optional(),
     categoryId: id.nullable().optional(),
     markId: id.nullable().optional(),
+    /** Nur für lose Wurzeln: gleich in „Ready“ anlegen. */
+    ready: z.boolean().optional(),
     tags: z.array(tag).optional(),
     deps: z.array(id).optional(),
   }),
@@ -96,10 +98,13 @@ export const moveTarget = z.object({
   milestoneId: id.nullable().optional(),
   groupId: id.nullable().optional(),
   /**
-   * Nur für lose Wurzeln im Backlog: die Markierung bestimmt die smarte Gruppe.
-   * Fehlt das Feld, bleibt die Markierung, wie sie war.
+   * Nur für lose Wurzeln: `ready` trennt Backlog und „Ready“; dort bestimmt die
+   * Markierung die smarte Gruppe, ohne Markierung die Kategorie. Fehlt ein
+   * Feld, bleibt es, wie es war.
    */
   markId: id.nullable().optional(),
+  ready: z.boolean().optional(),
+  categoryId: id.nullable().optional(),
   /** Nur nötig, wenn das Ziel kein eigenes Projekt mitbringt (Unsortiert, smarte Gruppe). */
   projectId: id.optional(),
   /** In die Dokumentation oder heraus. Fehlt das Feld, bleibt es, wie es war. */

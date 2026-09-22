@@ -55,7 +55,9 @@ export async function addIn(projectId: string, place: Placement): Promise<void> 
     projectId,
     milestoneId: place.milestoneId ?? null,
     groupId: place.groupId ?? null,
-    markId: place.markId ?? null,
+    ...(place.ready ? { ready: true } : {}),
+    ...(place.markId ? { markId: place.markId } : {}),
+    ...(place.categoryId ? { categoryId: place.categoryId } : {}),
   });
 }
 
@@ -90,13 +92,20 @@ export async function outdent(ws: Workspace, t: Task): Promise<void> {
  */
 export async function toBacklog(t: Task): Promise<void> {
   const store = useStore.getState();
-  if (isLooseRoot(t)) {
+  if (isLooseRoot(t) && !t.ready) {
     store.say('Liegt schon unter „Unsortiert“');
     return;
   }
   await store.moveTask(
     t.id,
-    { parentId: null, milestoneId: null, groupId: null, doc: false, index: Number.MAX_SAFE_INTEGER },
+    {
+      parentId: null,
+      milestoneId: null,
+      groupId: null,
+      doc: false,
+      ready: false,
+      index: Number.MAX_SAFE_INTEGER,
+    },
     () => `„${t.title}“ liegt jetzt im Backlog › Unsortiert`,
   );
 }
