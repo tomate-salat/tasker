@@ -10,7 +10,7 @@ import { drawingsOf } from '../api.js';
 import { useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
-import { addChild, addSibling, indent, outdent } from './actions.js';
+import { addChild, indent, outdent } from './actions.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
 import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, LOCK_ICON, PrioIcon, statusMark, STATUS_LABEL } from './icons.js';
 import type { Menu } from './Menu.js';
@@ -565,9 +565,9 @@ function TagCell({ ws, task, onClick }: { ws: Workspace; task: Task; onClick: Ce
 
 /**
  * Titel direkt in der Zeile bearbeiten – Tasten wie im Prototyp (`edit-title`):
- * `Enter` bestätigt und legt bei Aufgaben gleich die nächste an – außer bei einer
- * eben angelegten, die bleibt zum Füllen im Inspektor offen –, `⇧ Enter` eine
- * Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft.
+ * `Enter` bestätigt nur – anders als im Prototyp legt es keine nächste Aufgabe
+ * an, die Aufgabe bleibt im Inspektor offen –, `⇧ Enter` legt eine
+ * Unteraufgabe an, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft.
  * Eine eben angelegte Zeile, die leer bleibt oder abgebrochen wird, verschwindet.
  */
 function TitleEdit({
@@ -606,15 +606,14 @@ function TitleEdit({
   };
 
   const next = async (child: boolean, value: string): Promise<void> => {
-    // Eine eben angelegte Aufgabe bleibt nach Enter ausgewählt und im Inspektor
-    // offen, statt gleich die nächste anzulegen (Wunsch des Nutzers). Der Fokus
-    // geht an die Liste zurück: noch ein Enter legt dann die nächste an.
-    const chain = child || !useStore.getState().editingNew;
+    // Enter bestätigt nur: die Aufgabe bleibt ausgewählt und im Inspektor offen,
+    // statt gleich die nächste anzulegen (Wunsch des Nutzers). Der Fokus geht an
+    // die Liste zurück: noch ein Enter legt dann die nächste an.
     const kept = await finish(value);
     const ws = useStore.getState().ws;
     const t = ws?.task(id);
-    if (kind !== 'task' || !kept || !ws || !t || !chain) return;
-    await (child ? addChild(t) : addSibling(ws, t));
+    if (kind !== 'task' || !kept || !ws || !t || !child) return;
+    await addChild(t);
   };
 
   const shift = async (out: boolean, value: string): Promise<void> => {

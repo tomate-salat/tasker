@@ -481,9 +481,9 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   alle. Das Label-Menü bleibt offen und baut sich nach jeder Änderung neu (`keep` im Menü,
   Menü als Funktion), „Neues Label …“ springt ins Labelfeld des Inspektors. „+ Label“ erscheint
   beim Überfahren leerer Zeilen. Zellmaße gegen den Prototyp gemessen: deckungsgleich.
-- ~~Titel bearbeiten~~ **Erledigt.** `Enter` bestätigt und legt die nächste Aufgabe an – bei
-  einer eben angelegten nicht mehr (Wunsch des Nutzers, Abweichung vom Prototyp): sie bleibt
-  ausgewählt und im Inspektor offen, der Fokus liegt wieder auf der Liste, `Enter` dort legt die
+- ~~Titel bearbeiten~~ **Erledigt.** `Enter` bestätigt nur – anders als im Prototyp legt es
+  keine nächste Aufgabe mehr an, weder beim Anlegen noch beim Umbenennen (Wunsch des Nutzers): die
+  Aufgabe bleibt ausgewählt und im Inspektor offen, der Fokus liegt wieder auf der Liste, `Enter` dort legt die
   nächste an. `⇧ Enter`
   eine Unteraufgabe, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft. Eine neue
   Zeile (Aufgabe, Milestone, Gruppe), die leer bleibt oder abgebrochen wird, verschwindet spurlos
