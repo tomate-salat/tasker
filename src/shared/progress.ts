@@ -74,6 +74,16 @@ export function milestoneStats(ws: Workspace, m: Milestone): MilestoneStats {
   };
 }
 
+/**
+ * Fertig im Sinne von Abhängigkeiten: entweder ausdrücklich auf „erledigt“
+ * gesetzt oder alle seine Aufgaben sind erledigt. Wer darauf wartet, wartet
+ * dann nicht weiter, nur weil der Status noch nicht umgestellt wurde.
+ */
+export function milestoneDone(ws: Workspace, m: Milestone): boolean {
+  const stats = milestoneStats(ws, m);
+  return stats.isDone || stats.tasksDone;
+}
+
 export function milestoneProgressPct(ws: Workspace, m: Milestone): number {
   if (m.status === 'done') return 100;
   const roots = ws.msRoots(m);

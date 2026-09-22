@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { blockers, dependsOn, inheritedBlock, isBlocked, ownBlockers } from './blocking.js';
+import type { Milestone, Task } from './model.js';
 import { Builder } from './testing.js';
 
 describe('Blockierungen', () => {
@@ -48,6 +49,64 @@ describe('Blockierungen', () => {
       .task('t2', 'p2')
       .build();
     assert.equal(isBlocked(ws, ws.task('t1')!), true);
+  });
+});
+
+describe('Warten auf einen Milestone', () => {
+  const withMilestone = (o: Partial<Milestone>, tasks: Partial<Task>[] = [{}]) => {
+    const b = new Builder().project('p1').milestone('m1', 'p1', o).task('t1', 'p1', { deps: ['m1'] });
+    tasks.forEach((t, i) => b.task(`in${i}`, 'p1', { milestoneId: 'm1', ...t }));
+    return b.build();
+  };
+
+  it('ein offener Milestone blockiert', () => {
+    const ws = withMilestone({});
+    assert.equal(isBlocked(ws, ws.task('t1')!), true);
+    assert.deepEqual(
+      ownBlockers(ws, ws.task('t1')!).map((x) => x.id),
+      ['m1'],
+    );
+  });
+
+  it('ein erledigter Milestone blockiert nicht mehr', () => {
+    const ws = withMilestone({ status: 'done' });
+    assert.equal(isBlocked(ws, ws.task('t1')!), false);
+  });
+
+  it('sind alle seine Aufgaben erledigt, blockiert er auch ohne Status „erledigt“', () => {
+    const ws = withMilestone({}, [{ status: 'done' }, { status: 'done' }]);
+    assert.equal(isBlocked(ws, ws.task('t1')!), false);
+  });
+
+  it('ein archivierter Milestone blockiert nicht mehr', () => {
+    const ws = withMilestone({ archivedAt: '2026-01-01T00:00:00Z' });
+    assert.equal(isBlocked(ws, ws.task('t1')!), false);
+  });
+
+  it('die Unteraufgaben erben das Warten', () => {
+    const ws = new Builder()
+      .project('p1')
+      .milestone('m1', 'p1')
+      .task('in', 'p1', { milestoneId: 'm1' })
+      .task('eltern', 'p1', { deps: ['m1'] })
+      .task('kind', 'p1', { parentId: 'eltern' })
+      .build();
+    assert.deepEqual(
+      inheritedBlock(ws, ws.task('kind')!).deps.map((x) => [x.blocker.id, x.via.id]),
+      [['m1', 'eltern']],
+    );
+  });
+
+  it('der Milestone weiß, wer auf ihn wartet', () => {
+    const ws = new Builder()
+      .project('p1')
+      .milestone('m1', 'p1')
+      .task('t1', 'p1', { deps: ['m1'] })
+      .build();
+    assert.deepEqual(
+      ws.blocks(ws.milestone('m1')!).map((t) => t.id),
+      ['t1'],
+    );
   });
 });
 

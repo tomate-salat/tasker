@@ -80,6 +80,12 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
        JOIN milestone m ON m.id = d.from_id
        WHERE d.kind = 'milestone' AND m.archived_at IS NULL AND x.archived_at IS NOT NULL`,
     ),
+    // Ein Task kann auch auf einen Milestone warten.
+    ...all<{ id: string; title: string }>(
+      `SELECT DISTINCT x.id, x.title FROM dependency d JOIN milestone x ON x.id = d.to_id
+       JOIN task t ON t.id = d.from_id
+       WHERE d.kind = 'task' AND ${ACTIVE_TASK} AND x.archived_at IS NOT NULL`,
+    ),
   ].map((r) => ({ ...r, archived: true as const }));
 
   // Verweise im Text ($142) auf Archiviertes: Titel und Kennung kommen mit.
@@ -1344,7 +1350,9 @@ function insertRows(ctx: DbCtx, table: string, rows: Record<string, unknown>[]):
 export function pruneDependencies(ctx: DbCtx): void {
   ctx.sqlite.exec(`
     DELETE FROM dependency WHERE kind = 'task' AND (
-      from_id NOT IN (SELECT id FROM task) OR to_id NOT IN (SELECT id FROM task));
+      from_id NOT IN (SELECT id FROM task)
+      -- Ein Task darf auch auf einen Milestone warten.
+      OR (to_id NOT IN (SELECT id FROM task) AND to_id NOT IN (SELECT id FROM milestone)));
     DELETE FROM dependency WHERE kind = 'milestone' AND (
       from_id NOT IN (SELECT id FROM milestone) OR to_id NOT IN (SELECT id FROM milestone));
   `);

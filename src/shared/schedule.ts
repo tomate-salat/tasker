@@ -87,6 +87,14 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     for (const root of ws.msRoots(m)) {
       for (const task of [root, ...ws.desc(root)]) {
         for (const depId of task.deps) {
+          // Wartet die Aufgabe direkt auf einen Milestone, wartet auch dieser hier.
+          const depMs = ws.milestone(depId);
+          if (depMs) {
+            if (depMs.id !== m.id && depMs.planned && !milestoneStats(ws, depMs).isDone) {
+              deps.add(depMs.id);
+            }
+            continue;
+          }
           const dep = ws.task(depId);
           if (!dep || isDone(dep)) continue;
           const other = ws.milestoneOf(dep);

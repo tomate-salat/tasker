@@ -37,7 +37,7 @@ export class Workspace {
   private readonly allKidsOf = new Map<string, Task[]>();
   /** Wurzelaufgaben je Milestone, nach order sortiert. */
   private readonly rootsOfMilestone = new Map<string, Task[]>();
-  /** Wer hängt von diesem Task ab. */
+  /** Wer hängt von diesem Task oder Milestone ab. */
   private readonly blocksOf = new Map<string, Task[]>();
 
   constructor(data: Data) {
@@ -88,8 +88,8 @@ export class Workspace {
   /** Aktive Wurzelaufgaben eines Milestones. */
   msRoots = (m: Milestone): Task[] => this.rootsOfMilestone.get(m.id) ?? [];
 
-  /** Tasks, die von diesem hier abhängen. */
-  blocks = (t: Task): Task[] => this.blocksOf.get(t.id) ?? [];
+  /** Tasks, die von diesem Task oder Milestone abhängen. */
+  blocks = (x: { id: string }): Task[] => this.blocksOf.get(x.id) ?? [];
 
   /** Von der Wurzel abwärts bis zum direkten Elternteil. */
   ancestors = (t: Task): Task[] => {

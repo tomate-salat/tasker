@@ -4,7 +4,14 @@ import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags, projectTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
-import { allDone, doneCount, milestoneStats, statusSegments, total } from '@shared/progress.js';
+import {
+  allDone,
+  doneCount,
+  milestoneDone,
+  milestoneStats,
+  statusSegments,
+  total,
+} from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
@@ -769,36 +776,48 @@ function Deps({
 }) {
   const { patch, select } = useStore();
   const isMs = kind === 'milestone';
-  const word = isMs ? 'Milestone' : 'Task';
   const [dir, setDir] = useState<'by' | 'blocks'>('by');
+  // Wonach die Suche sucht, hängt an der Richtung: ein Milestone wartet nur auf
+  // Milestones, warten dürfen auf ihn aber auch Tasks.
+  const word = isMs
+    ? dir === 'by'
+      ? 'Milestone'
+      : 'Milestone oder Task'
+    : dir === 'by'
+      ? 'Task oder Milestone'
+      : 'Task';
   const [query, setQuery] = useState('');
 
   useEffect(() => setQuery(''), [item.id]);
 
+  // Ein Task kann auch auf einen ganzen Milestone warten; umgekehrt wartet ein
+  // Milestone nur auf Milestones – auf ihn warten dürfen aber auch Tasks.
   const lookup = (id: string): Task | Milestone | null =>
-    isMs ? ws.milestone(id) : ws.task(id);
+    isMs ? ws.milestone(id) : (ws.task(id) ?? ws.milestone(id));
   const deps = item.deps.map(lookup).filter((x): x is Task | Milestone => !!x);
-  const rev = isMs
-    ? ws.milestones.filter((m) => m.deps.includes(item.id))
-    : ws.blocks(item as Task);
+  const rev: (Task | Milestone)[] = isMs
+    ? [...ws.milestones.filter((m) => m.deps.includes(item.id)), ...ws.blocks(item)]
+    : ws.blocks(item);
   const inherited = isMs
     ? { deps: [], statusVia: null }
     : inheritedBlock(ws, item as Task);
 
   const finished = (x: Task | Milestone): boolean =>
-    'planned' in x ? milestoneStats(ws, x).isDone : isDone(x);
+    'planned' in x ? milestoneDone(ws, x) : isDone(x);
 
   const removeDep = (otherId: string): void => {
     void patch(kind, item.id, { deps: item.deps.filter((d) => d !== otherId) });
   };
+  const kindOf = (x: Task | Milestone): 'task' | 'milestone' =>
+    'planned' in x ? 'milestone' : 'task';
   const removeReverse = (other: Task | Milestone): void => {
-    void patch(kind, other.id, { deps: other.deps.filter((d) => d !== item.id) });
+    void patch(kindOf(other), other.id, { deps: other.deps.filter((d) => d !== item.id) });
   };
 
   const candidates = depCandidates(ws, item, isMs, dir, query);
 
   const addDep = (other: Task | Milestone): void => {
-    if (dir === 'blocks') void patch(kind, other.id, { deps: [...other.deps, item.id] });
+    if (dir === 'blocks') void patch(kindOf(other), other.id, { deps: [...other.deps, item.id] });
     else void patch(kind, item.id, { deps: [...item.deps, other.id] });
     setQuery('');
   };
@@ -944,9 +963,16 @@ function depCandidates(
   const n = norm(query.trim());
   if (!n) return [];
 
+  // Ein Task darf auf einen Milestone warten, ein Milestone nur auf Milestones.
+  const tasks = (): Task[] => ws.tasks.filter((t) => ws.isActive(t));
+  const milestones = (): Milestone[] => ws.milestones.filter((m) => !isArchived(m));
   const pool: (Task | Milestone)[] = isMs
-    ? ws.milestones.filter((m) => !isArchived(m))
-    : ws.tasks.filter((t) => ws.isActive(t));
+    ? dir === 'by'
+      ? milestones()
+      : [...milestones(), ...tasks()]
+    : dir === 'by'
+      ? [...tasks(), ...milestones()]
+      : tasks();
 
   return pool
     .filter((x) => {

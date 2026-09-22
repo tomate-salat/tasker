@@ -146,6 +146,19 @@ describe('Zeitplan', () => {
     assert.deepEqual(s.byId.get('spät')!.deps, ['früh']);
   });
 
+  it('wartet eine Aufgabe direkt auf einen Milestone, wartet ihr eigener mit', () => {
+    const ws = new Builder()
+      .project('p1')
+      .milestone('früh', 'p1', { planned: true, qorder: 0 })
+      .milestone('spät', 'p1', { planned: true, qorder: 1 })
+      .task('vorarbeit', 'p1', { milestoneId: 'früh' })
+      .task('wurzel', 'p1', { milestoneId: 'spät', deps: ['früh'] })
+      .build();
+
+    const s = schedule(ws, { velocity: 1, today: TODAY });
+    assert.deepEqual(s.byId.get('spät')!.deps, ['früh']);
+  });
+
   it('ein Startdatum in der Vergangenheit rechnet die Restarbeit ab heute', () => {
     const ws = new Builder()
       .project('p1')
