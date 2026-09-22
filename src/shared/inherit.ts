@@ -33,6 +33,15 @@ export type EffectiveTags = {
 };
 
 /**
+ * Die Labels, die in diesen Projekten schon vorkommen, sortiert – die
+ * Vorschläge beim Vergeben. Labels anderer Projekte bleiben dort.
+ */
+export function projectTags(ws: Workspace, projectIds: Iterable<string>): string[] {
+  const ids = new Set(projectIds);
+  return [...new Set(ws.tasks.filter((t) => ids.has(t.projectId)).flatMap((t) => t.tags))].sort();
+}
+
+/**
  * Labels wandern umgekehrt nach oben: ein Task zeigt zusätzlich alle Labels
  * seiner Unteraufgaben. Gespeichert bleibt bei jedem Task nur, was direkt an
  * ihm hängt.

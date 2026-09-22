@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { effectiveCategory, effectiveTags } from './inherit.js';
+import { effectiveCategory, effectiveTags, projectTags } from './inherit.js';
 import { Builder } from './testing.js';
 
 describe('Kategorien vererben nach unten', () => {
@@ -76,5 +76,23 @@ describe('Labels vererben nach oben', () => {
       .task('t2', 'p1', { parentId: 't1', tags: ['weg'], archivedAt: '2026-01-01T00:00:00Z' })
       .build();
     assert.deepEqual(effectiveTags(ws2, ws2.task('t1')!).tags, ['code']);
+  });
+});
+
+describe('Label-Vorschläge', () => {
+  const ws = new Builder()
+    .project('p1')
+    .project('p2')
+    .task('t1', 'p1', { tags: ['ui', 'code'] })
+    .task('t2', 'p1', { tags: ['code'] })
+    .task('t3', 'p2', { tags: ['garten'] })
+    .build();
+
+  it('nur die Labels des eigenen Projekts, sortiert und einmal', () => {
+    assert.deepEqual(projectTags(ws, ['p1']), ['code', 'ui']);
+  });
+
+  it('bei mehreren Projekten deren Labels zusammen', () => {
+    assert.deepEqual(projectTags(ws, ['p1', 'p2']), ['code', 'garten', 'ui']);
   });
 });

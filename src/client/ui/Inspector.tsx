@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dependsOn, inheritedBlock } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
-import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
+import { effectiveCategory, effectiveTags, projectTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
 import { allDone, doneCount, milestoneStats, statusSegments, total } from '@shared/progress.js';
@@ -347,13 +347,13 @@ function TaskHead({
   );
 }
 
-/** Neues Label mit Vorschlägen aus allen vorhandenen. */
+/** Neues Label mit Vorschlägen aus denen des eigenen Projekts. */
 function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
   const patch = useStore((s) => s.patch);
   const [value, setValue] = useState('');
   const all = useMemo(
-    () => [...new Set(ws.tasks.flatMap((t) => t.tags))].filter((g) => !task.tags.includes(g)).sort(),
-    [ws, task.tags],
+    () => projectTags(ws, [task.projectId]).filter((g) => !task.tags.includes(g)),
+    [ws, task.projectId, task.tags],
   );
 
   const commit = (): void => {

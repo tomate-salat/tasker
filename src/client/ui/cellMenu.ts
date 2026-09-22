@@ -1,4 +1,4 @@
-import { effectiveTags } from '@shared/inherit.js';
+import { effectiveTags, projectTags } from '@shared/inherit.js';
 import type { Prio } from '@shared/model.js';
 import { useStore } from '../store.js';
 import { bulkCellMenu } from './BulkBar.js';
@@ -42,7 +42,7 @@ function labelItems(id: string): MenuItem[] {
   const ws = store.ws;
   const t = ws?.task(id);
   if (!ws || !t) return [];
-  const all = [...new Set(ws.tasks.flatMap((x) => x.tags))].sort();
+  const all = projectTags(ws, [t.projectId]);
   const extra = effectiveTags(ws, t).extra;
 
   return [

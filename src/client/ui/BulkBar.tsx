@@ -1,4 +1,5 @@
 import type { BulkAction } from '@shared/api.js';
+import { projectTags } from '@shared/inherit.js';
 import type { Status, Task } from '@shared/model.js';
 import { draftMilestones, groupsOf, plannedMilestones } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
@@ -218,7 +219,7 @@ const markItems = (ws: Workspace, tasks: Task[], run: Run): MenuItem[] => [
 ];
 
 function labelItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
-  const all = [...new Set(ws.tasks.flatMap((t) => t.tags))].sort();
+  const all = projectTags(ws, tasks.map((t) => t.projectId));
   const present = [...new Set(tasks.flatMap((t) => t.tags))].sort();
 
   return [
