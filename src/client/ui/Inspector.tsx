@@ -822,9 +822,20 @@ function Deps({
     setQuery('');
   };
 
+  // Dasselbe Zeichen wie in der Trefferliste: ◆ für Milestones, sonst die Markierung.
+  const glyph = (x: Task | Milestone) =>
+    'planned' in x ? (
+      <span className="ico ms" title="Milestone">
+        ◆
+      </span>
+    ) : (
+      <MarkGlyph ws={ws} task={x} />
+    );
+
   const row = (x: Task | Milestone, onRemove: () => void) => (
     <div key={x.id} className={`dep ${finished(x) ? 'ok' : ''}`}>
       <span className="st">{finished(x) ? '✓' : '●'}</span>
+      {glyph(x)}
       <button className="linkish" onClick={() => select(x.id)}>
         {x.title || 'Ohne Titel'}
       </button>
@@ -848,6 +859,7 @@ function Deps({
           {inherited.deps.map((x) => (
             <div key={x.blocker.id} className="dep inherited">
               <span className="st">●</span>
+              {glyph(x.blocker)}
               <button className="linkish" onClick={() => select(x.blocker.id)}>
                 {x.blocker.title}
               </button>
@@ -932,7 +944,7 @@ function Deps({
                 onClick={() => addDep(x)}
               >
                 <span className={`st ${finished(x) ? 'ok' : ''}`}>{finished(x) ? '✓' : '●'}</span>
-                {'planned' in x ? '◆ ' : <MarkGlyph ws={ws} task={x} />}
+                {glyph(x)}
                 <span className="lab">{x.title || 'Ohne Titel'}</span>
                 <span className="where">{whereLabel(ws, x)}</span>
               </button>
