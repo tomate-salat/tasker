@@ -13,6 +13,8 @@ export type MenuItem =
   | { head: string }
   /** Eine Zeile kleiner Knöpfe statt untereinander – im Prototyp die Priorität. */
   | { label: string; chips: { label: string; on?: boolean; onSelect: () => void }[] }
+  /** Ein Textfeld; Enter übergibt den Text und schließt das Menü. */
+  | { input: string; onSubmit: (value: string) => void }
   | {
       label: string;
       /** Häkchen links – sobald ein Eintrag eines hat, rücken alle ein. */
@@ -133,8 +135,16 @@ function Panel({
     const onKey = (e: KeyboardEvent): void => {
       const root = ref.current;
       if (!root) return;
-      e.stopPropagation();
       const active = document.activeElement as HTMLElement | null;
+      // Im Textfeld gehören die Tasten dem Feld – nur Escape, Tab und ↑/↓ bleiben beim Menü.
+      if (
+        active?.matches('input') &&
+        root.contains(active) &&
+        !['Escape', 'Tab', 'ArrowDown', 'ArrowUp'].includes(e.key)
+      ) {
+        return;
+      }
+      e.stopPropagation();
       const level =
         active && root.contains(active) ? (active.closest<HTMLElement>('.ctx') ?? root) : root;
       const buttons = buttonsOf(level);
@@ -220,6 +230,25 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
             </div>
           );
 
+        if ('input' in item) {
+          return (
+            <input
+              key={i}
+              className="ctx-input"
+              placeholder={item.input}
+              aria-label={item.input}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const value = e.currentTarget.value.trim();
+                if (!value) return;
+                item.onSubmit(value);
+                onClose();
+              }}
+            />
+          );
+        }
+
         if ('chips' in item) {
           return (
             <div key={i} className="ctx-chips" role="group" aria-label={item.label}>
@@ -252,7 +281,10 @@ function Items({ items, onClose }: { items: MenuItem[]; onClose: () => void }) {
               }}
               className={`ctx-wrap ${openSub === i ? 'open' : ''}`}
               onMouseEnter={() => setOpenSub(i)}
-              onMouseLeave={() => setOpenSub(null)}
+              // Wer im Untermenü gerade tippt, verliert es nicht, nur weil die Maus hinausrutscht.
+              onMouseLeave={(e) => {
+                if (!e.currentTarget.querySelector('input:focus')) setOpenSub(null);
+              }}
             >
               <button
                 className="ctx-i"

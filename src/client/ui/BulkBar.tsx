@@ -223,13 +223,20 @@ function labelItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
   return [
     {
       label: 'Hinzufügen',
-      sub: all.length
-        ? all.map((g) => ({
-            label: `#${g}`,
-            check: tasks.every((t) => t.tags.includes(g)),
-            onSelect: () => run({ type: 'tag', tag: g, add: true }, `Label #${g} hinzugefügt`),
-          }))
-        : [{ label: 'Noch keine Labels', disabled: true }],
+      sub: [
+        {
+          input: 'Neues Label …',
+          onSubmit: (value) => {
+            const tag = value.replace(/^#+/, '').trim();
+            if (tag) void run({ type: 'tag', tag, add: true }, `Label #${tag} hinzugefügt`);
+          },
+        },
+        ...all.map((g) => ({
+          label: `#${g}`,
+          check: tasks.every((t) => t.tags.includes(g)),
+          onSelect: () => run({ type: 'tag', tag: g, add: true }, `Label #${g} hinzugefügt`),
+        })),
+      ],
     },
     {
       label: 'Entfernen',

@@ -2448,6 +2448,24 @@ button.prop:hover {
   color: var(--faint);
 }
 
+.ctx-input {
+  display: block;
+  width: calc(100% - 8px);
+  margin: 3px 4px 4px;
+  padding: 5px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  outline: none;
+}
+
+.ctx-input:focus {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
 .ctx-chips {
   display: flex;
   align-items: center;
