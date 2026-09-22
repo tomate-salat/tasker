@@ -479,7 +479,8 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
 - ~~Zellen nicht anklickbar~~ **Erledigt.** Markierung, Priorität, Kategorie und Labels öffnen
   ihr Menü unter der Zelle (`cellMenu.ts`, wie `openCell`); in einer Mehrfachauswahl gilt es für
   alle. Das Label-Menü bleibt offen und baut sich nach jeder Änderung neu (`keep` im Menü,
-  Menü als Funktion), „Neues Label …“ springt ins Labelfeld des Inspektors. „+ Label“ erscheint
+  Menü als Funktion), „Neues Label …“ ist ein Textfeld im Menü (Wunsch des Nutzers; im Prototyp
+  sprang es ins Labelfeld des Inspektors) – ebenso in der Leiste der Mehrfachauswahl. „+ Label“ erscheint
   beim Überfahren leerer Zeilen. Zellmaße gegen den Prototyp gemessen: deckungsgleich.
 - ~~Titel bearbeiten~~ **Erledigt.** `Enter` bestätigt nur – anders als im Prototyp legt es
   keine nächste Aufgabe mehr an, weder beim Anlegen noch beim Umbenennen (Wunsch des Nutzers): die

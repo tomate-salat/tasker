@@ -36,10 +36,9 @@ const prioItems = (id: string, current: Prio): MenuItem[] =>
     onSelect: () => void useStore.getState().patch('task', id, { prio: v }),
   }));
 
-/** Labels umschalten, ohne dass sich das Menü schließt; neue gibt es im Inspektor. */
+/** Labels umschalten, ohne dass sich das Menü schließt; ein neues gleich im Feld darunter. */
 function labelItems(id: string): MenuItem[] {
-  const store = useStore.getState();
-  const ws = store.ws;
+  const ws = useStore.getState().ws;
   const t = ws?.task(id);
   if (!ws || !t) return [];
   const all = projectTags(ws, [t.projectId]);
@@ -65,11 +64,12 @@ function labelItems(id: string): MenuItem[] {
       : [{ label: 'Noch keine Labels', disabled: true }]),
     { sep: true },
     {
-      label: 'Neues Label …',
-      onSelect: () => {
-        store.clearMulti();
-        store.select(id);
-        setTimeout(() => document.getElementById('d-tag')?.focus(), 0);
+      input: 'Neues Label …',
+      onSubmit: (value) => {
+        const tag = value.replace(/^#+/, '').trim();
+        const cur = useStore.getState().ws?.task(id);
+        if (!tag || !cur || cur.tags.includes(tag)) return;
+        void useStore.getState().patch('task', id, { tags: [...cur.tags, tag] });
       },
     },
   ];
