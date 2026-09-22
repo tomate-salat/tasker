@@ -113,11 +113,31 @@ export function syncUrl(): void {
     else history.pushState(null, '', url + location.hash);
   };
 
+  /**
+   * Schnelles Durchblättern (Pfeiltasten, rasche Klicks) ist ein Schritt:
+   * folgt ein Auswahlwechsel binnen `BROWSE_MS` auf den vorigen, ersetzt er ihn.
+   */
+  const BROWSE_MS = 1000;
+  let lastSelectAt = 0;
+
   apply();
   write(true);
-  window.addEventListener('popstate', apply);
-  useStore.subscribe((_, prev) => {
+  window.addEventListener('popstate', () => {
+    lastSelectAt = 0;
+    apply();
+  });
+  useStore.subscribe((s, prev) => {
     check();
-    write(quiet || prev.loading || !prev.ws);
+    // Nur was die Adresse ändert, zählt – sonstige Änderungen am Store nicht.
+    const place = (x: typeof s): string => format({ ...x, selected: null });
+    let merge = false;
+    if (format(s) !== format(prev)) {
+      // Von einer Auswahl zur nächsten – Öffnen und Schließen bleiben eigene Schritte.
+      const browsing = !!s.selected && place(s) === place(prev);
+      const now = Date.now();
+      merge = browsing && !!prev.selected && now - lastSelectAt < BROWSE_MS;
+      lastSelectAt = browsing ? now : 0;
+    }
+    write(merge || quiet || prev.loading || !prev.ws);
   });
 }
