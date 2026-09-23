@@ -180,11 +180,6 @@
   min-width: 0;
 }
 
-.tcard-head .mk-emoji {
-  margin: 1px 0 0;
-  font-size: 15px;
-}
-
 .tcard-foot {
   position: relative;
   z-index: 1;
@@ -343,4 +338,21 @@
 
 .status-line > .m-row[data-r='cover'] {
   margin-left: auto;
+}
+
+/* Markierung unten rechts über dem Fuß – der Titel bekommt die volle Breite. */
+.tcard-mark {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  align-self: flex-end;
+  padding: 0 8px 6px;
+}
+
+.tcard-mark + .tcard-foot {
+  margin-top: 0;
+}
+
+.tcard-mark .mk-emoji {
+  font-size: 17px;
 }

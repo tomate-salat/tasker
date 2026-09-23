@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { checklist } from '@shared/checklist.js';
 import { isDone, type Task } from '@shared/model.js';
 import type { OutlineRow, OutlineView } from '@shared/outline.js';
@@ -308,6 +308,23 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
     kids.length > 0 &&
     ws.desc(task).some((d) => d.status === 'progress');
 
+  // Strg+V mit einem Bild in der Zwischenablage macht es zum Titelbild der
+  // ausgewählten Karte – solange kein Eingabefeld den Fokus hat.
+  const sel = selected === task.id && !multi.size;
+  useEffect(() => {
+    if (!sel) return;
+    const onPaste = (e: ClipboardEvent): void => {
+      const el = e.target instanceof HTMLElement ? e.target : null;
+      if (el?.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+      const files = e.clipboardData?.files;
+      if (!imagesIn(files).length) return;
+      e.preventDefault();
+      void uploadCover(task, files);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [sel, task]);
+
   const cell =
     (kind: CellKind) =>
     (e: React.MouseEvent<HTMLElement>): void => {
@@ -332,7 +349,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         'tcard',
         cover ? 'has-cover' : '',
         multi.has(task.id) ? 'multi' : '',
-        selected === task.id && !multi.size ? 'sel' : '',
+        sel ? 'sel' : '',
         holds ? 'holds' : '',
         isDone(task) ? 'done' : '',
         dragging ? 'dragging' : '',
@@ -352,17 +369,6 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
 
       <div className="tcard-head">
-        {mark && (
-          <span
-            className="mk-emoji cell"
-            role="button"
-            tabIndex={-1}
-            title={`${mark.name} – klicken zum Ändern`}
-            onClick={cell('mark')}
-          >
-            {mark.emoji}
-          </span>
-        )}
         {/* Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet. */}
         {editing === task.id && !kids.length ? (
           <TitleEdit kind="task" id={task.id} title={task.title} />
@@ -372,6 +378,21 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           </span>
         )}
       </div>
+
+      {/* Die Markierung steht unten rechts, damit der Titel die volle Breite hat. */}
+      {mark && (
+        <div className="tcard-mark">
+          <span
+            className="mk-emoji cell"
+            role="button"
+            tabIndex={-1}
+            title={`${mark.name} – klicken zum Ändern`}
+            onClick={cell('mark')}
+          >
+            {mark.emoji}
+          </span>
+        </div>
+      )}
 
       <div className="tcard-foot">
         <div className="tcard-meta">

@@ -48,11 +48,11 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready und Backlog als Karten erscheinen,
   angelehnt an Codecks – ein gemeinsamer Umschalter „Liste/Karten“ in der Reiterleiste, gemerkt pro
   Gerät. Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
-  Markierung und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
+  Markierung (unten rechts, damit der Titel die volle Breite hat) und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
   Task; Bilder in der Beschreibung zählen nicht): über das Feld „Titelbild“ rechts neben dem Status im Inspektor (ohne Vorschau –
   die zeigt die Karte; ohne Bild ein Ablagefeld für Ziehen aus Galerie oder vom Rechner, Strg+V und
   Klick für den Dateidialog, mit Bild nur „Entfernen“), per „Als Titelbild von …“ im
-  Kontextmenü der Galerie oder durch Ziehen auf die Karte. Was vom Rechner kommt, landet in der
+  Kontextmenü der Galerie, durch Ziehen auf die Karte oder mit Strg+V auf der ausgewählten Karte. Was vom Rechner kommt, landet in der
   Galerie im Ordner „Cardimages“ des Projekts (wird bei Bedarf angelegt). Endgültig gelöschte Bilder
   leeren das Feld. Offen, erst wenn die Karten bleiben: Vorgabe-Hintergründe mit der Kette
   Projekt → Kategorie → Task. Den Baum darunter zeigt
