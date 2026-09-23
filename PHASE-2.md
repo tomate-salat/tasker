@@ -453,6 +453,9 @@ Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `us
 - **Tab / Shift+Tab** rücken Listenpunkte ein und aus (alle markierten), unter den Inhalt des
   Punktes darüber; nummerierte zählen auf der neuen Ebene neu. Außerhalb von Listen bleibt Tab,
   was es war. Die Textlogik steht rein in `src/shared/listEdit.ts`.
+- **Alt+↑/↓** verschieben die Zeile der Schreibmarke – bei einer Markierung den ganzen Block –
+  nach oben oder unten, gleich was darin steht. Dieselbe Kombination, die in der Liste eine Zeile
+  umsortiert; im Textfeld greift die der Liste nicht, dort wird ja getippt.
 - **`/`** öffnet ein Befehlsmenü wie `$` (gemeinsame Mechanik in `caretMenu.tsx`). Befehle stehen
   in `SLASH_COMMANDS` – bisher „TodoListe“ und „Liste“; weitere kommen dort dazu. Auf einer leeren
   Zeile beginnt der Befehl diese, hinter Text eine neue.

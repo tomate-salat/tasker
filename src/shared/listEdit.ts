@@ -9,6 +9,8 @@
  *   Ebene hinauf, ganz außen verschwindet das Zeichen.
  * - Tab / Umschalt+Tab rücken Listenpunkte ein und aus – alle markierten
  *   Zeilen, die Listenpunkte sind.
+ * - Alt und Pfeil hoch/runter schieben die Zeile der Schreibmarke (oder alle
+ *   markierten) nach oben oder unten.
  */
 
 /** Ersetze `from..to` durch `text`, danach steht die Auswahl bei `selStart..selEnd`. */
@@ -48,7 +50,13 @@ function item(line: string): Item | null {
 /** Wie weit der Inhalt eines Punktes eingerückt ist – so tief muss ein Unterpunkt stehen. */
 const contentWidth = (it: Item): number => it.marker.length + it.gap.length;
 
-const lineStartAt = (v: string, i: number): number => v.lastIndexOf('\n', i - 1) + 1;
+/**
+ * Der Anfang der Zeile, in der `i` steht. Die Null muss dabei ausdrücklich
+ * abgefangen werden: `lastIndexOf` nimmt eine negative Startstelle als 0 und
+ * fände bei einem Text, der mit einem Umbruch beginnt, genau diesen – die
+ * Schreibmarke ganz vorn läge dann scheinbar in der zweiten Zeile.
+ */
+const lineStartAt = (v: string, i: number): number => (i <= 0 ? 0 : v.lastIndexOf('\n', i - 1) + 1);
 const lineEndAt = (v: string, i: number): number => {
   const n = v.indexOf('\n', i);
   return n < 0 ? v.length : n;
@@ -88,6 +96,45 @@ export function tabInList(value: string, selStart: number, selEnd: number, dir: 
   const first = lineStartAt(value, selStart);
   if (!item(value.slice(first, lineEndAt(value, first)))) return null;
   return shiftLines(value, selStart, selEnd, dir);
+}
+
+/**
+ * Alt und Pfeil hoch/runter: die Zeile der Schreibmarke mit ihrer Nachbarin
+ * tauschen – bei einer Markierung der ganze Block. Sie behält dabei ihren Text
+ * unverändert, es ändert sich nur die Reihenfolge; die Markierung wandert mit,
+ * sonst verlöre man beim zweiten Druck, was man gerade verschiebt.
+ *
+ * `null` heißt: am Rand angekommen, es geht nicht weiter.
+ */
+export function moveLines(value: string, selStart: number, selEnd: number, dir: 1 | -1): TextEdit | null {
+  const from = lineStartAt(value, selStart);
+  const to = lineEndAt(value, selEnd);
+  const block = value.slice(from, to);
+
+  if (dir === -1) {
+    if (from === 0) return null;
+    const above = lineStartAt(value, from - 1);
+    const shift = from - above;
+    return {
+      from: above,
+      to,
+      text: `${block}\n${value.slice(above, from - 1)}`,
+      selStart: selStart - shift,
+      selEnd: selEnd - shift,
+    };
+  }
+
+  if (to >= value.length) return null;
+  const below = lineEndAt(value, to + 1);
+  const next = value.slice(to + 1, below);
+  const shift = next.length + 1;
+  return {
+    from,
+    to: below,
+    text: `${next}\n${block}`,
+    selStart: selStart + shift,
+    selEnd: selEnd + shift,
+  };
 }
 
 function shiftLines(value: string, selStart: number, selEnd: number, dir: 1 | -1): TextEdit | null {

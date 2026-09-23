@@ -1,4 +1,4 @@
-import { enterInList, tabInList, type TextEdit } from '@shared/listEdit.js';
+import { enterInList, moveLines, tabInList, type TextEdit } from '@shared/listEdit.js';
 import type { Workspace } from '@shared/workspace.js';
 import { replaceText, useCaretMenu } from './caretMenu.js';
 import { useRefPicker } from './refs.js';
@@ -11,6 +11,7 @@ import { useRefPicker } from './refs.js';
  * - `/` bietet Befehle an (`SLASH_COMMANDS`),
  * - Enter setzt Listen fort, Tab / Umschalt+Tab rücken Listenpunkte ein und
  *   aus (`listEdit.ts`). Umschalt+Enter bricht die Zeile ohne neuen Punkt um.
+ * - Alt und Pfeil hoch/runter verschieben die Zeile im Text.
  */
 
 /**
@@ -122,8 +123,21 @@ export function useSmartEditor(
   /** Gibt `true` zurück, wenn der Editor die Taste übernommen hat. */
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (refs.onKeyDown(e) || slash.onKeyDown(e)) return true;
-    if (e.nativeEvent.isComposing || e.altKey || e.ctrlKey || e.metaKey) return false;
+    if (e.nativeEvent.isComposing) return false;
     const el = e.currentTarget;
+
+    /**
+     * Alt und Pfeil hoch/runter verschieben die Zeile – wie in der Liste, wo
+     * dieselbe Kombination die Zeile umsortiert. Auch am Rand bleibt die Taste
+     * hier: sonst spränge die Schreibmarke doch noch weg.
+     */
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const moved = moveLines(el.value, el.selectionStart, el.selectionEnd, e.key === 'ArrowDown' ? 1 : -1);
+      if (moved) apply(el, moved);
+      return true;
+    }
+    if (e.altKey || e.ctrlKey || e.metaKey) return false;
     const edit =
       e.key === 'Enter' && !e.shiftKey
         ? enterInList(el.value, el.selectionStart, el.selectionEnd)

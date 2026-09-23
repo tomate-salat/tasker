@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { enterInList, tabInList, type TextEdit } from './listEdit.js';
+import { enterInList, moveLines, tabInList, type TextEdit } from './listEdit.js';
 
 /** Text mit `|` als Schreibmarke (oder zwei `|` als Auswahl) → Ergebnis im selben Format. */
 function run(src: string, f: (v: string, s: number, e: number) => TextEdit | null): string | null {
@@ -78,5 +78,38 @@ describe('Tab in Listen', () => {
 
   it('behält die Checkbox', () => {
     assert.equal(tab('- [ ] a\n- [ ] b|'), '- [ ] a\n  - [ ] b|');
+  });
+});
+
+const up = (src: string) => run(src, (v, s, e) => moveLines(v, s, e, -1));
+const down = (src: string) => run(src, (v, s, e) => moveLines(v, s, e, 1));
+
+describe('Zeilen verschieben', () => {
+  it('tauscht die Zeile mit der darüber und nimmt die Schreibmarke mit', () => {
+    assert.equal(up('- [ ] Repair\n- [ ] De|stroy'), '- [ ] De|stroy\n- [ ] Repair');
+  });
+
+  it('tauscht die Zeile mit der darunter', () => {
+    assert.equal(down('- [ ] Re|pair\n- [ ] Destroy'), '- [ ] Destroy\n- [ ] Re|pair');
+  });
+
+  it('bleibt am Rand stehen', () => {
+    assert.equal(up('- [ ] Re|pair\n- [ ] Destroy'), null);
+    assert.equal(down('- [ ] Repair\n- [ ] De|stroy'), null);
+  });
+
+  it('nimmt eine Markierung über mehrere Zeilen als Block mit', () => {
+    assert.equal(down('a\n|b\nc|\nd'), 'a\nd\n|b\nc|');
+    assert.equal(up('a\n|b\nc|\nd'), '|b\nc|\na\nd');
+  });
+
+  it('kümmert sich nicht darum, was in der Zeile steht', () => {
+    assert.equal(down('-----\nText|'), null);
+    assert.equal(up('-----\nTe|xt'), 'Te|xt\n-----');
+  });
+
+  it('kommt mit leeren Zeilen zurecht', () => {
+    assert.equal(up('a\n\nb|'), 'a\nb|\n');
+    assert.equal(down('|\na'), 'a\n|');
   });
 });
