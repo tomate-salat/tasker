@@ -247,8 +247,72 @@ export function untrashImage(ctx: DbCtx, id: string): boolean {
   return res.changes > 0;
 }
 
-/** Endgültig – hier sind die Bytes wirklich weg. */
+/** Was an der Stelle eines endgültig entfernten Bildes im Text stehen bleibt. */
+export const GONE_NOTE = '[BILD WURDE GELÖSCHT]';
+
+/**
+ * Ersetzt jeden Verweis auf dieses Bild durch den Hinweis. Wird nur beim
+ * endgültigen Entfernen aufgerufen: solange das Bild im Papierkorb liegt, ist es
+ * noch da und wird auch noch ausgeliefert – erst danach stünde in den
+ * Beschreibungen ein kaputtes Bild.
+ *
+ * Deshalb braucht es auch keinen Rückweg: das Entfernen selbst hat keinen.
+ */
+export function stripRefs(ctx: DbCtx, imageId: string): number {
+  const pattern = new RegExp(String.raw`!\[[^\]]*\]\(\s*/api/bilder/${imageId}[^)]*\)`, 'g');
+  let n = 0;
+  for (const kind of ['task', 'milestone'] as const) {
+    const rows = ctx.sqlite
+      .prepare(`SELECT id, desc FROM ${kind} WHERE desc LIKE ?`)
+      .all(`%/api/bilder/${imageId}%`) as { id: string; desc: string }[];
+    for (const r of rows) {
+      const next = r.desc.replace(pattern, GONE_NOTE);
+      if (next === r.desc) continue;
+      // Version mit hochzählen, sonst schreibt ein offener Tab auf altem Stand darüber.
+      ctx.sqlite
+        .prepare(
+          `UPDATE ${kind} SET desc = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+        )
+        .run(next, new Date().toISOString(), r.id);
+      n++;
+    }
+  }
+
+  /**
+   * Und dasselbe in den Papierkorb-Einträgen: dort stehen die Texte gelöschter
+   * Aufgaben als JSON. Ohne das zeigte eine wiederhergestellte Aufgabe später
+   * ein kaputtes Bild ohne jede Erklärung – und genau der Fall ist häufig, weil
+   * man ja gerade die Bilder aufräumt, die nur noch dort hängen.
+   */
+  const entries = ctx.sqlite
+    .prepare("SELECT id, payload FROM trash WHERE kind != 'image' AND payload LIKE ?")
+    .all(`%/api/bilder/${imageId}%`) as { id: string; payload: string }[];
+  for (const e of entries) {
+    let p: { row?: { desc?: string }; tasks?: { desc?: string }[]; milestones?: { desc?: string }[] };
+    try {
+      p = JSON.parse(e.payload);
+    } catch {
+      continue;
+    }
+    let hit = false;
+    for (const row of [p.row, ...(p.tasks ?? []), ...(p.milestones ?? [])]) {
+      if (typeof row?.desc !== 'string') continue;
+      const next = row.desc.replace(pattern, GONE_NOTE);
+      if (next === row.desc) continue;
+      row.desc = next;
+      hit = true;
+    }
+    if (!hit) continue;
+    ctx.sqlite.prepare('UPDATE trash SET payload = ? WHERE id = ?').run(JSON.stringify(p), e.id);
+    n++;
+  }
+
+  return n;
+}
+
+/** Endgültig – hier sind die Bytes wirklich weg, und die Texte sagen es. */
 export function purgeImage(ctx: DbCtx, id: string): void {
+  stripRefs(ctx, id);
   ctx.sqlite.prepare('DELETE FROM image WHERE id = ?').run(id);
 }
 

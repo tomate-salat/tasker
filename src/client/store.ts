@@ -1109,7 +1109,9 @@ export const useStore = create<State>((set, get) => ({
   purgeTrash: async (id) => {
     try {
       const { undo, images } = await api.purgeTrash(id);
-      await Promise.all([get().loadTrash(), images && get().imagesLoaded ? get().loadImages() : null]);
+      // Mit einem Bild ändern sich auch Beschreibungen (der Hinweis tritt an seine
+      // Stelle) – dafür braucht es den ganzen Bestand neu, nicht nur den Papierkorb.
+      await Promise.all([images ? get().load() : get().loadTrash(), images ? get().loadImages() : null]);
       remember(`Endgültig gelöscht${bildHinweis(images)}`, undo);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
@@ -1124,7 +1126,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       const { count, undo, images } = await api.emptyTrash(ids);
       set({ trashConfirm: false });
-      await Promise.all([get().loadTrash(), images && get().imagesLoaded ? get().loadImages() : null]);
+      await Promise.all([images ? get().load() : get().loadTrash(), images ? get().loadImages() : null]);
       remember(
         `${count} ${count === 1 ? 'Eintrag' : 'Einträge'} endgültig gelöscht${bildHinweis(images)}`,
         undo,

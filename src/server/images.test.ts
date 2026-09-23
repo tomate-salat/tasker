@@ -7,6 +7,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { Milestone, Task } from '../shared/model.js';
 import { createDbCtx, type DbCtx } from './db.js';
 import {
+  GONE_NOTE,
   getImage,
   imageBytes,
   imageRefs,
@@ -39,6 +40,9 @@ beforeEach(() => {
 const mkProject = () => create(ctx, 'project', { name: 'Spiel' }) as { id: string };
 const mkTask = (o: Record<string, unknown>) => create(ctx, 'task', o) as Task;
 const mkMilestone = (o: Record<string, unknown>) => create(ctx, 'milestone', o) as Milestone;
+
+const readDesc = (kind: 'task' | 'milestone', id: string): string =>
+  (ctx.sqlite.prepare(`SELECT desc FROM ${kind} WHERE id = ?`).get(id) as { desc: string }).desc;
 
 const put = (bytes: string, o: { projectId?: string | null; name?: string } = {}) =>
   putImage(ctx, {
@@ -195,6 +199,54 @@ describe('Bilder löschen', () => {
     const zurueck = res.undo[0] as { op: 'unpurge'; rows: { kind: string }[] };
     assert.equal(zurueck.op, 'unpurge');
     assert.deepEqual(zurueck.rows.map((r) => r.kind), ['task']);
+  });
+
+  it('hinterlässt in den Beschreibungen einen Hinweis', () => {
+    const p = mkProject();
+    const bild = put('verschwindet');
+    const verweis = `![Screenshot](/api/bilder/${bild.id})`;
+    const t = mkTask({ projectId: p.id, title: 'Mit Bild', desc: `Oben\n\n${verweis}\n\nUnten` });
+    const m = mkMilestone({ projectId: p.id, title: 'M', desc: verweis });
+
+    // Im Papierkorb ändert sich noch nichts – das Bild ist ja noch da.
+    trashImage(ctx, bild.id, 'x1');
+    assert.match(readDesc('task', t.id), /!\[Screenshot\]/);
+
+    purgeImage(ctx, bild.id);
+    assert.equal(readDesc('task', t.id), `Oben\n\n${GONE_NOTE}\n\nUnten`);
+    assert.equal(readDesc('milestone', m.id), GONE_NOTE);
+  });
+
+  it('der Hinweis erreicht auch Aufgaben im Papierkorb', () => {
+    const p = mkProject();
+    const bild = put('auch dort');
+    const t = mkTask({
+      projectId: p.id,
+      title: 'Liegt im Papierkorb',
+      desc: `![B](/api/bilder/${bild.id})`,
+    });
+    remove(ctx, 'task', t.id);
+    const eintrag = loadTrash(ctx)[0] as { id: string };
+
+    purgeImage(ctx, bild.id);
+
+    // Wiederhergestellt steht dort der Hinweis und kein kaputtes Bild.
+    restoreTrash(ctx, eintrag.id);
+    assert.equal(readDesc('task', t.id), GONE_NOTE);
+  });
+
+  it('lässt andere Bilder im selben Text unberührt', () => {
+    const p = mkProject();
+    const weg = put('weg');
+    const bleibt = put('bleibt');
+    const t = mkTask({
+      projectId: p.id,
+      title: 'Zwei Bilder',
+      desc: `![A](/api/bilder/${weg.id}) und ![B](/api/bilder/${bleibt.id})`,
+    });
+
+    purgeImage(ctx, weg.id);
+    assert.equal(readDesc('task', t.id), `${GONE_NOTE} und ![B](/api/bilder/${bleibt.id})`);
   });
 
   it('die Frist nimmt ein altes Bild mit', () => {

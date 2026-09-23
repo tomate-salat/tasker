@@ -416,6 +416,10 @@ ist eine Zeile, und die Auslieferung darf `immutable` setzen.
   Eintrag trägt die Bild-ID, nicht das Bild (als Base64 wäre es ein Drittel größer). Beim Leeren
   fallen die Bytes – und **das lässt sich nicht zurücknehmen**. Deshalb kommt ein Bild-Eintrag gar
   nicht erst in die Rückgängig-Liste, die Rückfrage sagt es vorher, und die Meldung danach auch.
+- **Beim endgültigen Entfernen** tritt in jeder Beschreibung `[BILD WURDE GELÖSCHT]` an die Stelle
+  des Verweises (`stripRefs`), auch in den Nutzlasten im Papierkorb – sonst zeigte eine später
+  wiederhergestellte Aufgabe ein kaputtes Bild ohne Erklärung. Solange das Bild nur im Papierkorb
+  liegt, bleiben die Texte unberührt: es wird ja weiter ausgeliefert.
 
 ### Beschreibung schreiben (über den Prototyp hinaus)
 
