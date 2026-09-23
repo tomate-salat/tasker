@@ -45,6 +45,14 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Dokumente** sind technisch normale Tasks in einer eigenen Ansicht; ihr Inspektor ist bewusst anders.
 - **Papierkorb** mit Ablauffrist statt sofortigem Löschen.
 - **Zeichnungen** gehören zu einem Task und werden über `![[zeichnung:Name]]` in die Beschreibung eingebettet.
+- **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready und Backlog als Karten erscheinen,
+  angelehnt an Codecks – ein gemeinsamer Umschalter „Liste/Karten“ in der Reiterleiste, gemerkt pro
+  Gerät. Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild (erstes Bild der
+  Beschreibung), Status, Priorität, Markierung und Fortschrittssegmenten. Den Baum darunter zeigt
+  der Inspektor an seinem Ende, immer ab der Wurzel – auch wenn eine Unteraufgabe ausgewählt ist –, mit
+  Auswahl, Ziehen und Kontextmenü wie in der Liste. Nicht im Prototyp, Wunsch des Nutzers; ob sie
+  bleibt, ist offen. Deshalb steckt fast alles in `ui/Cards.tsx` und `ui/cards.css`, die übrigen
+  Stellen sind als „Karten“ kommentiert; die Liste bleibt unverändert.
 
 ---
 

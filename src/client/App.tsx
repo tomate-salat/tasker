@@ -29,6 +29,7 @@ import { Timeline } from './ui/Timeline.js';
 import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
 import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
+import { LayoutSwitch } from './ui/Cards.js';
 
 export function App() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -185,6 +186,7 @@ function Shell({
               ))}
 
               <span className="tab-actions">
+                <LayoutSwitch />
                 <ArchiveDone ws={ws} />
                 {/* Wie im Prototyp: Aufgaben entstehen über die Schnellerfassung oder
                     in der Liste, der Kopf legt nur Milestones und Seiten an – sofort,

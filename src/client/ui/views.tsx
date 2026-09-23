@@ -11,6 +11,7 @@ import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
+import { CardGrid, cardRows, cardsOn, chunkCards } from './Cards.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
 
@@ -21,7 +22,10 @@ import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.j
 export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const state = useStore();
   const { collapsed, settings, filter } = state;
-  const rows = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
+  const all = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
+  // Karten: nur die Wurzeln; die Tastatur läuft zusätzlich durch den offenen Baum.
+  const cards = cardsOn(state) ? cardRows(ws, all, state.selected, collapsed) : null;
+  const rows = cards ? cards.keys : all;
   const menu = useMenu();
   useKeys(ws, rows, menu);
 
@@ -45,7 +49,7 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   return (
     <>
       <div
-        className={`list ${state.multi.size ? 'has-multi' : ''}`}
+        className={`list ${state.multi.size ? 'has-multi' : ''} ${cards ? 'cards' : ''}`}
         onContextMenu={(e) => {
           const el = e.target as HTMLElement;
           const id = el.closest('[data-row]')?.getAttribute('data-row');
@@ -65,7 +69,10 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
           menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
         }}
       >
-        {rows.map((row) => {
+        {(cards ? chunkCards(cards.shown) : rows).map((row) => {
+          if (Array.isArray(row)) {
+            return <CardGrid key={`cards:${row[0]?.id}`} ws={ws} tasks={row} view={view} menu={menu} />;
+          }
           if (row.type === 'task') {
             return (
               <TaskRow

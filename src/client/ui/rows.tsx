@@ -445,7 +445,7 @@ export function ChecklistBadge({ desc }: { desc: string }) {
 }
 
 /** Zeigt an, dass an der Aufgabe oder dem Milestone eine Zeichnung hängt. */
-function DrawingBadge({ ownerId }: { ownerId: string }) {
+export function DrawingBadge({ ownerId }: { ownerId: string }) {
   const { boot, openDrawing } = useStore();
   const drawings = drawingsOf(boot?.drawings, ownerId);
   const first = drawings[0];
@@ -476,7 +476,7 @@ function DrawingBadge({ ownerId }: { ownerId: string }) {
 }
 
 /** Schloss, wenn die Aufgabe blockiert ist – eigene und geerbte Gründe im Titel. */
-function LockBadge({ ws, task }: { ws: Workspace; task: Task }) {
+export function LockBadge({ ws, task }: { ws: Workspace; task: Task }) {
   const own = ownBlockers(ws, task);
   const inherited = inheritedBlock(ws, task);
   const reasons = [
@@ -573,7 +573,7 @@ function TagCell({ ws, task, onClick }: { ws: Workspace; task: Task; onClick: Ce
  * Unteraufgabe an, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft.
  * Eine eben angelegte Zeile, die leer bleibt oder abgebrochen wird, verschwindet.
  */
-function TitleEdit({
+export function TitleEdit({
   kind,
   id,
   title,

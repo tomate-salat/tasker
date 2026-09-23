@@ -8,6 +8,8 @@ import { markdownHtml } from './markdown.js';
 import { focusAtEnd, useSmartEditor } from './editor.js';
 import { refClick, useRefResolver } from './refs.js';
 import { ChecklistBadge, StatusDot } from './rows.js';
+import { Hierarchy } from './Cards.js';
+import { useMenu } from './Menu.js';
 
 /**
  * Der Inspektor bei einer Mehrfachauswahl: eine Karte je Aufgabe mit ihrer
@@ -15,7 +17,8 @@ import { ChecklistBadge, StatusDot } from './rows.js';
  * von Text zwischen Aufgaben, deshalb sind die Beschreibungen hier alle offen.
  */
 export function MultiDetail({ ws }: { ws: Workspace }) {
-  const { multi, visible, clearMulti, select } = useStore();
+  const { multi, visible, clearMulti, select, anchor, selected } = useStore();
+  const menu = useMenu();
   const order = (id: string): number => {
     const i = visible.indexOf(id);
     return i < 0 ? Number.MAX_SAFE_INTEGER : i;
@@ -40,6 +43,10 @@ export function MultiDetail({ ws }: { ws: Workspace }) {
           ✕
         </button>
       </div>
+      {/* Karten: der Baum bleibt stehen, auch wenn darin mehrere ausgewählt sind. */}
+      <Hierarchy ws={ws} id={anchor ?? selected} menu={menu} />
+      {menu.node}
+
       <p className="hint multi-hint">
         Text markieren und kopieren, dann in einer anderen Beschreibung auf „bearbeiten“ klicken und
         einfügen.

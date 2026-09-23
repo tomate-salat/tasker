@@ -41,6 +41,9 @@ export const VIEWS = [
 ] as const;
 export type View = (typeof VIEWS)[number];
 
+/** Darstellung von Plan, Ready und Backlog. */
+export type Layout = 'list' | 'cards';
+
 export const VIEW_LABEL: Record<View, string> = {
   plan: 'Plan',
   ready: 'Ready',
@@ -90,6 +93,9 @@ type State = {
   filter: OutlineFilter;
   /** Seitenleiste eingeklappt – pro Gerät. */
   sideCollapsed: boolean;
+  /** Plan, Ready und Backlog als Liste oder als Karten – pro Gerät. */
+  layout: Layout;
+  setLayout: (layout: Layout) => void;
   /** Auf schmalen Bildschirmen liegt die Seitenleiste als Overlay über allem. */
   sideOpen: boolean;
   view: View;
@@ -297,6 +303,7 @@ type State = {
 const COLLAPSED_KEY = 'tasker.collapsed';
 const SCOPE_KEY = 'tasker.scope';
 const SIDE_KEY = 'tasker.side';
+const LAYOUT_KEY = 'tasker.layout';
 const ARCH_OPEN_KEY = 'tasker.archOpen';
 
 const readLocal = <T>(key: string, fallback: T): T => {
@@ -328,6 +335,11 @@ export const useStore = create<State>((set, get) => ({
   lastProject: null,
   filter: { tag: null, categoryId: null, markId: null },
   sideCollapsed: readLocal<boolean>(SIDE_KEY, false),
+  layout: readLocal<Layout>(LAYOUT_KEY, 'list') === 'cards' ? 'cards' : 'list',
+  setLayout: (layout) => {
+    writeLocal(LAYOUT_KEY, layout);
+    set({ layout });
+  },
   sideOpen: false,
   view: 'plan',
   selected: null,

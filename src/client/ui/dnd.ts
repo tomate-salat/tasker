@@ -324,7 +324,12 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
     case 'task':
       if (target.type === 'task') {
         if (drag.blocked.has(target.task.id)) return null;
-        return y < 0.28 ? 'before' : y > 0.72 ? 'after' : 'child';
+        // Karten stehen nebeneinander: dort liegt „davor/danach“ links und rechts.
+        const at =
+          (e.currentTarget as HTMLElement).dataset['axis'] === 'x'
+            ? (e.clientX - box.left) / box.width
+            : y;
+        return at < 0.28 ? 'before' : at > 0.72 ? 'after' : 'child';
       }
       if (target.type === 'tab') {
         return ['plan', 'ready', 'backlog', 'docs', 'archive'].includes(target.view) ? 'into' : null;
