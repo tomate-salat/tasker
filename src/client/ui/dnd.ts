@@ -15,6 +15,7 @@ import type { Milestone, Project, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
+import { appendMarkdown } from './imageDrop.js';
 
 /**
  * Ziehen und Ablegen, Regeln wie im Prototyp (`dragover`/`applyDrop`):
@@ -36,7 +37,7 @@ import { placeSteps, toBacklog } from './actions.js';
  */
 export type Zone = 'before' | 'after' | 'child' | 'into';
 
-type DragKind = 'task' | 'milestone' | 'group' | 'project';
+type DragKind = 'task' | 'milestone' | 'group' | 'project' | 'image';
 
 type Drag = {
   kind: DragKind;
@@ -65,7 +66,12 @@ export type Target =
   | { type: 'tab'; view: View }
   | { type: 'project'; project: Project }
   /** Die beiden Felder im Inspektor: Ablegen setzt eine Abhängigkeit. */
-  | { type: 'dep'; dir: 'by' | 'blocks'; item: Task | Milestone };
+  | { type: 'dep'; dir: 'by' | 'blocks'; item: Task | Milestone }
+  /**
+   * Die Beschreibung im Inspektor. Nimmt nur Bilder aus der Galerie: auswählen,
+   * zum Reiter „Bilder“ wechseln, das Bild auf den Text ziehen.
+   */
+  | { type: 'desc'; kind: 'task' | 'milestone'; item: Task | Milestone };
 
 const keyOf = (t: Target): string => {
   switch (t.type) {
@@ -82,6 +88,8 @@ const keyOf = (t: Target): string => {
       return `proj:${t.project.id}`;
     case 'dep':
       return `dep:${t.dir}:${t.item.id}`;
+    case 'desc':
+      return `desc:${t.item.id}`;
   }
 };
 
@@ -289,6 +297,10 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
   // Die Felder im Inspektor nehmen, was dort eine Abhängigkeit ergibt.
   if (target.type === 'dep') return depPairs(drag, target).length ? 'into' : null;
 
+  // Die Beschreibung nimmt nur Bilder – eine Zeile fällt dort durch.
+  if (target.type === 'desc') return drag.kind === 'image' ? 'into' : null;
+  if (drag.kind === 'image') return null;
+
   switch (drag.kind) {
     case 'task':
       if (target.type === 'task') {
@@ -320,7 +332,10 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
   const ws = useStore.getState().ws;
   if (!ws) return;
   if (target.type === 'dep') return dropDep(drag, target);
+  if (target.type === 'desc') return dropImage(drag, target);
   switch (drag.kind) {
+    case 'image':
+      return;
     case 'task':
       return dropTasks(ws, drag, target, zone);
     case 'milestone':
@@ -346,6 +361,23 @@ function depPairs(drag: Drag, target: DepTarget): { from: Task | Milestone; to: 
     .filter((x): x is Task | Milestone => !!x)
     .map((x) => (target.dir === 'by' ? { from: item, to: x } : { from: x, to: item }))
     .filter((p) => canDepend(ws, p.from, p.to));
+}
+
+type DescTarget = Extract<Target, { type: 'desc' }>;
+
+/**
+ * Ein Bild aus der Galerie auf die Beschreibung: der Verweis kommt ans Ende des
+ * Textes. Damit lässt sich eine Aufgabe auswählen, zum Reiter „Bilder“ wechseln
+ * und von dort etwas hereinziehen – dafür bleibt die Auswahl beim Reiterwechsel
+ * stehen.
+ */
+async function dropImage(drag: Drag, target: DescTarget): Promise<void> {
+  const store = useStore.getState();
+  const bild = store.images.find((b) => b.id === drag.id);
+  if (!bild) return;
+  const item = target.item;
+  await store.patch(target.kind, item.id, { desc: appendMarkdown(item.desc, bild) });
+  store.say(`„${bild.name}“ zu „${item.title || 'Ohne Titel'}“ hinzugefügt`);
 }
 
 async function dropDep(drag: Drag, target: DepTarget): Promise<void> {

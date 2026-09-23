@@ -142,6 +142,10 @@ Zugriffsmuster sind bekannt.
 - `POST /api/kind/:kind/:id/archive` bzw. `/restore` – archivieren und zurückholen
 - `POST /api/move` – Drag & Drop: neuer Elternteil / Milestone / Gruppe plus Platz (`index`), als eine Transaktion
 - `GET|POST /api/drawings`, `PATCH|DELETE /api/drawings/:id` – Zeichnungen (siehe Abschnitt 7, Schritt 8)
+- `GET /api/bilder` – der Bestand für die Galerie: Angaben und Verwendungen, nie die Bytes
+- `GET /api/bilder/:id` (`?v=klein`) – die Bytes, dauerhaft zwischenspeicherbar
+- `POST /api/bilder` – ein fertiges Bild hochladen (`FormData`, kein JSON)
+- `POST /api/bilder/:id/loeschen` bzw. `/zurueck` – in den Papierkorb und zurück
 
 Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit festen Pfaden wie
 `/move`, `/trash` oder `/settings` nicht überschneiden können. Sonst hinge die Korrektheit an der
@@ -377,6 +381,41 @@ Aufgabe oder den Milestone mit dieser Nummer.
   Aufgabe); unbekannte darunter bleiben stehen und heißen in der Vorschau „unklar“. Jedes Projekt
   nur einmal (`setting codecks.refs.<projectId>`) – danach könnten dort echte Tasker-Nummern stehen.
 - Links nach draußen öffnen einen neuen Tab und nicht den Editor.
+
+### Bilder (über den Prototyp hinaus)
+
+Wunsch des Nutzers. Bilder liegen als BLOB in der Datenbank (Tabelle `image`) und nicht als Dateien
+daneben – so hängen sie am Papierkorb und an „Rückgängig“, statt einen zweiten Zustand zu bilden,
+der auseinanderlaufen kann. Der Schlüssel ist der **Inhalts-Hash**: dasselbe Bild zweimal eingefügt
+ist eine Zeile, und die Auslieferung darf `immutable` setzen.
+
+- **Immer WebP**, mit einer einstellbaren Obergrenze je Bild (`imageMaxKb`, Vorgabe 500) und
+  Kantenlänge (`imageMaxEdge`, Vorgabe 2560). Umgewandelt wird im Browser vor dem Hochladen
+  (`src/client/ui/imageFile.ts`). Die Größe wird nicht gerechnet, sondern gemessen: Qualität per
+  Intervallhalbierung, und erst wenn die am Boden ist, fällt die Kantenlänge. Dadurch ist die
+  Grenze eine Zusage. Animierte GIFs und SVG werden abgelehnt.
+- **Herein kommt es** über Einfügen aus der Zwischenablage und Ziehen ins Fenster – kein
+  Dateidialog (ausdrücklicher Wunsch). Im Editor landet der Verweis an der Cursorposition, auf der
+  Karte am Ende des Textes.
+- **Im Text** steht ein gewöhnliches Markdown-Bild auf `/api/bilder/<id>`; `marked` rendert das ohne
+  Sonderweg, anders als bei `![[zeichnung:…]]`.
+- **Ein Bild gehört zu einem Projekt** (dem, in dem es hochgeladen wurde), aber ohne Fremdschlüssel:
+  ein gelöschtes Projekt soll die Bytes nicht mitnehmen.
+- **Wer es verwendet, wird nachgesehen und nicht mitgeschrieben** (`usage` in
+  `src/server/images.ts`): einmal über alle Beschreibungen von Aufgaben und Milestones plus die
+  Nutzlasten im Papierkorb. Eine mitgeführte Tabelle müsste bei Rückgängig, Papierkorb, Umwandeln
+  und Import korrekt mitlaufen – und eine Galerie, die „nicht mehr verlinkt“ fälschlich behauptet,
+  löscht Bilder, die noch gebraucht werden.
+- **Die Galerie** ist ein eigener Reiter (`src/client/ui/Gallery.tsx`), ein Bestand wie das Archiv.
+  Sie zeigt je Bild Maße, Größe, Datum und die Verwendungen (anklickbar) und filtert nach: ohne
+  Verwendung, nur noch archiviert, nur noch im Papierkorb, älter als. Dazu Sortierung und die
+  Gesamtgröße – ohne die weiß man nie, ob Aufräumen lohnt.
+- **Aus der Galerie ziehen:** ein Bild auf die Beschreibung im offenen Inspektor hängt es ans Ende
+  des Textes. Das baut darauf, dass die Auswahl den Reiterwechsel überlebt.
+- **Löschen geht über den Papierkorb.** Die Bytes bleiben liegen, nur `deleted_at` wird gesetzt; der
+  Eintrag trägt die Bild-ID, nicht das Bild (als Base64 wäre es ein Drittel größer). Beim Leeren
+  fallen die Bytes – und **das lässt sich nicht zurücknehmen**. Deshalb kommt ein Bild-Eintrag gar
+  nicht erst in die Rückgängig-Liste, die Rückfrage sagt es vorher, und die Meldung danach auch.
 
 ### Beschreibung schreiben (über den Prototyp hinaus)
 

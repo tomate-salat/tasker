@@ -549,7 +549,15 @@ function Content({
     void patch(kind, item.id, { desc });
   };
 
-  /** Einfügen und Ablegen – beides nur, wenn wirklich Bilder dabei sind. */
+  /**
+   * Zwei Arten von Ablage auf demselben Fleck: Dateien von außen und ein Bild
+   * aus der Galerie. Was gezogen wird, steht im `dataTransfer` – Dateien gehen
+   * den Weg übers Hochladen, alles andere an das gewöhnliche Ziehen weiter.
+   */
+  const descTarget = { type: 'desc', kind, item } as const;
+  const descDrop = dropTarget(descTarget);
+  const descZone = useZone(descTarget);
+
   const imageEvents = {
     onPaste: (e: React.ClipboardEvent) => {
       if (!imagesIn(e.clipboardData?.files).length) return;
@@ -557,10 +565,17 @@ function Content({
       void take(e.clipboardData.files);
     },
     onDragOver: (e: React.DragEvent) => {
-      if (hasFiles(e.dataTransfer)) e.preventDefault();
+      if (hasFiles(e.dataTransfer)) {
+        e.preventDefault();
+        return;
+      }
+      descDrop.onDragOver(e);
     },
     onDrop: (e: React.DragEvent) => {
-      if (!hasFiles(e.dataTransfer)) return;
+      if (!hasFiles(e.dataTransfer)) {
+        descDrop.onDrop(e);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       void take(e.dataTransfer.files);
@@ -624,7 +639,7 @@ function Content({
   return (
     <>
       <div
-        className="d-card"
+        className={`d-card ${descZone ? 'dz-on' : ''}`}
         role="button"
         tabIndex={0}
         aria-label="Inhalt bearbeiten"

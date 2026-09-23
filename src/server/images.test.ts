@@ -17,7 +17,7 @@ import {
   untrashImage,
   usage,
 } from './images.js';
-import { archive, create, remove } from './repo.js';
+import { archive, create, expireTrash, loadTrash, purgeTrash, remove, restoreTrash } from './repo.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tasker-bilder-'));
 const opened: DbCtx[] = [];
@@ -159,5 +159,52 @@ describe('Bilder löschen', () => {
     purgeImage(ctx, bild.id);
     assert.equal(getImage(ctx, bild.id), null);
     assert.equal(imageBytes(ctx, bild.id, 'gross'), null);
+  });
+
+  it('steht im Papierkorb und kommt von dort zurück', () => {
+    const bild = put('ueber den papierkorb');
+    trashImage(ctx, bild.id, 'x1');
+
+    const eintrag = loadTrash(ctx).find((e) => e.id === 'x1');
+    assert.equal(eintrag?.kind, 'image');
+    assert.equal(eintrag?.imageId, bild.id);
+    assert.equal(eintrag?.taskCount, 0, 'ein Bild bringt keine Aufgaben mit');
+
+    restoreTrash(ctx, 'x1');
+    assert.equal(getImage(ctx, bild.id)?.deletedAt, null);
+    assert.equal(loadTrash(ctx).length, 0);
+  });
+
+  it('beim Leeren fallen die Bytes – und zwar ohne Rückgängig', () => {
+    const p = mkProject();
+    const bild = put('faellt weg');
+    const t = mkTask({ projectId: p.id, title: 'Auch weg' });
+    trashImage(ctx, bild.id, 'x1');
+    remove(ctx, 'task', t.id);
+
+    const ids = loadTrash(ctx).map((e) => e.id);
+    const res = purgeTrash(ctx, ids);
+    assert.equal(res.count, 2);
+    assert.equal(res.images, 1);
+    assert.equal(getImage(ctx, bild.id), null);
+
+    /**
+     * Die Aufgabe lässt sich zurückholen, das Bild nicht – seine Bytes sind
+     * fort. Deshalb steht sein Eintrag gar nicht erst in der Rückgängig-Liste.
+     */
+    const zurueck = res.undo[0] as { op: 'unpurge'; rows: { kind: string }[] };
+    assert.equal(zurueck.op, 'unpurge');
+    assert.deepEqual(zurueck.rows.map((r) => r.kind), ['task']);
+  });
+
+  it('die Frist nimmt ein altes Bild mit', () => {
+    const bild = put('zu alt');
+    trashImage(ctx, bild.id, 'x1');
+    ctx.sqlite
+      .prepare('UPDATE trash SET deleted_at = ? WHERE id = ?')
+      .run(new Date(Date.now() - 90 * 864e5).toISOString(), 'x1');
+
+    assert.equal(expireTrash(ctx), 1);
+    assert.equal(getImage(ctx, bild.id), null);
   });
 });

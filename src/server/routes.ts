@@ -25,7 +25,8 @@ import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
-import { imageBytes, listImages, putImage, usage } from './images.js';
+import { getImage, imageBytes, listImages, putImage, trashImage, untrashImage, usage } from './images.js';
+import { newId } from './ids.js';
 import {
   Conflict,
   NotFound,
@@ -182,6 +183,25 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     publish(c, bus, { type: 'reload', reason: 'Bild hinzugefügt' });
     return c.json(meta, 201);
   });
+
+  /**
+   * Löschen heißt beim Bild: in den Papierkorb. Die Bytes bleiben liegen, frei
+   * wird der Platz erst beim Leeren – wie bei allem anderen auch.
+   */
+  app.post('/bilder/:id/loeschen', (c) =>
+    run(c, bus, () => {
+      const meta = trashImage(ctx, c.req.param('id'), newId('x'));
+      if (!meta) throw new NotFound();
+      return meta;
+    }),
+  );
+
+  app.post('/bilder/:id/zurueck', (c) =>
+    run(c, bus, () => {
+      if (!untrashImage(ctx, c.req.param('id'))) throw new NotFound();
+      return getImage(ctx, c.req.param('id'));
+    }),
+  );
 
   /* ---------------------------------------------------------- Schreiben */
 

@@ -3,7 +3,7 @@ import { isDone, type Milestone, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
 import { allDone } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
-import type { ArchiveEntry, TrashEntry } from '../api.js';
+import { imageUrl, type ArchiveEntry, type TrashEntry } from '../api.js';
 import { archiveWorkspace, scopeProjectIds, useStore } from '../store.js';
 import { CHEVRON_DOWN, CHEVRON_RIGHT } from './icons.js';
 import { useMenu, type Menu, type MenuItem } from './Menu.js';
@@ -320,7 +320,12 @@ export function TrashView({ ws }: { ws: Workspace }) {
         const ago = Math.floor((Date.now() - new Date(e.deletedAt).getTime()) / 864e5);
         const left = Math.max(0, trashDays - ago);
         const subs = e.kind === 'task' ? e.taskCount - 1 : e.taskCount;
-        const where = e.kind === 'project' ? `Projekt · ${e.milestoneCount} Milestones` : e.where;
+        const where =
+          e.kind === 'project'
+            ? `Projekt · ${e.milestoneCount} Milestones`
+            : e.imageId
+              ? 'Bild · beim Leeren sind die Daten endgültig weg'
+              : e.where;
         const extra = [
           subs
             ? `${subs} ${e.kind === 'task' ? `Unteraufgabe${subs === 1 ? '' : 'n'}` : `Task${subs === 1 ? '' : 's'}`}`
@@ -337,6 +342,9 @@ export function TrashView({ ws }: { ws: Workspace }) {
           <div key={e.id} className="row trash-row" style={{ '--d': 0 } as React.CSSProperties}>
             {e.kind === 'project' ? (
               <span className="dot" style={{ background: e.color ?? undefined }} />
+            ) : e.imageId ? (
+              // Bei einem Bild sagt die Vorschau mehr als jedes Symbol.
+              <img className="trash-thumb" src={imageUrl(e.imageId, 'klein')} alt="" />
             ) : (
               <span className={`ico ${e.kind === 'milestone' ? 'ms' : ''}`}>
                 {e.kind === 'milestone' ? '◆' : '·'}
@@ -402,6 +410,7 @@ export function TrashBar({ ws }: { ws: Workspace }) {
   const { trash, trashDays, trashConfirm, setTrashConfirm, emptyTrash } = state;
   const inView = trash ? trashInView(ws, trash, scopeProjectIds(state)) : [];
   const n = inView.length;
+  const bilder = inView.filter((e) => e.imageId).length;
   return (
     <div className="toolbar">
       <b className="trash-title">Papierkorb</b>
@@ -410,7 +419,11 @@ export function TrashBar({ ws }: { ws: Workspace }) {
       {n > 0 &&
         (trashConfirm ? (
           <>
-            <span className="sum">Alle {n} endgültig löschen?</span>
+            <span className="sum">
+              Alle {n} endgültig löschen?
+              {/* Bei Bildern fallen die Daten mit – das lässt sich nicht zurücknehmen. */}
+              {bilder > 0 && ` ${bilder === 1 ? 'Das Bild ist' : `Die ${bilder} Bilder sind`} danach unwiederbringlich weg.`}
+            </span>
             <button className="btn ghost" onClick={() => setTrashConfirm(false)}>
               Abbrechen
             </button>

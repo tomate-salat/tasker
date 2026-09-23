@@ -118,9 +118,14 @@ export type TrashEntry = {
   drawingCount: number;
   milestoneCount: number;
   color: string | null;
+  /** Nur bei einem Bild: darüber holt die Ansicht die Vorschau. */
+  imageId: string | null;
 };
 
 export type TrashList = { days: number; entries: TrashEntry[] };
+
+/** Das Ergebnis eines endgültigen Löschens; `images` fällt nicht unter „Rückgängig“. */
+export type Purged = Undoable & { images: number };
 
 export type ImageMeta = {
   id: string;
@@ -231,10 +236,11 @@ export const api = {
   restoreTrash: (id: string) =>
     post<{ restored: number; kind: string; id: string; label: string }>(`/api/trash/${id}/restore`),
 
-  purgeTrash: (id: string) => request<Undoable>(`/api/trash/${id}`, { method: 'DELETE' }),
+  /** `images` zählt, wie viele Bilder dabei endgültig fielen – die kommen nicht zurück. */
+  purgeTrash: (id: string) => request<Purged>(`/api/trash/${id}`, { method: 'DELETE' }),
 
   /** „Papierkorb leeren“ – nur was die Ansicht gerade zeigt. */
-  emptyTrash: (ids: string[]) => post<Undoable>('/api/trash/purge', { ids }),
+  emptyTrash: (ids: string[]) => post<Purged>('/api/trash/purge', { ids }),
 
   drawings: (owner: DrawingOwner) =>
     request<{ drawings: Drawing[] }>(`/api/drawings?${OWNER_KEY[owner.kind]}=${encodeURIComponent(owner.id)}`),
@@ -267,6 +273,11 @@ export const api = {
     if (p.projectId) form.append('projekt', p.projectId);
     return request<ImageMeta>('/api/bilder', { method: 'POST', body: form });
   },
+
+  /** Löschen heißt Papierkorb – der Platz wird erst beim Leeren frei. */
+  trashImage: (id: string) => post<ImageMeta>(`/api/bilder/${id}/loeschen`),
+
+  restoreImage: (id: string) => post<ImageMeta>(`/api/bilder/${id}/zurueck`),
 
   settings: () => request<Settings>('/api/settings'),
 

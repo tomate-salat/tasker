@@ -1933,6 +1933,12 @@ button.prop:hover {
   background: var(--bg);
 }
 
+/* Ein Bild aus der Galerie schwebt darüber: es kommt ans Ende des Textes. */
+.d-card.dz-on {
+  border: 1px dashed var(--accent);
+  background: var(--accent-soft);
+}
+
 .d-h {
   margin: 0 0 12px;
   font: 700 24px/1.2 var(--display);
@@ -2048,6 +2054,138 @@ button.prop:hover {
 
 .md-cb {
   cursor: pointer;
+}
+
+/* ---- Galerie ---- */
+
+.gallery {
+  flex: 1;
+  overflow: auto;
+  padding: 0 14px 24px;
+}
+
+.gallery.dz-on {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+
+.gal-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+
+.gal-age {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.gal-sweep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.gal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.gal-item {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.gal-item img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.gal-item figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px 10px;
+  font-size: 12px;
+}
+
+.gal-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gal-meta,
+.gal-use.none {
+  color: var(--faint);
+}
+
+.gal-use {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 2px;
+}
+
+.gal-tag {
+  color: var(--muted);
+}
+
+.gal-del {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Was im Papierkorb liegt, steht getrennt darunter und tritt zurück. */
+.gal-deleted {
+  margin-top: 24px;
+}
+
+.gal-deleted h3 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gal-item.gone {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.trash-thumb {
+  width: 26px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 4px;
 }
 
 /* Ein Bild steht für sich und geht nie über die Breite des Inspektors hinaus. */

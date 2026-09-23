@@ -251,3 +251,29 @@ export function untrashImage(ctx: DbCtx, id: string): boolean {
 export function purgeImage(ctx: DbCtx, id: string): void {
   ctx.sqlite.prepare('DELETE FROM image WHERE id = ?').run(id);
 }
+
+/** Die Bild-ID aus einem Papierkorb-Eintrag, oder `null` bei allem anderen. */
+export function imageIdIn(entry: { kind: string; payload: string }): string | null {
+  if (entry.kind !== 'image') return null;
+  try {
+    return (JSON.parse(entry.payload) as { row?: { id?: string } }).row?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Beim Leeren des Papierkorbs: für jeden Bild-Eintrag fällt auch die Zeile.
+ * Gibt zurück, wie viele es waren – das gehört in die Meldung, denn anders als
+ * beim übrigen Papierkorb bringt ein „Rückgängig“ die Bytes nicht zurück.
+ */
+export function purgeImagesFor(ctx: DbCtx, entries: { kind: string; payload: string }[]): number {
+  let n = 0;
+  for (const e of entries) {
+    const id = imageIdIn(e);
+    if (!id) continue;
+    purgeImage(ctx, id);
+    n++;
+  }
+  return n;
+}

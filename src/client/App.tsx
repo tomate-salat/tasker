@@ -24,6 +24,7 @@ import { BulkBar } from './ui/BulkBar.js';
 import { BadgeDrawingEditor } from './ui/Drawings.js';
 import { MultiDetail } from './ui/MultiDetail.js';
 import { Sidebar } from './ui/Sidebar.js';
+import { Gallery } from './ui/Gallery.js';
 import { Timeline } from './ui/Timeline.js';
 import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
 import { useGlobalKeys } from './ui/keys.js';
@@ -227,6 +228,7 @@ function Shell({
             <Outline ws={ws} view={view} />
           )}
           {view === 'timeline' && <Timeline ws={ws} />}
+          {view === 'bilder' && <Gallery />}
           {view === 'archive' && <ArchiveView />}
           {view === 'trash' && <TrashView ws={ws} />}
         </main>

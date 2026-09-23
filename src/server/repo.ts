@@ -21,6 +21,7 @@ import type {
 import { refsIn, type RefStub } from '../shared/refs.js';
 import type { DbCtx } from './db.js';
 import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
+import { purgeImagesFor, untrashImage } from './images.js';
 import { newId, type IdPrefix } from './ids.js';
 
 /* ============================================================ Lesen */
@@ -1200,6 +1201,8 @@ export type TrashEntry = {
   /** Nur bei einem Projekt. */
   milestoneCount: number;
   color: string | null;
+  /** Nur bei einem Bild: darüber holt die Ansicht die Vorschau. */
+  imageId: string | null;
 };
 
 /** Nach dieser Frist räumt sich der Papierkorb selbst auf. */
@@ -1221,22 +1224,29 @@ export function loadTrash(ctx: DbCtx): TrashEntry[] {
     .all() as TrashRow[];
 
   return rows.map((r) => {
-    const p = JSON.parse(r.payload) as TrashPayload;
+    // Ein Bild bringt hier nur seine ID mit, deshalb der weitere Typ.
+    const p = JSON.parse(r.payload) as Omit<TrashPayload, 'kind' | 'tasks'> & {
+      kind: TrashPayload['kind'] | 'image';
+      tasks?: Record<string, unknown>[];
+    };
     return {
       id: r.id,
       kind: r.kind,
       title: r.title,
       projectId: r.project_id,
       deletedAt: r.deleted_at,
-      taskCount: p.tasks.length,
+      // Ein Bild bringt keine Aufgaben mit – sein Eintrag trägt nur die ID.
+      taskCount: p.tasks?.length ?? 0,
       where: p.where ?? '',
       drawingCount: p.drawings?.length ?? 0,
       milestoneCount: p.milestones?.length ?? 0,
       color: p.kind === 'project' ? ((p.row['color'] as string | undefined) ?? null) : null,
+      imageId: p.kind === 'image' ? ((p.row['id'] as string | undefined) ?? null) : null,
     };
   });
 }
 
+/** Ein Bild ist hier nicht dabei: sein Eintrag wird vorher abgefangen. */
 type TrashPayload = {
   kind: Kind | 'drawing';
   row: Record<string, unknown>;
@@ -1268,7 +1278,18 @@ export function restoreTrash(
       | undefined;
     if (!entry) throw new NotFound();
 
-    const p = JSON.parse(entry.payload) as TrashPayload;
+    const raw = JSON.parse(entry.payload) as { kind: string; row: Record<string, unknown> };
+
+    // Bei einem Bild liegen die Bytes noch da; es fällt nur die Markierung weg.
+    if (raw.kind === 'image') {
+      const id = String(raw.row['id'] ?? '');
+      if (!untrashImage(ctx, id)) throw new NotFound();
+      ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
+      // Kein Zusatz: `label` ist sonst ein Ort („im Backlog“), den es hier nicht gibt.
+      return { restored: 1, kind: 'image', id, label: '' };
+    }
+
+    const p = raw as TrashPayload;
     const exists = (table: string, id: unknown): boolean =>
       !!id && !!ctx.sqlite.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id);
 
@@ -1416,7 +1437,7 @@ function parentsFirst(rows: Record<string, unknown>[]): Record<string, unknown>[
 }
 
 /** Endgültig löschen – die Zeilen gehen als Gegen-Schritt an den Client zurück. */
-export function purgeTrash(ctx: DbCtx, ids: string[]): Undoable {
+export function purgeTrash(ctx: DbCtx, ids: string[]): Undoable & { images: number } {
   return ctx.sqlite.transaction(() => {
     const list = JSON.stringify(ids);
     const rows = ctx.sqlite
@@ -1426,7 +1447,16 @@ export function purgeTrash(ctx: DbCtx, ids: string[]): Undoable {
       )
       .all(list) as TrashRowData[];
     ctx.sqlite.prepare('DELETE FROM trash WHERE id IN (SELECT value FROM json_each(?))').run(list);
-    return { count: rows.length, undo: rows.length ? [{ op: 'unpurge' as const, rows }] : [] };
+
+    /**
+     * Bei einem Bild fallen hier auch die Bytes. Das lässt sich nicht
+     * zurücknehmen, deshalb kommt so ein Eintrag gar nicht erst in die
+     * Rückgängig-Liste – ein Wiederherstellen würde sonst einen Eintrag
+     * anlegen, dessen Bild nicht mehr da ist.
+     */
+    const images = purgeImagesFor(ctx, rows);
+    const back = rows.filter((r) => r.kind !== 'image');
+    return { count: rows.length, images, undo: back.length ? [{ op: 'unpurge' as const, rows: back }] : [] };
   })();
 }
 
@@ -1441,7 +1471,13 @@ function unpurge(ctx: DbCtx, rows: TrashRowData[]): void {
 /** Läuft beim Start: alles, was die Frist überschritten hat, ist endgültig weg. */
 export function expireTrash(ctx: DbCtx, days = TRASH_DAYS): number {
   const limit = new Date(Date.now() - days * 864e5).toISOString();
-  return ctx.sqlite.prepare('DELETE FROM trash WHERE deleted_at < ?').run(limit).changes;
+  return ctx.sqlite.transaction(() => {
+    const rows = ctx.sqlite
+      .prepare('SELECT kind, payload FROM trash WHERE deleted_at < ?')
+      .all(limit) as { kind: string; payload: string }[];
+    purgeImagesFor(ctx, rows);
+    return ctx.sqlite.prepare('DELETE FROM trash WHERE deleted_at < ?').run(limit).changes;
+  })();
 }
 
 /**

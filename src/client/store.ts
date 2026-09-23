@@ -22,12 +22,22 @@ import {
   type ArchivePage,
   type Bootstrap,
   type DrawingOwner,
+  type ImageEntry,
   type Settings,
   type TrashList,
 } from './api.js';
 import { MS_STATUS } from './ui/icons.js';
 
-export const VIEWS = ['plan', 'ready', 'backlog', 'docs', 'timeline', 'archive', 'trash'] as const;
+export const VIEWS = [
+  'plan',
+  'ready',
+  'backlog',
+  'docs',
+  'timeline',
+  'bilder',
+  'archive',
+  'trash',
+] as const;
 export type View = (typeof VIEWS)[number];
 
 export const VIEW_LABEL: Record<View, string> = {
@@ -36,6 +46,7 @@ export const VIEW_LABEL: Record<View, string> = {
   backlog: 'Backlog',
   docs: 'Doku',
   timeline: 'Zeitplan',
+  bilder: 'Bilder',
   archive: 'Archiv',
   trash: 'Papierkorb',
 };
@@ -43,8 +54,9 @@ export const VIEW_LABEL: Record<View, string> = {
 /**
  * Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste.
  * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
+ * „Bilder“ ebenso: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
  */
-export const TABS: View[] = ['plan', 'ready', 'backlog', 'docs', 'timeline', 'archive'];
+export const TABS: View[] = ['plan', 'ready', 'backlog', 'docs', 'timeline', 'bilder', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help';
 
@@ -176,6 +188,13 @@ type State = {
   setVelocity: (velocity: number) => Promise<void>;
   /** Obergrenze und Kantenlänge für hochgeladene Bilder. */
   setImageLimits: (patch: { imageMaxKb?: number; imageMaxEdge?: number }) => Promise<void>;
+
+  /** Der Bestand für die Galerie – samt Verwendungen, aber ohne die Bytes. */
+  images: ImageEntry[];
+  imagesLoaded: boolean;
+  loadImages: () => Promise<void>;
+  trashImage: (id: string) => Promise<void>;
+  restoreImage: (id: string) => Promise<void>;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
@@ -317,6 +336,9 @@ export const useStore = create<State>((set, get) => ({
       await Promise.all([
         get().view === 'archive' ? get().loadArchive() : set({ archive: null }),
         get().view === 'trash' || get().trash ? get().loadTrash() : null,
+        // Die Galerie zieht mit, sobald sie einmal geladen war: die Verwendungen
+        // stehen sonst auf dem Stand von vorher.
+        get().view === 'bilder' || get().imagesLoaded ? get().loadImages() : null,
       ]);
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Laden fehlgeschlagen', loading: false });
@@ -1086,9 +1108,9 @@ export const useStore = create<State>((set, get) => ({
 
   purgeTrash: async (id) => {
     try {
-      const { undo } = await api.purgeTrash(id);
-      await get().loadTrash();
-      remember('Endgültig gelöscht', undo);
+      const { undo, images } = await api.purgeTrash(id);
+      await Promise.all([get().loadTrash(), images && get().imagesLoaded ? get().loadImages() : null]);
+      remember(`Endgültig gelöscht${bildHinweis(images)}`, undo);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
@@ -1100,12 +1122,51 @@ export const useStore = create<State>((set, get) => ({
   emptyTrash: async (ids) => {
     if (!ids.length) return;
     try {
-      const { count, undo } = await api.emptyTrash(ids);
+      const { count, undo, images } = await api.emptyTrash(ids);
       set({ trashConfirm: false });
-      await get().loadTrash();
-      remember(`${count} ${count === 1 ? 'Eintrag' : 'Einträge'} endgültig gelöscht`, undo);
+      await Promise.all([get().loadTrash(), images && get().imagesLoaded ? get().loadImages() : null]);
+      remember(
+        `${count} ${count === 1 ? 'Eintrag' : 'Einträge'} endgültig gelöscht${bildHinweis(images)}`,
+        undo,
+      );
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  /* --------------------------------------------------------------- Bilder */
+
+  images: [],
+  imagesLoaded: false,
+
+  loadImages: async () => {
+    try {
+      const { images } = await api.images();
+      set({ images, imagesLoaded: true });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Bilder konnten nicht geladen werden' });
+    }
+  },
+
+  trashImage: async (id) => {
+    const name = get().images.find((b) => b.id === id)?.name ?? 'Bild';
+    try {
+      await api.trashImage(id);
+      await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
+      // Kein `remember`: das Zurückholen läuft über den Papierkorb, nicht über Schritte.
+      linked(`„${name}“ in den Papierkorb gelegt`, 'Rückgängig', () => void get().restoreImage(id));
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen', toastUndo: false });
+    }
+  },
+
+  restoreImage: async (id) => {
+    try {
+      await api.restoreImage(id);
+      await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
+      set({ toast: 'Bild wiederhergestellt', toastUndo: false });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Wiederherstellen fehlgeschlagen', toastUndo: false });
     }
   },
 }));
@@ -1163,6 +1224,13 @@ const UNDO_DEPTH = 25;
  * Meldung zeigen und die Gegen-Schritte auf den Stapel legen. Ohne Schritte
  * bleibt es bei der Meldung – dann gibt es nichts zurückzunehmen.
  */
+/**
+ * Beim Leeren des Papierkorbs fallen die Bytes eines Bildes wirklich. Das gehört
+ * in die Meldung, denn „Rückgängig“ bringt genau die nicht zurück.
+ */
+const bildHinweis = (n: number): string =>
+  n ? ` · ${n === 1 ? 'ein Bild ist' : `${n} Bilder sind`} damit endgültig weg` : '';
+
 function remember(message: string, steps: Step[]): void {
   if (!steps.length) {
     useStore.setState({ toast: message, toastUndo: false, toastLink: null });
