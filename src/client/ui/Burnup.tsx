@@ -62,6 +62,14 @@ export function Burnup({ ws, milestone: m }: { ws: Workspace; milestone: Milesto
   }
   const ex = xs(d.endI) + 5;
 
+  /**
+   * Wie weit die gepunktete Linie des committeten Umfangs nach rechts läuft:
+   * bis zum geplanten Ende, und wenn die Prognose darüber hinausgeht, bis
+   * dorthin. Vorher endete sie an der Prognose und ließ den Rest der Fläche
+   * leer, als wäre ab da nichts mehr committet.
+   */
+  const scopeEndI = Math.max(d.todayI, d.fcI ?? d.todayI, d.deadI ?? d.todayI);
+
   const onMove = (e: React.MouseEvent): void => {
     const r = svgRef.current?.getBoundingClientRect();
     if (!r) return;
@@ -124,11 +132,11 @@ export function Burnup({ ws, milestone: m }: { ws: Workspace; milestone: Milesto
           {d.deadI !== null && (
             <line className="bd-dead" x1={xs(d.deadI)} x2={xs(d.deadI)} y1={T - 4} y2={H - B} />
           )}
+          {!d.done && scopeEndI > d.todayI && (
+            <line className="bu-scope-fc" x1={xs(d.todayI)} y1={ys(d.s)} x2={xs(scopeEndI)} y2={ys(d.s)} />
+          )}
           {d.fcI !== null && (
-            <>
-              <line className="bu-scope-fc" x1={xs(d.todayI)} y1={ys(d.s)} x2={xs(d.fcI)} y2={ys(d.s)} />
-              <line className="bd-fc" x1={xs(d.todayI)} y1={ys(d.dn)} x2={xs(d.fcI)} y2={ys(d.s)} />
-            </>
+            <line className="bd-fc" x1={xs(d.todayI)} y1={ys(d.dn)} x2={xs(d.fcI)} y2={ys(d.s)} />
           )}
           <path className="bu-scope" d={line(d.scope)} />
           <path className="bd-actual" d={doneLine} />
