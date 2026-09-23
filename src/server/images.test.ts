@@ -323,13 +323,36 @@ describe('Ordner der Galerie', () => {
     const bild = put('inhalt');
     moveImages(ctx, [bild.id], unten.id);
 
-    assert.equal(deleteFolder(ctx, unten.id), true);
+    assert.deepEqual(deleteFolder(ctx, unten.id), { images: 0 });
     assert.equal(getFolder(ctx, unten.id), null);
     assert.equal(getImage(ctx, bild.id)?.folderId, oben.id);
 
     // Und eine Ebene weiter: ganz oben ist `null`, nicht verloren.
-    assert.equal(deleteFolder(ctx, oben.id), true);
+    assert.deepEqual(deleteFolder(ctx, oben.id), { images: 0 });
     assert.equal(getImage(ctx, bild.id)?.folderId, null);
+  });
+
+  it('mit Inhalt gelöscht landen die Bilder des ganzen Astes im Papierkorb', () => {
+    const oben = folder('Oben');
+    const unten = folder('Unten', { parentId: oben.id });
+    const a = put('oben drin');
+    const b = put('unten drin');
+    moveImages(ctx, [a.id], oben.id);
+    moveImages(ctx, [b.id], unten.id);
+
+    const res = deleteFolder(ctx, oben.id, { withContents: true, trashId: () => 'x' + n++ });
+    assert.deepEqual(res, { images: 2 });
+    assert.equal(getFolder(ctx, oben.id), null);
+    assert.equal(getFolder(ctx, unten.id), null);
+
+    // Nicht endgültig: die Bytes sind noch da, der Papierkorb hält sie.
+    assert.ok(getImage(ctx, a.id)?.deletedAt);
+    assert.ok(getImage(ctx, b.id)?.deletedAt);
+    assert.equal(loadTrash(ctx).filter((e) => e.imageId).length, 2);
+
+    // Und von dort einzeln zurück.
+    untrashImage(ctx, a.id);
+    assert.equal(getImage(ctx, a.id)?.deletedAt, null);
   });
 
   it('ein Ordner kann nicht in sich selbst wandern', () => {

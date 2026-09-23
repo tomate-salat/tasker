@@ -253,11 +253,19 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     });
   });
 
-  /** Löschen hebt den Inhalt eine Ebene höher – es geht dabei nichts verloren. */
+  /**
+   * Ohne `inhalt=weg` hebt das Löschen den Inhalt eine Ebene höher, es geht
+   * also nichts verloren. Mit dem Zusatz wandern die Bilder des ganzen Astes in
+   * den Papierkorb – von dort sind sie einzeln wieder herauszuholen.
+   */
   app.delete('/bildordner/:id', (c) =>
     run(c, bus, () => {
-      if (!deleteFolder(ctx, c.req.param('id'))) throw new NotFound();
-      return { ok: true };
+      const res = deleteFolder(ctx, c.req.param('id'), {
+        withContents: c.req.query('inhalt') === 'weg',
+        trashId: () => newId('x'),
+      });
+      if (!res) throw new NotFound();
+      return res;
     }),
   );
 

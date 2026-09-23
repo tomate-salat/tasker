@@ -304,8 +304,15 @@ export const api = {
       body: JSON.stringify(changes),
     }),
 
-  /** Der Inhalt geht dabei nicht verloren, er rückt eine Ebene höher. */
-  deleteFolder: (id: string) => request<{ ok: true }>(`/api/bildordner/${id}`, { method: 'DELETE' }),
+  /**
+   * Ohne `withContents` rückt der Inhalt eine Ebene höher; mit ihm wandern die
+   * Bilder des ganzen Astes in den Papierkorb.
+   */
+  deleteFolder: (id: string, withContents = false) =>
+    request<{ images: number }>(
+      `/api/bildordner/${id}${withContents ? '?inhalt=weg' : ''}`,
+      { method: 'DELETE' },
+    ),
 
   sortIntoFolder: (ids: string[], folderId: string | null) =>
     post<{ moved: number }>('/api/bildordner/einsortieren', { ids, folderId }),

@@ -237,12 +237,35 @@ export function Gallery() {
     { sep: true },
     { label: 'Neuer Ordner darin', sub: [{ input: 'Name', onSubmit: (name) => void addFolder(name, folder.projectId, folder.id) }] },
     { sep: true },
-    // Kein Papierkorb: es geht nichts verloren, der Inhalt rückt nur hoch.
+    // Zwei verschiedene Dinge, deshalb zwei Einträge: die Hülle wegnehmen oder
+    // den Inhalt mitnehmen. Verloren geht dabei nichts – die Bilder gehen in
+    // den Papierkorb und sind von dort einzeln zurückzuholen.
     { label: 'Ordner auflösen', danger: true, onSelect: () => void deleteFolder(folder.id) },
+    { label: 'Ordner löschen', danger: true, onSelect: () => void deleteFolder(folder.id, true) },
   ];
 
   const moveFolderTo = (folder: ImageFolder, to: string | null): Promise<void> =>
     state.moveFolder(folder.id, to);
+
+  /**
+   * Das Menü der freien Fläche – hier entsteht ein Ordner an der Stelle, an der
+   * man gerade steht. Rechtsklick statt Knopf: so liegt die Handlung dort, wo
+   * sie wirkt, und die Leiste bleibt frei.
+   */
+  const emptyMenu = (): MenuItem[] => [
+    {
+      label: 'Neuer Ordner',
+      sub: [
+        {
+          input: 'Name des Ordners',
+          onSubmit: (name) => void addFolder(name, here ? here.projectId : projectId, folderAt),
+        },
+      ],
+    },
+    { sep: true },
+    { label: 'Alle auswählen', disabled: !shown.length, onSelect: () => setImageSel(shown.map((b) => b.id)) },
+    { label: 'Auswahl aufheben', disabled: !imageSel.size, onSelect: clearImageSel },
+  ];
 
   /** Rechtsklick auf eine Kachel außerhalb der Auswahl meint nur diese Kachel. */
   const onContext = (e: React.MouseEvent, id: string): void => {
@@ -285,21 +308,6 @@ export function Gallery() {
             <Crumb id={f.id} label={f.name} at={folderAt} onGo={openFolder} />
           </span>
         ))}
-        <span className="spacer" />
-        <button
-          className="btn tiny ghost"
-          title="Ordner an dieser Stelle anlegen"
-          onClick={(e) =>
-            menu.openAt(e.currentTarget, [
-              {
-                input: 'Name des Ordners',
-                onSubmit: (name) => void addFolder(name, here ? here.projectId : projectId, folderAt),
-              },
-            ])
-          }
-        >
-          + Ordner
-        </button>
       </div>
 
       <div className="gal-bar">
@@ -366,6 +374,12 @@ export function Gallery() {
         // zur Auswahl und heben sie nicht auf, sonst wäre ihr eigener Knopf ihr Ende.
         onClick={(e) => {
           if (!(e.target as HTMLElement).closest('.gal-item, .gal-pick, .gal-sweep')) clearImageSel();
+        }}
+        // Rechtsklick daneben: das Menü der Fläche, nicht das einer Kachel.
+        onContextMenu={(e) => {
+          if ((e.target as HTMLElement).closest('.gal-item')) return;
+          e.preventDefault();
+          menu.openAtPoint(e.clientX, e.clientY, emptyMenu());
         }}
       >
       {imageSel.size > 0 && (
@@ -541,8 +555,9 @@ function FolderTile({
   return (
     <figure
       className={`gal-item gal-folder ${zone ? 'dz-into' : ''}`}
+      // Geöffnet wird mit Doppelklick – ein einzelner Klick soll nicht gleich
+      // die Ebene wechseln, wenn man eigentlich nur zielt.
       onDoubleClick={onOpen}
-      onClick={onOpen}
       onContextMenu={onMenu}
       {...dragSource('folder', folder.id)}
       {...dropTarget(target)}

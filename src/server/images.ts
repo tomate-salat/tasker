@@ -248,21 +248,40 @@ export function moveFolder(ctx: DbCtx, id: string, parentId: string | null): Fol
 }
 
 /**
- * Ein Ordner ist nur eine Hülle: Löschen wirft nichts weg, sondern hebt seinen
- * Inhalt eine Ebene höher. Deshalb geht er auch nicht in den Papierkorb – es
- * gäbe dort nichts zurückzuholen als den Namen.
+ * Ein Ordner ist nur eine Hülle. Standardmäßig wirft das Löschen deshalb nichts
+ * weg, sondern hebt seinen Inhalt eine Ebene höher.
+ *
+ * Auf Wunsch geht der Inhalt mit: die Bilder des ganzen Astes wandern dann in
+ * den Papierkorb – nicht endgültig, sie lassen sich von dort einzeln
+ * zurückholen – und die Unterordner fallen als leere Hüllen weg.
  */
-export function deleteFolder(ctx: DbCtx, id: string): boolean {
+export function deleteFolder(
+  ctx: DbCtx,
+  id: string,
+  o: { withContents?: boolean; trashId?: () => string } = {},
+): { images: number } | null {
   return ctx.sqlite.transaction(() => {
     const folder = getFolder(ctx, id);
-    if (!folder) return false;
-    ctx.sqlite.prepare('UPDATE image SET folder_id = ? WHERE folder_id = ?').run(folder.parentId, id);
-    ctx.sqlite
-      .prepare('UPDATE image_folder SET parent_id = ? WHERE parent_id = ?')
-      .run(folder.parentId, id);
-    ctx.sqlite.prepare('DELETE FROM image_folder WHERE id = ?').run(id);
-    return true;
-  })() as boolean;
+    if (!folder) return null;
+
+    if (!o.withContents) {
+      ctx.sqlite.prepare('UPDATE image SET folder_id = ? WHERE folder_id = ?').run(folder.parentId, id);
+      ctx.sqlite
+        .prepare('UPDATE image_folder SET parent_id = ? WHERE parent_id = ?')
+        .run(folder.parentId, id);
+      ctx.sqlite.prepare('DELETE FROM image_folder WHERE id = ?').run(id);
+      return { images: 0 };
+    }
+
+    const tree = folderTree(ctx, id);
+    const list = tree.map(() => '?').join(', ');
+    const drin = ctx.sqlite
+      .prepare(`SELECT id FROM image WHERE deleted_at IS NULL AND folder_id IN (${list})`)
+      .all(...tree) as { id: string }[];
+    for (const b of drin) trashImage(ctx, b.id, o.trashId ? o.trashId() : `x${b.id}`);
+    ctx.sqlite.prepare(`DELETE FROM image_folder WHERE id IN (${list})`).run(...tree);
+    return { images: drin.length };
+  })() as { images: number } | null;
 }
 
 /**

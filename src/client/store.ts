@@ -216,7 +216,8 @@ type State = {
   renameFolder: (id: string, name: string) => Promise<void>;
   /** `null` als Ziel heißt: ganz nach oben. */
   moveFolder: (id: string, parentId: string | null) => Promise<void>;
-  deleteFolder: (id: string) => Promise<void>;
+  /** `withContents` legt die Bilder des ganzen Astes in den Papierkorb. */
+  deleteFolder: (id: string, withContents?: boolean) => Promise<void>;
   sortIntoFolder: (ids: string[], folderId: string | null) => Promise<void>;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
@@ -1273,16 +1274,24 @@ export const useStore = create<State>((set, get) => ({
   },
 
   /**
-   * Der Inhalt rückt dabei eine Ebene höher – es geht nichts verloren, deshalb
-   * gibt es hier weder Rückfrage noch Papierkorb.
+   * Zwei Wege, die der Nutzer im Dialog wählt: Der Ordner allein lässt seinen
+   * Inhalt eine Ebene höher rücken – dabei geht nichts verloren. Mit Inhalt
+   * wandern die Bilder in den Papierkorb, von dort sind sie einzeln zurückzuholen.
    */
-  deleteFolder: async (id) => {
-    const name = get().folders.find((f) => f.id === id)?.name ?? 'Ordner';
+  deleteFolder: async (id, withContents = false) => {
+    const folder = get().folders.find((f) => f.id === id);
+    const name = folder?.name ?? 'Ordner';
     try {
-      await api.deleteFolder(id);
-      if (get().folderAt === id) get().openFolder(get().folders.find((f) => f.id === id)?.parentId ?? null);
-      await get().loadImages();
-      set({ toast: `Ordner „${name}“ aufgelöst – der Inhalt liegt eine Ebene höher`, toastUndo: false, toastLink: null });
+      const { images } = await api.deleteFolder(id, withContents);
+      if (get().folderAt === id) get().openFolder(folder?.parentId ?? null);
+      await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
+      set({
+        toast: withContents
+          ? `Ordner „${name}“ gelöscht${images ? ` – ${images === 1 ? 'ein Bild liegt' : `${images} Bilder liegen`} im Papierkorb` : ''}`
+          : `Ordner „${name}“ aufgelöst – der Inhalt liegt eine Ebene höher`,
+        toastUndo: false,
+        toastLink: null,
+      });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen', toastUndo: false });
     }

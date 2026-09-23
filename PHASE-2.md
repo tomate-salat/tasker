@@ -146,7 +146,8 @@ Zugriffsmuster sind bekannt.
 - `GET /api/bilder/:id` (`?v=klein`) – die Bytes, dauerhaft zwischenspeicherbar
 - `POST /api/bilder` – ein fertiges Bild hochladen (`FormData`, kein JSON)
 - `POST /api/bilder/:id/loeschen` bzw. `/zurueck` – in den Papierkorb und zurück
-- `POST|PATCH|DELETE /api/bildordner[/:id]` – Ordner der Galerie anlegen, umbenennen, umhängen, auflösen
+- `POST|PATCH|DELETE /api/bildordner[/:id]` – Ordner der Galerie anlegen, umbenennen, umhängen, löschen
+  (ohne Zusatz aufgelöst, mit `?inhalt=weg` samt Inhalt in den Papierkorb)
 - `POST /api/bildordner/einsortieren` – Bilder in einen Ordner legen (`folderId: null` heißt ganz oben)
 
 Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit festen Pfaden wie
@@ -414,8 +415,11 @@ ist eine Zeile, und die Auslieferung darf `immutable` setzen.
   Gesamtgröße – ohne die weiß man nie, ob Aufräumen lohnt.
 - **Ordner** (`image_folder`, Wunsch des Nutzers): verschachtelt, je Projekt, und ein Bild liegt in
   genau einem oder in keinem. Sie stehen als Kacheln im Raster, die Spur darüber führt zurück und
-  nimmt selbst Ablagen an. Ein Ordner ist eine reine Hülle: Auflösen hebt seinen Inhalt eine Ebene
-  höher, deshalb gibt es dafür weder Rückfrage noch Papierkorb. Umgehängt gilt das Projekt des neuen
+  nimmt selbst Ablagen an. Angelegt werden sie über das Kontextmenü der freien Fläche, geöffnet mit
+  Doppelklick – beides Wunsch des Nutzers: kein Knopf in der Leiste, kein Dialog. Ein Ordner ist eine
+  reine Hülle, deshalb zwei Menüeinträge statt einer Rückfrage: „Ordner auflösen“ hebt den Inhalt
+  eine Ebene höher, „Ordner löschen“ nimmt ihn mit – die Bilder des ganzen Astes wandern dabei in den
+  Papierkorb und sind von dort einzeln zurückzuholen. Umgehängt gilt das Projekt des neuen
   Platzes für den ganzen Ast – sonst lägen in einem Ordner Bilder, die im eigenen Projekt nicht mehr
   zu sehen sind. Die Filter kennen keine Ordner: unter „Alle“ ist die Galerie eine Ablage, unter
   jedem anderen Filter eine Suche durch den ganzen Ast darunter.
