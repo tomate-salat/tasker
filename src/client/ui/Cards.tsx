@@ -117,8 +117,19 @@ export function CardGrid({
  * gesetzte – Bilder in der Beschreibung zählen nicht (Wunsch des Nutzers).
  * Später sollen hier Vorgaben greifen: Task → Kategorie → Projekt.
  */
-const coverOf = (task: Task): string | null =>
-  task.coverImageId ? imageUrl(task.coverImageId, 'klein') : null;
+const coverOf = (ws: Workspace, task: Task): string | null => {
+  const id = coverSource(ws, task)?.coverImageId;
+  return id ? imageUrl(id, 'klein') : null;
+};
+
+/**
+ * Woher das Titelbild kommt: die Aufgabe selbst oder – geerbt – die nächste
+ * darüber, die eins hat. Ein eigenes Bild überschreibt das geerbte.
+ */
+function coverSource(ws: Workspace, task: Task): Task | null {
+  for (let t: Task | null = task; t; t = ws.task(t.parentId)) if (t.coverImageId) return t;
+  return null;
+}
 
 /**
  * Das Titelbild dezent hinter dem Inspektor – oben bündig, auf Breite gebracht,
@@ -126,12 +137,13 @@ const coverOf = (task: Task): string | null =>
  * Ein echtes Bild statt eines Hintergrunds, damit der Verlauf an seinem
  * eigenen unteren Rand sitzt, egal wie hoch es ist.
  */
-export function InspectorCover({ task }: { task: Task | null | undefined }) {
+export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null | undefined }) {
   const on = useStore((s) => cardsOn(s));
-  if (!on || !task?.coverImageId) return null;
+  const id = task && coverSource(ws, task)?.coverImageId;
+  if (!on || !id) return null;
   return (
     <div className="d-cover" aria-hidden>
-      <img src={imageUrl(task.coverImageId)} alt="" />
+      <img src={imageUrl(id)} alt="" />
     </div>
   );
 }
@@ -245,9 +257,12 @@ function mergeDrop(
  * Rechner daraufziehen, mit Strg+V einfügen (das Feld braucht dafür den Fokus)
  * oder klicken und eine Datei wählen. Mit Titelbild steht hier nur „Entfernen“;
  * die Zeile nimmt aber weiter ein Bild an und ersetzt damit das alte.
+ * Erbt eine Unteraufgabe das Bild, bleibt das Ablagefeld – ein eigenes Bild
+ * überschreibt das geerbte, „Entfernen“ gibt es nur für das eigene.
  */
-export function CoverRow({ task }: { task: Task }) {
+export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
   const on = useStore((s) => cardsOn(s));
+  const from = task.coverImageId ? null : coverSource(ws, task);
   const file = useRef<HTMLInputElement>(null);
   const target = { type: 'cover', task } as const;
   const zone = useZone(target);
@@ -271,7 +286,10 @@ export function CoverRow({ task }: { task: Task }) {
             className="prop empty cover-drop"
             role="button"
             tabIndex={0}
-            title="Bild aus der Galerie oder vom Rechner hierher ziehen, mit Strg+V einfügen oder klicken"
+            title={
+              (from ? `Geerbt von „${from.title || 'Ohne Titel'}“ – ein eigenes Bild überschreibt es.\n` : '') +
+              'Bild aus der Galerie oder vom Rechner hierher ziehen, mit Strg+V einfügen oder klicken'
+            }
             onClick={() => file.current?.click()}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -313,7 +331,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
   const mark = ws.mark(task.markId);
-  const cover = coverOf(task);
+  const cover = coverOf(ws, task);
   const segments = statusSegments(ws, task);
   const cl = checklist(task.desc);
   // Ist eine Unteraufgabe dieser Karte ausgewählt, bleibt die Karte markiert.

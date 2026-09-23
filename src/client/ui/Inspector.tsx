@@ -74,7 +74,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
   return (
     <aside className="detail">
       {/* Karten: das Titelbild liegt dezent im Hintergrund. */}
-      <InspectorCover task={task} />
+      <InspectorCover ws={ws} task={task} />
       <div className="d-top">
         <Crumbs ws={ws} task={task} milestone={milestone} />
         <button
@@ -283,7 +283,7 @@ function TaskHead({
           <MetaRow k="status" label="Status">
             <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
           </MetaRow>
-          <CoverRow task={task} />
+          <CoverRow ws={ws} task={task} />
         </div>
       )}
 
