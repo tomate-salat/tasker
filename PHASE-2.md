@@ -118,7 +118,10 @@ Klappzustände, zuletzt gewähltes Projekt) gehen nach `setting`.
 ### Entschiedene Detailfragen
 
 - **`order` serverseitig, `collapsed` pro Gerät.** Die Sortierung ist Inhalt und steht in der
-  Datenbank (Spalte `sort_order`); ob eine Zeile gerade zugeklappt ist, bleibt im Client.
+  Datenbank (Spalte `sort_order`); ob eine Zeile gerade zugeklappt ist, bleibt im Client. Steht
+  dort nichts, gilt eine Vorgabe (`isCollapsed` in `outline.ts`): Gruppen ohne Aufgaben sind zu –
+  auch „Unsortiert“ und die smarten –, damit die Ansicht nicht aus lauter leeren Behältern
+  besteht (Wunsch des Nutzers). Wer eine leere Gruppe aufklappt, dem bleibt sie offen.
 - **Dokumente als Flag `doc` am Task**, statt des Pseudo-Containers aus dem Prototyp.
 - **Kein `done`-Feld.** Im Prototyp war es immer `status === 'done'` und damit eine zweite Wahrheit,
   die auseinanderlaufen kann. Es bleibt nur `status` und `done_at`.

@@ -12,6 +12,7 @@ import {
   doneInContainer,
   draftMilestones,
   groupsOf,
+  isCollapsed,
   isLooseRoot,
   plannedMilestones,
   readyCategory,
@@ -203,7 +204,7 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
 /** Gruppen, „Unsortiert“ und die smarten Gruppen – drei Varianten, wie im Prototyp. */
 export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group' }>): MenuItem[] {
   const store = useStore.getState();
-  const collapsed = !!store.collapsed[row.id];
+  const collapsed = isCollapsed(store.collapsed, row.id, !row.tasks.length);
   const donePending = doneInContainer(ws, row.projectId, row.place);
 
   const common: MenuItem[] = [

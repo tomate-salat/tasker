@@ -3,12 +3,14 @@ import { describe, it } from 'node:test';
 import {
   categoriesOf,
   categoryColorIndex,
+  categoryGroupId,
   categoryTasks,
   container,
   doneCandidates,
   doneInContainer,
   outline,
   siblings,
+  smartId,
   smartTasks,
   unsortedTasks,
   type OutlineRow,
@@ -154,9 +156,14 @@ describe('Ready-Aufbau', () => {
     for (const id of ['t-lose', 't-bug', 't-grp']) assert.ok(!kinds(rows).includes(`task:${id}`), id);
   });
 
-  it('setzt hinter leere Gruppen einen Platzhalter, der sagt, was er setzt', () => {
-    const empty = ready(build()).filter((r) => r.type === 'empty');
-    // Leer sind: „Battle“ und „Idee“.
+  it('lässt leere Gruppen von sich aus zugeklappt', () => {
+    // Leer sind: „Battle“ und „Idee“ – ohne Inhalt steht dort auch kein Platzhalter.
+    assert.deepEqual(ready(build()).filter((r) => r.type === 'empty'), []);
+  });
+
+  it('setzt hinter aufgeklappte leere Gruppen einen Platzhalter, der sagt, was er setzt', () => {
+    const open = { [categoryGroupId('p', 'c2')]: false, [smartId('p', 'k2')]: false };
+    const empty = ready(build(), open).filter((r) => r.type === 'empty');
     assert.deepEqual(
       empty.map((r) => r.place),
       [

@@ -83,7 +83,7 @@ export function outline(
   const filtering = isFiltering(o.filter);
   const show = visibility(ws, o.filter);
   // Wird gefiltert, sind zugeklappte Äste offen – sonst versteckt man das Gesuchte.
-  const open = (id: string): boolean => filtering || !o.collapsed[id];
+  const open = (id: string, empty = false): boolean => filtering || !isCollapsed(o.collapsed, id, empty);
   const many = o.projectIds.length > 1;
 
   const walk = (task: Task, depth: number): void => {
@@ -183,7 +183,7 @@ export function outline(
       place,
       tasks,
     });
-    contents(tasks, id, projectId, place, !open(id));
+    contents(tasks, id, projectId, place, !open(id, !tasks.length));
   }
 
   function ready(projectId: string): void {
@@ -250,7 +250,7 @@ export function outline(
         place: { groupId: g.id },
         tasks,
       });
-      contents(tasks, g.id, projectId, { groupId: g.id }, !open(g.id));
+      contents(tasks, g.id, projectId, { groupId: g.id }, !open(g.id, !tasks.length));
     }
   }
 }
@@ -275,6 +275,16 @@ export function visibility(ws: Workspace, f: OutlineFilter | undefined): (t: Tas
   const show = (t: Task): boolean => matches(t) || ws.kids(t.id).some(show);
   return show;
 }
+
+/**
+ * Ob ein Behälter zugeklappt ist. Wer ihn angefasst hat, bestimmt es selbst;
+ * ohne gespeicherten Zustand gilt die Vorgabe. Für Gruppen – auch die smarten
+ * und „Unsortiert“ – ist das `leer`: eine Gruppe ohne Aufgaben steht zu, damit
+ * die Ansicht nicht aus lauter leeren Behältern besteht (Wunsch des Nutzers).
+ * Sobald eine Aufgabe darin liegt, ist sie wieder offen.
+ */
+export const isCollapsed = (collapsed: Record<string, boolean>, id: string, leer = false): boolean =>
+  collapsed[id] ?? leer;
 
 /** Der Sammelbereich im Backlog ist keine echte Gruppe, hat aber eine ID für den Klappzustand. */
 export const unsortedId = (projectId: string): string => `unsorted:${projectId}`;

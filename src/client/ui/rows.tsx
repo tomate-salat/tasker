@@ -3,7 +3,7 @@ import { inheritedBlock, ownBlockers } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
-import { categoryColorIndex, type OutlineRow } from '@shared/outline.js';
+import { categoryColorIndex, isCollapsed, type OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { drawingsOf } from '../api.js';
@@ -252,9 +252,12 @@ export function GroupRow({
   count: number;
   onAdd: () => void;
 }) {
-  const { collapsed, toggle, editing, edit, remove, setDialog, openCategories, ws } = useStore();
+  const { collapsed, setCollapsed, editing, edit, remove, setDialog, openCategories, ws } = useStore();
   const { id, group, mark, smart, category } = row;
-  const open = !collapsed[id];
+  // Eine leere Gruppe ist von sich aus zu – geklappt wird darum gegen das, was
+  // dasteht, sonst liefe der erste Klick ins Leere.
+  const open = !isCollapsed(collapsed, id, !row.tasks.length);
+  const toggle = (): void => setCollapsed(id, open);
   const target = { type: 'group', row } as const;
   const zone = useZone(target);
   const dragging = useDragging(group?.id ?? id);
@@ -283,12 +286,12 @@ export function GroupRow({
       // Eingabefeld und auf den Knöpfen, die ihre eigene Handlung haben.
       onClick={(e) => {
         if ((e.target as HTMLElement).closest('input, button')) return;
-        toggle(id);
+        toggle();
       }}
       {...dragSource('group', group?.id ?? id, !!group && !editing)}
       {...dropTarget(target)}
     >
-      <Caret open={open} hasKids onToggle={() => toggle(id)} />
+      <Caret open={open} hasKids onToggle={toggle} />
       {mark && <span className="mk-emoji">{mark.emoji}</span>}
       {hue !== null && (
         <span className="mk-emoji">
