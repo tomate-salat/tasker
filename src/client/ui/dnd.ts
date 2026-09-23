@@ -15,7 +15,7 @@ import type { Milestone, Project, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
-import { appendMarkdown } from './imageDrop.js';
+import { appendImages } from './imageDrop.js';
 
 /**
  * Ziehen und Ablegen, Regeln wie im Prototyp (`dragover`/`applyDrop`):
@@ -240,8 +240,11 @@ export function dragSource(kind: DragKind, id: string, enabled = true) {
 }
 
 function start(kind: DragKind, id: string): Drag {
-  const { ws, multi, visible } = useStore.getState();
+  const { ws, multi, visible, imageSel } = useStore.getState();
   let ids = [id];
+  // Ein Bild aus einer Auswahl nimmt die ganze Auswahl mit – in der Reihenfolge,
+  // in der sie zusammengeklickt wurde.
+  if (kind === 'image' && imageSel.has(id) && imageSel.size > 1) ids = [...imageSel];
   if (kind === 'task' && ws && multi.has(id) && multi.size > 1) {
     // In der Reihenfolge der Liste, ohne die, deren Vorfahre schon mitwandert.
     const order = (x: string): number => {
@@ -372,12 +375,9 @@ type DescTarget = Extract<Target, { type: 'desc' }>;
  * stehen.
  */
 async function dropImage(drag: Drag, target: DescTarget): Promise<void> {
-  const store = useStore.getState();
-  const bild = store.images.find((b) => b.id === drag.id);
-  if (!bild) return;
-  const item = target.item;
-  await store.patch(target.kind, item.id, { desc: appendMarkdown(item.desc, bild) });
-  store.say(`„${bild.name}“ zu „${item.title || 'Ohne Titel'}“ hinzugefügt`);
+  const { images } = useStore.getState();
+  const list = drag.ids.map((id) => images.find((b) => b.id === id)).filter((b) => !!b);
+  await appendImages(target.kind, target.item, list);
 }
 
 async function dropDep(drag: Drag, target: DepTarget): Promise<void> {

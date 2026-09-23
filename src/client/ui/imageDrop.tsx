@@ -115,3 +115,28 @@ export function insertAtCursor(area: HTMLTextAreaElement, text: string): void {
 /** Hängt einen Verweis ans Ende eines Textes – mit Leerzeile davor. */
 export const appendMarkdown = (desc: string, m: { id: string; name: string }): string =>
   (desc.trimEnd() + '\n\n' + imageMarkdown(m)).trimStart();
+
+/**
+ * Bilder aus der Galerie an eine Beschreibung hängen und speichern – der Weg
+ * des Ziehens und der des Kontextmenüs enden beide hier, damit mehrere Bilder
+ * in einem `patch` landen und nicht in mehreren nacheinander.
+ */
+export async function appendImages(
+  kind: 'task' | 'milestone',
+  item: { id: string; title: string; desc: string },
+  list: { id: string; name: string }[],
+): Promise<void> {
+  if (!list.length) return;
+  const store = useStore.getState();
+  let desc = item.desc;
+  for (const b of list) desc = appendMarkdown(desc, b);
+  await store.patch(kind, item.id, { desc });
+  // Erst jetzt: die Galerie soll die neue Verwendung sehen, nicht den Stand davor.
+  refreshGallery();
+  const wohin = `„${item.title || 'Ohne Titel'}“`;
+  store.say(
+    list.length === 1
+      ? `„${list[0]?.name}“ zu ${wohin} hinzugefügt`
+      : `${list.length} Bilder zu ${wohin} hinzugefügt`,
+  );
+}

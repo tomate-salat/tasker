@@ -410,8 +410,16 @@ ist eine Zeile, und die Auslieferung darf `immutable` setzen.
   Sie zeigt je Bild Maße, Größe, Datum und die Verwendungen (anklickbar) und filtert nach: ohne
   Verwendung, nur noch archiviert, nur noch im Papierkorb, älter als. Dazu Sortierung und die
   Gesamtgröße – ohne die weiß man nie, ob Aufräumen lohnt.
+- **Auswahl in der Galerie** (`imageSel` im Speicher): anklicken wählt eines, Strg nimmt dazu,
+  Umschalt den Bereich. Bewusst nicht `selected` und nicht `multi` – der Inspektor soll weiter die
+  offene Aufgabe zeigen, während man daneben Bilder für sie zusammenstellt; ein Bild wird nie im
+  Inspektor geöffnet. Die Sammelaktionen stehen im Rechtsklickmenü und in einer Leiste über dem
+  Raster: an die offene Aufgabe anhängen (ein `patch` für alle) und in den Papierkorb (ein
+  „Rückgängig“ für alle). Ein Filterwechsel hebt die Auswahl auf – was man nicht mehr sieht, soll
+  man nicht aus Versehen löschen.
 - **Aus der Galerie ziehen:** ein Bild auf die Beschreibung im offenen Inspektor hängt es ans Ende
-  des Textes. Das baut darauf, dass die Auswahl den Reiterwechsel überlebt.
+  des Textes; gehört es zu einer Auswahl, wandert die ganze Auswahl mit. Das baut darauf, dass die
+  Auswahl den Reiterwechsel überlebt.
 - **Löschen geht über den Papierkorb.** Die Bytes bleiben liegen, nur `deleted_at` wird gesetzt; der
   Eintrag trägt die Bild-ID, nicht das Bild (als Base64 wäre es ein Drittel größer). Beim Leeren
   fallen die Bytes – und **das lässt sich nicht zurücknehmen**. Deshalb kommt ein Bild-Eintrag gar

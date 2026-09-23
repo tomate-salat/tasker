@@ -3,8 +3,9 @@ import type { ImageEntry, ImageUse } from '../api.js';
 import { imageUrl } from '../api.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { dragSource } from './dnd.js';
-import { hasFiles, refreshGallery, useUpload } from './imageDrop.js';
+import { appendImages, hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
+import { useMenu, type MenuItem } from './Menu.js';
 
 /**
  * Die Galerie: ein Bestand wie das Archiv, keine Liste von Aufgaben. Sie zeigt
@@ -54,16 +55,27 @@ const onlyIn = (b: ImageEntry, where: 'archived' | 'trashed'): boolean => {
 export function Gallery() {
   const state = useStore();
   const { images, imagesLoaded, loadImages, scope, trashImage, restoreImage, select, reveal } = state;
+  const { ws, selected, imageSel, setImageSel, toggleImageSel, clearImageSel, trashImages } = state;
   const [filter, setFilter] = useState<Filter>('alle');
   const [months, setMonths] = useState(12);
   const [sort, setSort] = useState<Sort>('neu');
   const [over, setOver] = useState(false);
+  /** Ankerkachel für die Bereichsauswahl mit der Umschalttaste. */
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const menu = useMenu();
   const projectId = scope === 'all' ? null : scope;
   const uploader = useUpload(projectId);
 
   useEffect(() => {
     if (!imagesLoaded) void loadImages();
   }, [imagesLoaded, loadImages]);
+
+  // Ein anderer Filter zeigt andere Bilder; eine Auswahl, die man nicht mehr
+  // sieht, aber noch löschen könnte, wäre eine Falle.
+  useEffect(() => {
+    clearImageSel();
+    setAnchor(null);
+  }, [filter, months, scope, clearImageSel]);
 
   const projectIds = scopeProjectIds(state);
   const shown = useMemo(() => {
@@ -93,6 +105,69 @@ export function Gallery() {
   const total = shown.reduce((n, b) => n + b.size, 0);
   const deleted = images.filter((b) => b.deletedAt);
   const ungenutzt = images.filter((b) => !b.deletedAt && uses(b).length === 0);
+
+  /**
+   * Was im Inspektor offen steht, bleibt beim Reiterwechsel stehen – genau
+   * darauf baut „anhängen“: Aufgabe auswählen, hierher wechseln, Bilder
+   * zusammenklicken. Bilder selbst kommen nie in den Inspektor.
+   */
+  const openTask = ws && selected ? ws.task(selected) : null;
+  const openMs = ws && selected && !openTask ? ws.milestone(selected) : null;
+  const open = openTask ?? openMs;
+  const openKind = openTask ? ('task' as const) : ('milestone' as const);
+
+  /** Anklicken: einzeln, mit Strg dazu, mit Umschalt der Bereich dazwischen. */
+  const pick = (e: React.MouseEvent, id: string): void => {
+    if (e.ctrlKey || e.metaKey) {
+      toggleImageSel(id);
+      setAnchor(id);
+      return;
+    }
+    const ids = shown.map((b) => b.id);
+    const from = anchor ? ids.indexOf(anchor) : -1;
+    const to = ids.indexOf(id);
+    if (e.shiftKey && from >= 0 && to >= 0) {
+      setImageSel(ids.slice(Math.min(from, to), Math.max(from, to) + 1));
+      return;
+    }
+    setImageSel([id]);
+    setAnchor(id);
+  };
+
+  /** Die Sammelaktionen – dieselben im Kontextmenü wie in der Leiste. */
+  const bulkMenu = (ids: string[]): MenuItem[] => {
+    const list = ids.map((id) => images.find((b) => b.id === id)).filter((b) => !!b);
+    return [
+      ...(list.length > 1 ? [{ head: count(list.length, 'Bild', 'Bilder') + ' ausgewählt' } as MenuItem] : []),
+      {
+        label: open ? `An „${open.title || 'Ohne Titel'}“ anhängen` : 'Anhängen (keine Aufgabe offen)',
+        disabled: !open,
+        onSelect: () => {
+          if (open) void appendImages(openKind, open, list);
+        },
+      },
+      { sep: true },
+      { label: 'Alle auswählen', onSelect: () => setImageSel(shown.map((b) => b.id)) },
+      { label: 'Auswahl aufheben', disabled: !imageSel.size, onSelect: clearImageSel },
+      { sep: true },
+      {
+        label: list.length > 1 ? `${list.length} Bilder in den Papierkorb` : 'In den Papierkorb',
+        danger: true,
+        onSelect: () => void trashImages(ids),
+      },
+    ];
+  };
+
+  /** Rechtsklick auf eine Kachel außerhalb der Auswahl meint nur diese Kachel. */
+  const onContext = (e: React.MouseEvent, id: string): void => {
+    e.preventDefault();
+    const ids = imageSel.has(id) ? [...imageSel] : [id];
+    if (!imageSel.has(id)) {
+      setImageSel([id]);
+      setAnchor(id);
+    }
+    menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ids));
+  };
 
   /** Dateien ins Fenster gezogen: hier landen sie nur im Bestand. */
   const dropZone = {
@@ -170,7 +245,36 @@ export function Gallery() {
       </div>
 
       {/* Gescrollt wird nur unterhalb der Leiste – so verdeckt sie nichts. */}
-      <div className="gal-scroll">
+      <div
+        className="gal-scroll"
+        // Daneben geklickt heißt: nichts mehr gemeint – die Leisten gehören aber
+        // zur Auswahl und heben sie nicht auf, sonst wäre ihr eigener Knopf ihr Ende.
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest('.gal-item, .gal-pick, .gal-sweep')) clearImageSel();
+        }}
+      >
+      {imageSel.size > 0 && (
+        <div className="gal-pick">
+          <span>{count(imageSel.size, 'Bild', 'Bilder')} ausgewählt</span>
+          <button
+            className="btn tiny ghost"
+            disabled={!open}
+            title={open ? `An „${open.title || 'Ohne Titel'}“ anhängen` : 'Dafür muss ein Task offen sein'}
+            onClick={() => {
+              if (open) void appendImages(openKind, open, [...imageSel].map((id) => images.find((b) => b.id === id)).filter((b) => !!b));
+            }}
+          >
+            {open ? `An „${open.title || 'Ohne Titel'}“ anhängen` : 'Anhängen'}
+          </button>
+          <button className="btn tiny ghost" onClick={() => void trashImages([...imageSel])}>
+            In den Papierkorb
+          </button>
+          <button className="linkish" onClick={clearImageSel}>
+            Auswahl aufheben
+          </button>
+        </div>
+      )}
+
       {ungenutzt.length > 0 && filter === 'ungenutzt' && (
         <div className="gal-sweep">
           <span>{count(ungenutzt.length, 'Bild wird', 'Bilder werden')} nirgends mehr erwähnt.</span>
@@ -194,7 +298,14 @@ export function Gallery() {
       ) : (
         <div className="gal-grid">
           {shown.map((b) => (
-            <figure key={b.id} className="gal-item" {...dragSource('image', b.id)}>
+            <figure
+              key={b.id}
+              className={`gal-item ${imageSel.has(b.id) ? 'sel' : ''}`}
+              aria-selected={imageSel.has(b.id)}
+              onClick={(e) => pick(e, b.id)}
+              onContextMenu={(e) => onContext(e, b.id)}
+              {...dragSource('image', b.id)}
+            >
               <img src={imageUrl(b.id, 'klein')} alt={b.name} loading="lazy" draggable={false} />
               <figcaption>
                 <span className="gal-name" title={b.name}>
@@ -203,11 +314,15 @@ export function Gallery() {
                 <span className="gal-meta">
                   {b.width}×{b.height} · {humanSize(b.size)}
                 </span>
+                {/* Die Verweise darin springen weg – ein Klick darauf ist keine Auswahl. */}
                 <Usage entry={b} onGo={(id) => { select(id); reveal(id); }} />
                 <button
                   className="linkish gal-del"
                   title="In den Papierkorb legen"
-                  onClick={() => void trashImage(b.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void trashImage(b.id);
+                  }}
                 >
                   Löschen
                 </button>
@@ -237,6 +352,7 @@ export function Gallery() {
         </div>
       )}
       </div>
+      {menu.node}
     </div>
   );
 }
@@ -250,7 +366,15 @@ function Usage({ entry, onGo }: { entry: ImageEntry; onGo: (id: string) => void 
   return (
     <span className="gal-use">
       {u?.live.map((e) => (
-        <button key={e.id} className="linkish" onClick={() => onGo(e.id)} title="Dorthin springen">
+        <button
+          key={e.id}
+          className="linkish"
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onGo(e.id);
+          }}
+          title="Dorthin springen"
+        >
           {e.kind === 'milestone' ? '◆ ' : ''}
           {e.title || 'Ohne Titel'}
         </button>

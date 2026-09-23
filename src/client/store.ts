@@ -194,7 +194,18 @@ type State = {
   imagesLoaded: boolean;
   loadImages: () => Promise<void>;
   trashImage: (id: string) => Promise<void>;
+  trashImages: (ids: string[]) => Promise<void>;
   restoreImage: (id: string) => Promise<void>;
+
+  /**
+   * Die Auswahl in der Galerie. Bewusst nicht `selected` und nicht `multi`: der
+   * Inspektor soll weiter die offene Aufgabe zeigen, während man daneben Bilder
+   * zusammenstellt, die man ihr geben will.
+   */
+  imageSel: Set<string>;
+  setImageSel: (ids: string[]) => void;
+  toggleImageSel: (id: string) => void;
+  clearImageSel: () => void;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
@@ -1154,12 +1165,53 @@ export const useStore = create<State>((set, get) => ({
     const name = get().images.find((b) => b.id === id)?.name ?? 'Bild';
     try {
       await api.trashImage(id);
+      if (get().imageSel.has(id)) {
+        const rest = new Set(get().imageSel);
+        rest.delete(id);
+        set({ imageSel: rest });
+      }
       await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
       // Kein `remember`: das Zurückholen läuft über den Papierkorb, nicht über Schritte.
       linked(`„${name}“ in den Papierkorb gelegt`, 'Rückgängig', () => void get().restoreImage(id));
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen', toastUndo: false });
     }
+  },
+
+  /**
+   * Mehrere Bilder in einem Zug. Der Bestand wird einmal am Ende neu geholt –
+   * sonst zuckt die Galerie bei jedem einzelnen Bild.
+   */
+  trashImages: async (ids) => {
+    if (ids.length === 1) return get().trashImage(ids[0] as string);
+    if (!ids.length) return;
+    try {
+      for (const id of ids) await api.trashImage(id);
+      set({ imageSel: new Set() });
+      await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
+      linked(`${ids.length} Bilder in den Papierkorb gelegt`, 'Rückgängig', () => {
+        void (async () => {
+          for (const id of ids) await api.restoreImage(id);
+          await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
+          set({ toast: 'Bilder wiederhergestellt', toastUndo: false, toastLink: null });
+        })();
+      });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen', toastUndo: false });
+    }
+  },
+
+  imageSel: new Set(),
+  setImageSel: (ids) => set({ imageSel: new Set(ids) }),
+
+  toggleImageSel: (id) => {
+    const next = new Set(get().imageSel);
+    if (!next.delete(id)) next.add(id);
+    set({ imageSel: next });
+  },
+
+  clearImageSel: () => {
+    if (get().imageSel.size) set({ imageSel: new Set() });
   },
 
   restoreImage: async (id) => {
