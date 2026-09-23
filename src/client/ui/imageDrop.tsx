@@ -61,6 +61,41 @@ export function useUpload(projectId: string | null): Uploader {
   return { upload, busy };
 }
 
+/**
+ * Die Galerie zieht mit, wenn sie geladen ist – sonst fehlt das eben
+ * hinzugefügte Bild dort, bis man neu lädt: der eigene Tab bekommt seinen Hall
+ * aus dem Änderungs-Strom ja nicht zurück.
+ *
+ * Aufgerufen wird das erst, wenn auch der Text steht. Sonst sähe die Galerie
+ * das Bild, hätte die Verwendung aber noch nicht gesehen und schriebe „Ohne
+ * Verwendung“ darunter.
+ */
+export const refreshGallery = (): void => {
+  if (useStore.getState().imagesLoaded) void useStore.getState().loadImages();
+};
+
+/**
+ * Eine Datei von außen über einem Feld: `dragleave` kommt auch beim Wechsel auf
+ * ein Kindelement, deshalb zählt hier ein Zähler statt eines Schalters. Sonst
+ * flackert die Hervorhebung, sobald der Zeiger über den Text wandert.
+ */
+export function useFileOver(): { over: boolean; events: Record<string, (e: React.DragEvent) => void> } {
+  const [depth, setDepth] = useState(0);
+  return {
+    over: depth > 0,
+    events: {
+      onDragEnter: (e) => {
+        if (hasFiles(e.dataTransfer)) setDepth((n) => n + 1);
+      },
+      onDragLeave: (e) => {
+        if (hasFiles(e.dataTransfer)) setDepth((n) => Math.max(0, n - 1));
+      },
+      onDropCapture: () => setDepth(0),
+      onDragEnd: () => setDepth(0),
+    },
+  };
+}
+
 /** Enthält das Gezogene Dateien? Daran trennt sich der Weg vom Ziehen der Zeilen. */
 export const hasFiles = (t: DataTransfer | null): boolean => !!t && [...t.types].includes('Files');
 

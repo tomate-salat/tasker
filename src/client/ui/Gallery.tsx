@@ -3,7 +3,7 @@ import type { ImageEntry, ImageUse } from '../api.js';
 import { imageUrl } from '../api.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { dragSource } from './dnd.js';
-import { hasFiles, useUpload } from './imageDrop.js';
+import { hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
 
 /**
@@ -106,7 +106,7 @@ export function Gallery() {
       setOver(false);
       if (!hasFiles(e.dataTransfer)) return;
       e.preventDefault();
-      void uploader.upload(e.dataTransfer.files).then(() => void loadImages());
+      void uploader.upload(e.dataTransfer.files).then(refreshGallery);
     },
   };
 

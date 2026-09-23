@@ -30,7 +30,14 @@ import {
   STATUS_LABEL,
   StatusIcon,
 } from './icons.js';
-import { appendMarkdown, hasFiles, insertAtCursor, useUpload } from './imageDrop.js';
+import {
+  appendMarkdown,
+  hasFiles,
+  insertAtCursor,
+  refreshGallery,
+  useFileOver,
+  useUpload,
+} from './imageDrop.js';
 import { imagesIn } from './imageFile.js';
 import { markdownParts, checkboxClick } from './markdown.js';
 import { focusAtEnd, useSmartEditor } from './editor.js';
@@ -542,11 +549,15 @@ function Content({
     const area = ref.current;
     if (editing && area) {
       for (const m of added) insertAtCursor(area, imageMarkdown(m));
+      // Der Text ist noch nicht gespeichert – die Verwendung sieht die Galerie
+      // erst nach „Fertig“.
+      refreshGallery();
       return;
     }
     let desc = item.desc;
     for (const m of added) desc = appendMarkdown(desc, m);
-    void patch(kind, item.id, { desc });
+    await patch(kind, item.id, { desc });
+    refreshGallery();
   };
 
   /**
@@ -562,8 +573,11 @@ function Content({
    * soll nicht erst darüberfahren müssen, um zu sehen, dass sie eine ist.
    */
   const imageDrag = useDrag((s) => s.drag?.kind === 'image');
+  // Dasselbe für eine Datei von außen – die kennt der Ziehzustand der App nicht.
+  const fileOver = useFileOver();
 
   const imageEvents = {
+    ...fileOver.events,
     onPaste: (e: React.ClipboardEvent) => {
       if (!imagesIn(e.clipboardData?.files).length) return;
       e.preventDefault();
@@ -607,7 +621,7 @@ function Content({
       <>
         <textarea
           ref={ref}
-          className="d-content"
+          className={`d-content ${fileOver.over ? 'dz-on' : ''}`}
           spellCheck
           aria-label="Inhalt: erste Zeile ist der Titel"
           defaultValue={item.title + (item.desc ? `\n\n${item.desc}` : '')}
@@ -644,7 +658,9 @@ function Content({
   return (
     <>
       <div
-        className={`d-card ${imageDrag ? 'drop-ready' : ''} ${descZone ? 'dz-on' : ''}`}
+        className={`d-card ${imageDrag || fileOver.over ? 'drop-ready' : ''} ${
+          descZone || fileOver.over ? 'dz-on' : ''
+        }`}
         role="button"
         tabIndex={0}
         aria-label="Inhalt bearbeiten"

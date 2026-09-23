@@ -1992,6 +1992,12 @@ button.prop:hover {
   outline: none;
 }
 
+/* Eine Datei schwebt darüber: das Feld nimmt sie an der Cursorstelle auf. */
+.d-content.dz-on {
+  border-style: dashed;
+  background: var(--accent-soft);
+}
+
 .d-editbar {
   display: flex;
   align-items: center;
