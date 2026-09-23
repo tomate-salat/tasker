@@ -1933,10 +1933,36 @@ button.prop:hover {
   background: var(--bg);
 }
 
-/* Ein Bild aus der Galerie schwebt darüber: es kommt ans Ende des Textes. */
+/*
+ * Wird ein Bild aus der Galerie gezogen, gibt sich die Beschreibung als Ablage
+ * zu erkennen – gestrichelt und mit einem Wort dazu. Schwebt das Bild darüber,
+ * springt sie ganz an. Der Hinweis liegt über dem Text, statt ihn zu verschieben.
+ */
+.d-card.drop-ready {
+  position: relative;
+  border: 1px dashed var(--line-strong);
+}
+
+.d-card.drop-ready::after {
+  content: 'Bild hier ablegen – es kommt ans Ende';
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+
 .d-card.dz-on {
   border: 1px dashed var(--accent);
   background: var(--accent-soft);
+}
+
+.d-card.dz-on::after {
+  color: var(--accent);
 }
 
 .d-h {
@@ -2059,20 +2085,37 @@ button.prop:hover {
 /* ---- Galerie ---- */
 
 .gallery {
+  position: relative;
   flex: 1;
-  overflow: auto;
-  padding: 0 14px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 14px;
 }
 
-.gallery.dz-on {
-  outline: 2px dashed var(--accent);
-  outline-offset: -6px;
+/*
+ * Der Rahmen liegt über allem. Als `outline` am scrollenden Kasten verschwand
+ * seine obere Kante unter der Filterleiste – die steht ja fest und wird über
+ * dem Rahmen gezeichnet.
+ */
+.gallery.dz-on::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  z-index: 5;
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.gal-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 24px;
 }
 
 .gal-bar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;

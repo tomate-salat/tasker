@@ -557,6 +557,11 @@ function Content({
   const descTarget = { type: 'desc', kind, item } as const;
   const descDrop = dropTarget(descTarget);
   const descZone = useZone(descTarget);
+  /**
+   * Sobald ein Bild gezogen wird, zeigt die Beschreibung sich als Ablage – man
+   * soll nicht erst darüberfahren müssen, um zu sehen, dass sie eine ist.
+   */
+  const imageDrag = useDrag((s) => s.drag?.kind === 'image');
 
   const imageEvents = {
     onPaste: (e: React.ClipboardEvent) => {
@@ -639,7 +644,7 @@ function Content({
   return (
     <>
       <div
-        className={`d-card ${descZone ? 'dz-on' : ''}`}
+        className={`d-card ${imageDrag ? 'drop-ready' : ''} ${descZone ? 'dz-on' : ''}`}
         role="button"
         tabIndex={0}
         aria-label="Inhalt bearbeiten"
@@ -833,8 +838,9 @@ function Deps({
   item: Task | Milestone;
 }) {
   const { patch, select } = useStore();
-  // Solange etwas gezogen wird, zeigt der Bereich seine beiden Ablagefelder.
-  const dragging = useDrag((s) => !!s.drag);
+  // Solange eine Zeile gezogen wird, zeigt der Bereich seine beiden Ablagefelder.
+  // Ein Bild gehört nicht hierher – dafür Felder anzubieten, wäre ein leeres Versprechen.
+  const dragging = useDrag((s) => !!s.drag && s.drag.kind !== 'image');
   const isMs = kind === 'milestone';
   const [dir, setDir] = useState<'by' | 'blocks'>('by');
   // Wonach die Suche sucht, hängt an der Richtung: ein Milestone wartet nur auf

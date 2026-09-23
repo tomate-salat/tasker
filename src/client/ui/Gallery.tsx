@@ -169,6 +169,8 @@ export function Gallery() {
         </button>
       </div>
 
+      {/* Gescrollt wird nur unterhalb der Leiste – so verdeckt sie nichts. */}
+      <div className="gal-scroll">
       {ungenutzt.length > 0 && filter === 'ungenutzt' && (
         <div className="gal-sweep">
           <span>{count(ungenutzt.length, 'Bild wird', 'Bilder werden')} nirgends mehr erwähnt.</span>
@@ -234,6 +236,7 @@ export function Gallery() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

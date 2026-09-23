@@ -39,10 +39,18 @@ const parse = (): Place | null => {
   return { scope, selected: second ?? null, filter };
 };
 
+/**
+ * Ansichten, die ein eigener Ort sind und keine Sicht auf die Liste: Archiv,
+ * Papierkorb und Galerie. Eine Auswahl sagt dort nichts darüber, wo man ist –
+ * die Ansicht muss also in der Adresse stehen und darf beim Laden nicht durch
+ * den Ort der Auswahl ersetzt werden.
+ */
+const PLACES: View[] = ['archive', 'trash', 'bilder'];
+
 /** Braucht die Adresse die Ansicht, oder ergibt sie sich aus der Auswahl? */
 const needsView = (s: S): boolean => {
   const { ws, selected: id, view } = s;
-  if (!id || !ws || view === 'archive') return true;
+  if (!id || !ws || PLACES.includes(view)) return true;
   if (!ws.task(id) && !ws.milestone(id)) return true;
   return ambiguousView(ws, id) || homeView(ws, id, null) !== view;
 };
@@ -108,7 +116,9 @@ export function syncUrl(): void {
       quietly(() => useStore.setState({ selected: null }));
       return;
     }
-    if (archived) return;
+    // An einem eigenen Ort bleibt man stehen: die Auswahl steht dort im
+    // Inspektor, ohne dass sie den Reiter bestimmt.
+    if (archived || PLACES.includes(s.view)) return;
     // Die Ansicht aus der Adresse steht schon im Store und dient `reveal` als
     // Hinweis. Passt sie nicht (mehr), zählt sie wie keine – dann gilt „Ready“.
     if (homeView(ws, id, s.view) !== s.view) {
