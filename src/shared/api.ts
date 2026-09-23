@@ -292,6 +292,8 @@ export const settingsBody = z
   .object({
     velocity: z.number().int().min(1).max(200),
     theme: z.enum(['system', 'light', 'dark']),
+    imageMaxKb: z.number().int().min(50).max(5000),
+    imageMaxEdge: z.number().int().min(400).max(8000),
   })
   .partial();
 

@@ -14,6 +14,7 @@ import {
 } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
+import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
 import { categoryHue, tagHue } from './colors.js';
@@ -29,6 +30,8 @@ import {
   STATUS_LABEL,
   StatusIcon,
 } from './icons.js';
+import { appendMarkdown, hasFiles, insertAtCursor, useUpload } from './imageDrop.js';
+import { imagesIn } from './imageFile.js';
 import { markdownParts, checkboxClick } from './markdown.js';
 import { focusAtEnd, useSmartEditor } from './editor.js';
 import { refClick, useRefResolver } from './refs.js';
@@ -526,6 +529,43 @@ function Content({
   const ref = useRef<HTMLTextAreaElement>(null);
   const resolve = useRefResolver();
   const picker = useSmartEditor(ws, ref, { projectId: item.projectId, self: item.id });
+  const uploader = useUpload(item.projectId);
+
+  /**
+   * Eingefügte oder hereingezogene Bilder. Im Editor kommt der Verweis an die
+   * Cursorposition, auf der Karte ans Ende des Textes – da gibt es keinen
+   * Cursor, und das Bild gehört unter das, was schon dasteht.
+   */
+  const take = async (files: FileList | File[] | null | undefined): Promise<void> => {
+    const added = await uploader.upload(files);
+    if (!added.length) return;
+    const area = ref.current;
+    if (editing && area) {
+      for (const m of added) insertAtCursor(area, imageMarkdown(m));
+      return;
+    }
+    let desc = item.desc;
+    for (const m of added) desc = appendMarkdown(desc, m);
+    void patch(kind, item.id, { desc });
+  };
+
+  /** Einfügen und Ablegen – beides nur, wenn wirklich Bilder dabei sind. */
+  const imageEvents = {
+    onPaste: (e: React.ClipboardEvent) => {
+      if (!imagesIn(e.clipboardData?.files).length) return;
+      e.preventDefault();
+      void take(e.clipboardData.files);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (hasFiles(e.dataTransfer)) e.preventDefault();
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void take(e.dataTransfer.files);
+    },
+  };
 
   const { parts, embedded } = markdownParts(item.desc, drawings.list, resolve);
   const loose = drawings.list.filter((d) => !embedded.has(d.id));
@@ -554,6 +594,7 @@ function Content({
           onInput={picker.onInput}
           onSelect={picker.onSelect}
           onBlur={picker.onBlur}
+          {...imageEvents}
           onKeyDown={(e) => {
             if (picker.onKeyDown(e)) return;
             if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
@@ -588,6 +629,7 @@ function Content({
         tabIndex={0}
         aria-label="Inhalt bearbeiten"
         title="Klicken zum Bearbeiten"
+        {...imageEvents}
         onClick={(e) => {
           if (refClick(e)) return;
           // Ein gewöhnlicher Link öffnet sein Ziel, nicht den Editor.

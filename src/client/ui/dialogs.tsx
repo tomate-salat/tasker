@@ -255,7 +255,7 @@ export function ProfileDialog({
   onLogout: () => void;
   onClose: () => void;
 }) {
-  const { settings, setVelocity, say, setTheme } = useStore();
+  const { settings, setVelocity, setImageLimits, say, setTheme } = useStore();
 
   const save = (patch: { name?: string; avatar?: string }): void => {
     void api
@@ -321,6 +321,36 @@ export function ProfileDialog({
         />
       </label>
       <p className="pf-hint">Aufgaben pro Woche – daraus entstehen Zeitplan und Burnup-Prognose.</p>
+
+      <h3>Bilder</h3>
+      <label className="field pf-vel">
+        <span>Größe je Bild</span>
+        <input
+          type="number"
+          min={50}
+          max={5000}
+          step={50}
+          defaultValue={settings.imageMaxKb}
+          key={`kb${settings.imageMaxKb}`}
+          onBlur={(e) => void setImageLimits({ imageMaxKb: Number(e.target.value) })}
+        />
+      </label>
+      <label className="field pf-vel">
+        <span>Längere Kante</span>
+        <input
+          type="number"
+          min={400}
+          max={8000}
+          step={160}
+          defaultValue={settings.imageMaxEdge}
+          key={`px${settings.imageMaxEdge}`}
+          onBlur={(e) => void setImageLimits({ imageMaxEdge: Number(e.target.value) })}
+        />
+      </label>
+      <p className="pf-hint">
+        Kilobyte und Pixel. Hochgeladene Bilder werden im Browser verkleinert und nach WebP
+        umgewandelt, bis sie darunter liegen – erst über die Qualität, dann über die Kantenlänge.
+      </p>
 
       <h3>Passwort</h3>
       <PasswordForm />

@@ -174,6 +174,8 @@ type State = {
   setCollapsed: (id: string, value: boolean) => void;
   say: (message: string | null) => void;
   setVelocity: (velocity: number) => Promise<void>;
+  /** Obergrenze und Kantenlänge für hochgeladene Bilder. */
+  setImageLimits: (patch: { imageMaxKb?: number; imageMaxEdge?: number }) => Promise<void>;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
@@ -288,7 +290,7 @@ export const useStore = create<State>((set, get) => ({
   selected: null,
   editing: null,
   collapsed: readLocal<Record<string, boolean>>(COLLAPSED_KEY, {}),
-  settings: { velocity: 8, theme: 'system' },
+  settings: { velocity: 8, theme: 'system', imageMaxKb: 500, imageMaxEdge: 2560 },
   archive: null,
   archiveQuery: '',
   trash: null,
@@ -377,6 +379,14 @@ export const useStore = create<State>((set, get) => ({
       set({ settings: await api.putSettings({ velocity }) });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Tempo konnte nicht gesetzt werden' });
+    }
+  },
+
+  setImageLimits: async (patch) => {
+    try {
+      set({ settings: await api.putSettings(patch) });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Einstellung konnte nicht gesetzt werden' });
     }
   },
 

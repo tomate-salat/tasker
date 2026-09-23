@@ -2050,6 +2050,16 @@ button.prop:hover {
   cursor: pointer;
 }
 
+/* Ein Bild steht für sich und geht nie über die Breite des Inspektors hinaus. */
+.md img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
 /* ---- Abschnitte, Unteraufgaben ---- */
 
 .detail section {

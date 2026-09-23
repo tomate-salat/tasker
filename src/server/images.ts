@@ -1,0 +1,253 @@
+import { createHash } from 'node:crypto';
+import type { DbCtx } from './db.js';
+
+/**
+ * Bilder liegen als BLOB in der Datenbank – wie die Zeichnungen, und aus
+ * demselben Grund: so hängen sie an Papierkorb und Rückgängig, statt daneben
+ * ein zweites Leben als Dateien zu führen, das auseinanderlaufen kann.
+ *
+ * Der Schlüssel ist der Hash des Inhalts. Dasselbe Bild zweimal eingefügt legt
+ * also nur eine Zeile an, und die Auslieferung darf `immutable` setzen.
+ *
+ * Wer ein Bild verwendet, wird nicht mitgeschrieben, sondern nachgesehen
+ * (siehe `usage`). Eine mitgeführte Tabelle müsste bei Rückgängig, Papierkorb,
+ * Umwandeln und Import korrekt mitlaufen – und eine Galerie, die „nicht mehr
+ * verlinkt“ fälschlich behauptet, löscht Bilder, die noch gebraucht werden.
+ */
+
+export type ImageMeta = {
+  id: string;
+  projectId: string | null;
+  name: string;
+  mime: string;
+  width: number;
+  height: number;
+  size: number;
+  createdAt: string;
+  deletedAt: string | null;
+};
+
+type Row = {
+  id: string;
+  project_id: string | null;
+  name: string;
+  mime: string;
+  width: number;
+  height: number;
+  size: number;
+  created_at: string;
+  deleted_at: string | null;
+};
+
+const META_COLUMNS = 'id, project_id, name, mime, width, height, size, created_at, deleted_at';
+
+const toMeta = (r: Row): ImageMeta => ({
+  id: r.id,
+  projectId: r.project_id,
+  name: r.name,
+  mime: r.mime,
+  width: r.width,
+  height: r.height,
+  size: r.size,
+  createdAt: r.created_at,
+  deletedAt: r.deleted_at,
+});
+
+/** Der Schlüssel eines Bildes: so viel Hash, dass Zufallstreffer ausgeschlossen sind. */
+export const hashOf = (bytes: Buffer): string =>
+  'b' + createHash('sha256').update(bytes).digest('base64url').slice(0, 24);
+
+export type NewImage = {
+  projectId: string | null;
+  name: string;
+  mime: string;
+  width: number;
+  height: number;
+  bytes: Buffer;
+  thumb: Buffer;
+};
+
+/**
+ * Legt ein Bild an – oder gibt das vorhandene zurück, wenn derselbe Inhalt
+ * schon da ist. Lag es im Papierkorb, kommt es dabei zurück: der Nutzer fügt es
+ * ja gerade wieder ein.
+ */
+export function putImage(ctx: DbCtx, input: NewImage): ImageMeta {
+  const id = hashOf(input.bytes);
+  return ctx.sqlite.transaction(() => {
+    const found = ctx.sqlite.prepare(`SELECT ${META_COLUMNS} FROM image WHERE id = ?`).get(id) as
+      | Row
+      | undefined;
+    if (found) {
+      if (found.deleted_at) {
+        ctx.sqlite.prepare('UPDATE image SET deleted_at = NULL WHERE id = ?').run(id);
+        ctx.sqlite.prepare("DELETE FROM trash WHERE kind = 'image' AND payload LIKE ?").run(`%"${id}"%`);
+        return { ...toMeta(found), deletedAt: null };
+      }
+      return toMeta(found);
+    }
+
+    ctx.sqlite
+      .prepare(
+        `INSERT INTO image (id, project_id, name, mime, width, height, size, bytes, thumb)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.projectId,
+        input.name,
+        input.mime,
+        input.width,
+        input.height,
+        input.bytes.length,
+        input.bytes,
+        input.thumb,
+      );
+    return ctx.sqlite.prepare(`SELECT ${META_COLUMNS} FROM image WHERE id = ?`).get(id) as Row;
+  })() as ImageMeta;
+}
+
+/** Die Bytes zum Ausliefern – `klein` ist die Vorschau. */
+export function imageBytes(
+  ctx: DbCtx,
+  id: string,
+  size: 'gross' | 'klein',
+): { bytes: Buffer; mime: string } | null {
+  const row = ctx.sqlite
+    .prepare(`SELECT ${size === 'klein' ? 'thumb' : 'bytes'} AS b, mime FROM image WHERE id = ?`)
+    .get(id) as { b: Buffer; mime: string } | undefined;
+  return row ? { bytes: row.b, mime: row.mime } : null;
+}
+
+export const listImages = (ctx: DbCtx): ImageMeta[] =>
+  (
+    ctx.sqlite
+      .prepare(`SELECT ${META_COLUMNS} FROM image ORDER BY created_at DESC`)
+      .all() as Row[]
+  ).map(toMeta);
+
+export const getImage = (ctx: DbCtx, id: string): ImageMeta | null => {
+  const row = ctx.sqlite.prepare(`SELECT ${META_COLUMNS} FROM image WHERE id = ?`).get(id) as
+    | Row
+    | undefined;
+  return row ? toMeta(row) : null;
+};
+
+/* ------------------------------------------------------------ Verwendungen */
+
+/**
+ * Im Text steht ein Bild als gewöhnliches Markdown: `![Name](/api/bilder/<id>)`.
+ * Das rendert `marked` ohne Zutun und bleibt auch in einem Export lesbar.
+ */
+const REF = /\/api\/bilder\/(b[A-Za-z0-9_-]+)/g;
+
+export const imageRefs = (text: string | null | undefined): string[] =>
+  [...(text ?? '').matchAll(REF)].map((m) => m[1] as string);
+
+/** Wo ein Bild überall steckt – und in welchem Zustand das Umgebende ist. */
+export type Usage = {
+  /** Lebende, nicht archivierte Aufgaben und Milestones. */
+  live: { kind: 'task' | 'milestone'; id: string; title: string }[];
+  /** Dasselbe für Archiviertes. */
+  archived: { kind: 'task' | 'milestone'; id: string; title: string }[];
+  /** Und für das, was nur noch im Papierkorb liegt. */
+  trashed: { kind: 'task' | 'milestone'; id: string; title: string }[];
+};
+
+const empty = (): Usage => ({ live: [], archived: [], trashed: [] });
+
+type DescRow = { id: string; title: string; desc: string; archived_at: string | null };
+
+/**
+ * Sucht alle Verwendungen in einem Durchgang. Beschreibungen gibt es nur an
+ * zwei Stellen, dazu die Nutzlasten im Papierkorb – dort stecken die Texte
+ * gelöschter Aufgaben als JSON.
+ */
+export function usage(ctx: DbCtx): Map<string, Usage> {
+  const out = new Map<string, Usage>();
+  const add = (
+    imageId: string,
+    where: keyof Usage,
+    entry: { kind: 'task' | 'milestone'; id: string; title: string },
+  ): void => {
+    const u = out.get(imageId) ?? empty();
+    if (!u[where].some((e) => e.id === entry.id)) u[where].push(entry);
+    out.set(imageId, u);
+  };
+
+  for (const kind of ['task', 'milestone'] as const) {
+    const rows = ctx.sqlite
+      .prepare(`SELECT id, title, desc, archived_at FROM ${kind} WHERE desc <> ''`)
+      .all() as DescRow[];
+    for (const r of rows) {
+      const where = r.archived_at ? 'archived' : 'live';
+      for (const imageId of imageRefs(r.desc)) add(imageId, where, { kind, id: r.id, title: r.title });
+    }
+  }
+
+  // Der Papierkorb: die gelöschten Zeilen liegen als JSON im Eintrag.
+  const entries = ctx.sqlite
+    .prepare("SELECT payload FROM trash WHERE kind != 'image'")
+    .all() as { payload: string }[];
+  for (const e of entries) {
+    let p: {
+      tasks?: DescRow[];
+      milestones?: DescRow[];
+      row?: DescRow;
+      kind?: 'task' | 'milestone' | string;
+    };
+    try {
+      p = JSON.parse(e.payload);
+    } catch {
+      continue;
+    }
+    const rows: { kind: 'task' | 'milestone'; row: DescRow }[] = [
+      ...(p.tasks ?? []).map((row) => ({ kind: 'task' as const, row })),
+      ...(p.milestones ?? []).map((row) => ({ kind: 'milestone' as const, row })),
+      ...(p.row && (p.kind === 'task' || p.kind === 'milestone')
+        ? [{ kind: p.kind as 'task' | 'milestone', row: p.row }]
+        : []),
+    ];
+    for (const { kind, row } of rows) {
+      for (const imageId of imageRefs(row?.desc)) {
+        add(imageId, 'trashed', { kind, id: row.id, title: row.title });
+      }
+    }
+  }
+
+  return out;
+}
+
+/* ------------------------------------------------------------- Papierkorb */
+
+/**
+ * Gelöscht heißt: die Bytes bleiben liegen, im Papierkorb entsteht ein Eintrag.
+ * Der trägt nur die Angaben zum Bild, nicht das Bild selbst – als Base64 wäre
+ * es ein Drittel größer, über `JSON.stringify` eines Buffers ein Vielfaches.
+ */
+export function trashImage(ctx: DbCtx, id: string, trashId: string): ImageMeta | null {
+  return ctx.sqlite.transaction(() => {
+    const meta = getImage(ctx, id);
+    if (!meta || meta.deletedAt) return null;
+    const at = new Date().toISOString();
+    ctx.sqlite.prepare('UPDATE image SET deleted_at = ? WHERE id = ?').run(at, id);
+    ctx.sqlite
+      .prepare(
+        `INSERT INTO trash (id, kind, title, project_id, payload, deleted_at)
+         VALUES (?, 'image', ?, ?, ?, ?)`,
+      )
+      .run(trashId, meta.name, meta.projectId, JSON.stringify({ kind: 'image', row: { id } }), at);
+    return { ...meta, deletedAt: at };
+  })() as ImageMeta | null;
+}
+
+/** Aus dem Papierkorb zurück: nur die Markierung fällt weg. */
+export function untrashImage(ctx: DbCtx, id: string): boolean {
+  const res = ctx.sqlite.prepare('UPDATE image SET deleted_at = NULL WHERE id = ?').run(id);
+  return res.changes > 0;
+}
+
+/** Endgültig – hier sind die Bytes wirklich weg. */
+export function purgeImage(ctx: DbCtx, id: string): void {
+  ctx.sqlite.prepare('DELETE FROM image WHERE id = ?').run(id);
+}

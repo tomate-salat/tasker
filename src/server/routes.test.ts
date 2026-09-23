@@ -120,11 +120,20 @@ describe('Routen', () => {
   });
 
   it('Einstellungen werden begrenzt und bleiben erhalten', async () => {
-    assert.deepEqual((await send('GET', '/settings')).body, { velocity: 8, theme: 'system' });
+    const vorgabe = { velocity: 8, theme: 'system', imageMaxKb: 500, imageMaxEdge: 2560 };
+    assert.deepEqual((await send('GET', '/settings')).body, vorgabe);
     const set = await send('PATCH', '/settings', { velocity: 12, theme: 'dark' });
-    assert.deepEqual(set.body, { velocity: 12, theme: 'dark' });
+    assert.deepEqual(set.body, { ...vorgabe, velocity: 12, theme: 'dark' });
     assert.equal((await send('PATCH', '/settings', { velocity: 9999 })).status, 400);
-    assert.deepEqual((await send('GET', '/settings')).body, { velocity: 12, theme: 'dark' });
+    assert.equal((await send('PATCH', '/settings', { imageMaxKb: 10 })).status, 400);
+    const bild = await send('PATCH', '/settings', { imageMaxKb: 250, imageMaxEdge: 1920 });
+    assert.deepEqual(bild.body, {
+      ...vorgabe,
+      velocity: 12,
+      theme: 'dark',
+      imageMaxKb: 250,
+      imageMaxEdge: 1920,
+    });
   });
 
   it('schreibt nach jeder Änderung das Burnup-Protokoll fort', async () => {

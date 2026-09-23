@@ -111,6 +111,14 @@ export type Settings = {
   /** Aufgaben pro Woche, Grundlage von Zeitplan und Prognose. */
   velocity: number;
   theme: 'system' | 'light' | 'dark';
+  /**
+   * Obergrenze je Bild in Kilobyte. Erreicht wird sie im Browser über die
+   * Qualität und, wenn die nicht reicht, über die Kantenlänge – gerechnet wird
+   * sie nicht, sondern gemessen.
+   */
+  imageMaxKb: number;
+  /** Längere Kante eines Bildes in Pixeln; größeres wird verkleinert. */
+  imageMaxEdge: number;
 };
 
 /** Erledigt ist kein eigenes Feld – es ist genau dieser Status. */

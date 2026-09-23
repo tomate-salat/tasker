@@ -14,6 +14,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   type AnySQLiteColumn,
+  blob,
   check,
   index,
   integer,
@@ -231,6 +232,42 @@ export const drawings = sqliteTable(
     // Ohne Tabellennamen, sonst zeigt die Regel nach dem Umbenennen in der Migration ins Leere.
     check('drawing_owner', sql`(task_id IS NULL) <> (milestone_id IS NULL)`),
   ],
+);
+
+/**
+ * Bilder liegen anders als Zeichnungen niemandem zu eigen: sie bilden einen
+ * Bestand, und wer sie verwendet, ergibt sich aus den Verweisen in den
+ * Beschreibungen. Deshalb keine `task_id`.
+ *
+ * Der Schlüssel ist der Inhalts-Hash. Dasselbe Bild zweimal eingefügt ist eine
+ * Zeile, und weil der Schlüssel den Inhalt bestimmt, darf die Auslieferung
+ * `immutable` sein – jeder Browser lädt ein Bild genau einmal.
+ *
+ * `project_id` trägt bewusst keinen Fremdschlüssel: Beim Löschen eines Projekts
+ * sollen die Bytes nicht stillschweigend mitgehen. Die Galerie zeigt solche
+ * Bilder unter „Ohne Projekt“, und ein wiederhergestelltes Projekt hat seine
+ * Bilder wieder.
+ */
+export const images = sqliteTable(
+  'image',
+  {
+    /** Inhalts-Hash, gekürzt. */
+    id: text('id').primaryKey(),
+    projectId: text('project_id'),
+    name: text('name').notNull(),
+    mime: text('mime').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    /** Größe von `bytes`, damit die Galerie nicht die Bilder selbst laden muss. */
+    size: integer('size').notNull(),
+    bytes: blob('bytes').notNull(),
+    /** Vorschau, lange Seite 400 – das ist, was die Galerie zeigt. */
+    thumb: blob('thumb').notNull(),
+    /** Im Papierkorb: die Bytes bleiben liegen, bis er geleert wird. */
+    deletedAt: text('deleted_at'),
+    ...tracked,
+  },
+  (t) => [index('image_project_idx').on(t.projectId), index('image_deleted_idx').on(t.deletedAt)],
 );
 
 /**

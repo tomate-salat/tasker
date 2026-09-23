@@ -28,14 +28,21 @@ export function setSetting(ctx: DbCtx, key: string, value: string): void {
     .run();
 }
 
-const DEFAULTS: Settings = { velocity: 8, theme: 'system' };
+const DEFAULTS: Settings = { velocity: 8, theme: 'system', imageMaxKb: 500, imageMaxEdge: 2560 };
+
+/** Zahl aus der Tabelle, mit Grenzen – Unsinn in der Zeile fällt auf die Vorgabe zurück. */
+const num = (ctx: DbCtx, key: string, fallback: number, min: number, max: number): number => {
+  const n = Number(getSetting(ctx, key) ?? fallback);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
+};
 
 export function getSettings(ctx: DbCtx): Settings {
-  const velocity = Number(getSetting(ctx, 'ui.velocity') ?? DEFAULTS.velocity);
   const theme = (getSetting(ctx, 'ui.theme') ?? DEFAULTS.theme) as Settings['theme'];
   return {
-    velocity: Number.isFinite(velocity) ? Math.min(200, Math.max(1, velocity)) : DEFAULTS.velocity,
+    velocity: num(ctx, 'ui.velocity', DEFAULTS.velocity, 1, 200),
     theme: ['system', 'light', 'dark'].includes(theme) ? theme : DEFAULTS.theme,
+    imageMaxKb: num(ctx, 'bild.maxKb', DEFAULTS.imageMaxKb, 50, 5000),
+    imageMaxEdge: num(ctx, 'bild.maxKante', DEFAULTS.imageMaxEdge, 400, 8000),
   };
 }
 
@@ -44,6 +51,16 @@ export function putSettings(ctx: DbCtx, patch: Partial<Settings>): Settings {
     setSetting(ctx, 'ui.velocity', String(Math.min(200, Math.max(1, Math.round(patch.velocity)))));
   }
   if (patch.theme !== undefined) setSetting(ctx, 'ui.theme', patch.theme);
+  if (patch.imageMaxKb !== undefined) {
+    setSetting(ctx, 'bild.maxKb', String(Math.min(5000, Math.max(50, Math.round(patch.imageMaxKb)))));
+  }
+  if (patch.imageMaxEdge !== undefined) {
+    setSetting(
+      ctx,
+      'bild.maxKante',
+      String(Math.min(8000, Math.max(400, Math.round(patch.imageMaxEdge)))),
+    );
+  }
   return getSettings(ctx);
 }
 

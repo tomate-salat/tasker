@@ -25,6 +25,7 @@ import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
+import { imageBytes, listImages, putImage, usage } from './images.js';
 import {
   Conflict,
   NotFound,
@@ -113,6 +114,74 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       unsubscribe();
     }),
   );
+
+  /* --------------------------------------------------------------- Bilder */
+
+  /**
+   * Der Bestand für die Galerie: nur die Angaben, nie die Bytes. Wer ein Bild
+   * verwendet, wird hier nachgesehen und nicht mitgeschrieben – siehe images.ts.
+   */
+  app.get('/bilder', (c) => {
+    const uses = usage(ctx);
+    return c.json({
+      images: listImages(ctx).map((m) => ({ ...m, usage: uses.get(m.id) ?? null })),
+    });
+  });
+
+  /**
+   * Die Bytes. Der Pfad enthält den Inhalts-Hash, dasselbe Bild liegt also nie
+   * unter zwei Adressen und eine Adresse nie auf zwei Bildern – deshalb darf
+   * der Browser es für immer behalten.
+   */
+  app.get('/bilder/:id', (c) => {
+    const small = c.req.query('v') === 'klein';
+    const found = imageBytes(ctx, c.req.param('id'), small ? 'klein' : 'gross');
+    if (!found) return c.json({ error: 'Nicht gefunden.' }, 404);
+    return c.body(found.bytes as unknown as ArrayBuffer, 200, {
+      'Content-Type': found.mime,
+      'Content-Length': String(found.bytes.length),
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      ETag: `"${c.req.param('id')}${small ? '-k' : ''}"`,
+    });
+  });
+
+  /**
+   * Hochgeladen wird fertig: der Browser hat schon verkleinert und nach WebP
+   * umgewandelt (siehe imageFile.ts). Hier wird nur noch die Grenze als Netz
+   * geprüft und gehasht.
+   */
+  app.post('/bilder', async (c) => {
+    const body = await c.req.parseBody().catch(() => null);
+    if (!body) return c.json({ error: 'Kein Bild empfangen.' }, 400);
+    const bild = body['bild'];
+    const vorschau = body['vorschau'];
+    if (!(bild instanceof File) || !(vorschau instanceof File)) {
+      return c.json({ error: 'Kein Bild empfangen.' }, 400);
+    }
+    if (!ALLOWED.has(bild.type)) return c.json({ error: `${bild.type} wird nicht angenommen.` }, 400);
+
+    const limit = getSettings(ctx).imageMaxKb * 1024;
+    // Etwas Luft: die Grenze zieht der Browser, hier hängt nur das Netz.
+    if (bild.size > limit * 1.5) return c.json({ error: 'Das Bild ist zu groß.' }, 413);
+
+    const width = Number(body['breite']);
+    const height = Number(body['hoehe']);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
+      return c.json({ error: 'Maße fehlen.' }, 400);
+    }
+
+    const meta = putImage(ctx, {
+      projectId: typeof body['projekt'] === 'string' && body['projekt'] ? body['projekt'] : null,
+      name: typeof body['name'] === 'string' && body['name'] ? body['name'].slice(0, 200) : 'Bild',
+      mime: bild.type,
+      width: Math.round(width),
+      height: Math.round(height),
+      bytes: Buffer.from(await bild.arrayBuffer()),
+      thumb: Buffer.from(await vorschau.arrayBuffer()),
+    });
+    publish(c, bus, { type: 'reload', reason: 'Bild hinzugefügt' });
+    return c.json(meta, 201);
+  });
 
   /* ---------------------------------------------------------- Schreiben */
 
@@ -326,6 +395,14 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
 /* ---------------------------------------------------------------- Hilfen */
 
 const json = (c: Context): Promise<unknown> => c.req.json().catch(() => null);
+
+/**
+ * Angenommen wird nur, was der Browser selbst erzeugt hat. WebP ist der
+ * Normalfall; PNG bleibt für den Fall offen, dass ein Browser kein WebP
+ * kodieren kann. Animierte GIFs lehnt schon der Client ab – über den Canvas
+ * bliebe nur das erste Einzelbild übrig.
+ */
+const ALLOWED = new Set(['image/webp', 'image/png']);
 
 const parseKind = (raw: string): Kind | null => {
   const k = kindSchema.safeParse(raw);

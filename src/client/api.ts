@@ -68,10 +68,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Bei FormData setzt der Browser den Inhaltstyp selbst – samt Grenze zwischen
+  // den Teilen. Schreibt man ihn hier hin, fehlt sie und der Server versteht nichts.
+  const form = init?.body instanceof FormData;
   const res = await fetch(path, {
     ...init,
     headers: {
-      'content-type': 'application/json',
+      ...(form ? {} : { 'content-type': 'application/json' }),
       [CLIENT_HEADER]: CLIENT_ID,
       ...init?.headers,
     },
@@ -118,6 +121,43 @@ export type TrashEntry = {
 };
 
 export type TrashList = { days: number; entries: TrashEntry[] };
+
+export type ImageMeta = {
+  id: string;
+  projectId: string | null;
+  name: string;
+  mime: string;
+  width: number;
+  height: number;
+  size: number;
+  createdAt: string;
+  deletedAt: string | null;
+};
+
+/** Wo ein Bild steckt, getrennt nach dem Zustand des Umgebenden. */
+export type ImageUse = { kind: 'task' | 'milestone'; id: string; title: string };
+export type ImageUsage = { live: ImageUse[]; archived: ImageUse[]; trashed: ImageUse[] };
+
+/** Ein Bild in der Galerie: Angaben plus Verwendungen, nie die Bytes. */
+export type ImageEntry = ImageMeta & { usage: ImageUsage | null };
+
+/** Was hochgeladen wird – im Browser bereits verkleinert und als WebP. */
+export type ImageUpload = {
+  blob: Blob;
+  thumb: Blob;
+  width: number;
+  height: number;
+  name: string;
+  projectId: string | null;
+};
+
+/** Die Adresse eines Bildes. Der Hash im Pfad macht sie für immer gültig. */
+export const imageUrl = (id: string, size: 'gross' | 'klein' = 'gross'): string =>
+  `/api/bilder/${id}${size === 'klein' ? '?v=klein' : ''}`;
+
+/** So steht ein Bild in einer Beschreibung – gewöhnliches Markdown. */
+export const imageMarkdown = (m: { id: string; name: string }): string =>
+  `![${m.name.replace(/[[\]]/g, '')}](${imageUrl(m.id)})`;
 
 export type { Settings } from '@shared/model.js';
 import type { Settings } from '@shared/model.js';
@@ -209,6 +249,24 @@ export const api = {
     }),
 
   deleteDrawing: (id: string) => request<Undoable>(`/api/drawings/${id}`, { method: 'DELETE' }),
+
+  images: () => request<{ images: ImageEntry[] }>('/api/bilder'),
+
+  /**
+   * Das Bild ist beim Hochladen schon fertig – verkleinert und als WebP. Hier
+   * geht deshalb `FormData` raus und kein JSON; den Inhaltstyp setzt der
+   * Browser selbst, samt Grenze zwischen den Teilen.
+   */
+  addImage: (p: ImageUpload) => {
+    const form = new FormData();
+    form.append('bild', p.blob, p.name);
+    form.append('vorschau', p.thumb, 'vorschau.webp');
+    form.append('name', p.name);
+    form.append('breite', String(p.width));
+    form.append('hoehe', String(p.height));
+    if (p.projectId) form.append('projekt', p.projectId);
+    return request<ImageMeta>('/api/bilder', { method: 'POST', body: form });
+  },
 
   settings: () => request<Settings>('/api/settings'),
 
