@@ -14,7 +14,7 @@
 }
 
 .layout-switch button {
-  padding: 3px 10px;
+  padding: 3px 8px;
   border: 0;
   border-radius: 5px;
   background: none;
@@ -33,43 +33,43 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* Der Umschalter nimmt Platz weg – die Knöpfe daneben sollen nicht umbrechen. */
-.tab-actions .btn {
-  white-space: nowrap;
-}
-
 /* ---------------------------------------------------------------- Raster */
 
+/* Schmale Karten mit fester Breite, wie bei Codecks. Den Abstand machen die
+   Zellen selbst (je 7px Rand), damit es zwischen den Karten keine Lücke gibt,
+   die beim Ziehen nichts annimmt. */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
-  gap: 14px;
-  padding: 14px 10px 20px 30px;
+  grid-template-columns: repeat(auto-fill, 142px);
+  padding: 8px 4px 14px 23px;
   border-bottom: 1px solid var(--line);
+}
+
+.tcard-cell {
+  position: relative;
+  display: flex;
+  padding: 7px;
 }
 
 /* ----------------------------------------------------------------- Karte */
 
 .tcard {
   position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-height: 190px;
+  min-height: 176px;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--surface);
-  overflow: hidden;
   cursor: default;
   user-select: none;
   box-shadow: 0 1px 3px rgba(22, 34, 29, 0.08);
-  transition:
-    box-shadow 0.12s,
-    transform 0.12s;
 }
 
 .tcard:hover {
-  box-shadow: 0 4px 14px rgba(22, 34, 29, 0.14);
-  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(22, 34, 29, 0.14);
 }
 
 .tcard.sel,
@@ -77,7 +77,7 @@
   border-color: var(--accent);
   box-shadow:
     0 0 0 2px var(--accent),
-    0 4px 14px rgba(22, 34, 29, 0.14);
+    0 3px 10px rgba(22, 34, 29, 0.14);
 }
 
 /* Eine Unteraufgabe der Karte ist im Inspektor offen. */
@@ -98,35 +98,40 @@
   opacity: 0.4;
 }
 
-.tcard.dz-child {
+.tcard-cell.dz-child .tcard {
   box-shadow: 0 0 0 3px var(--accent);
   background: var(--accent-soft);
 }
 
-.tcard.dz-before::before,
-.tcard.dz-after::after {
+/* Die Einfügemarke steht mitten im Abstand – „nach der linken“ und „vor der
+   rechten Karte“ sehen gleich aus und springen nicht. */
+.tcard-cell.dz-before::before,
+.tcard-cell.dz-after::after {
   content: '';
   position: absolute;
-  top: 8px;
-  bottom: 8px;
+  top: 10px;
+  bottom: 10px;
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
   z-index: 3;
+  pointer-events: none;
 }
 
-.tcard.dz-before::before {
-  left: 2px;
+.tcard-cell.dz-before::before {
+  left: -1.5px;
 }
 
-.tcard.dz-after::after {
-  right: 2px;
+.tcard-cell.dz-after::after {
+  right: -1.5px;
 }
+
 
 /* Titelbild füllt die Karte, der Titel liegt oben darauf. */
 .tcard-cover {
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background-size: cover;
   background-position: center;
 }
@@ -135,6 +140,7 @@
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.05) 55%, transparent);
 }
 
@@ -150,7 +156,7 @@
 .tcard-title {
   flex: 1;
   min-width: 0;
-  font: 650 15px/1.25 var(--display);
+  font: 650 14px/1.25 var(--display);
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 4;
@@ -188,6 +194,7 @@
   padding: 8px 10px 10px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-top: 1px solid var(--line);
+  border-radius: 0 0 10px 10px;
 }
 
 .tcard-meta {
@@ -244,8 +251,56 @@
 
 /* ------------------------------------------------- Baum im Inspektor */
 
+/* Der Baum klebt am unteren Rand des Inspektors und bleibt dort, egal wie
+   lang der Inhalt darüber ist. Dafür wird der Inspektor zur Spalte: der
+   Abschnitt rückt mit `margin-top: auto` nach unten, `sticky` hält ihn dort
+   auch beim Scrollen. Nichts darüber darf dabei schrumpfen. */
+.detail:has(> .hier-sec) {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail:has(> .hier-sec) > * {
+  flex-shrink: 0;
+}
+
+.detail > .hier-sec {
+  position: sticky;
+  /* Chrome zieht das Polster des Inspektors vom Klebe-Rand ab – daher negativ. */
+  bottom: -32px;
+  z-index: 4;
+  margin: auto -24px -32px; /* bis über das Polster unten und seitlich */
+  padding: 10px 24px 14px !important;
+  background: var(--surface);
+  box-shadow: 0 -8px 16px -12px rgba(0, 0, 0, 0.35);
+}
+
+.hier-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.hier-toggle:hover {
+  background: var(--hover);
+}
+
+.hier-sec.shut .h3row {
+  margin-bottom: 0;
+}
+
+/* Ein tiefer Baum scrollt in sich, statt den Inspektor zuzudecken. */
 .detail .list.hier {
   flex: none;
+  max-height: 40vh;
+  overflow: auto;
   padding: 0;
   margin: 0 -6px;
   border-top: 1px solid var(--line);

@@ -26,6 +26,7 @@ export function TaskRow({
   depth,
   doc = false,
   menu,
+  fixed = false,
 }: {
   ws: Workspace;
   task: Task;
@@ -33,6 +34,8 @@ export function TaskRow({
   doc?: boolean;
   /** Das Menü der Liste – die Zellen öffnen darin ihre Auswahl. */
   menu?: Menu;
+  /** Karten: die Wurzel im Baum des Inspektors lässt sich nicht zuklappen. */
+  fixed?: boolean;
 }) {
   const { selected, select, collapsed, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } =
     useStore();
@@ -116,7 +119,7 @@ export function TaskRow({
           <span className="prio-gut cell" role="button" tabIndex={-1} onClick={cell('prio')}>
             <PrioIcon prio={task.prio} cell />
           </span>
-          <Caret open={open} hasKids={kids.length > 0} onToggle={() => toggle(task.id)} />
+          <Caret open={open} hasKids={kids.length > 0 && !fixed} onToggle={() => toggle(task.id)} />
           <StatusDot task={task} implicit={implicit} />
         </>
       )}

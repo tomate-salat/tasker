@@ -8,7 +8,7 @@ import { addChild } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
-import { PrioIcon, SegBar } from './icons.js';
+import { CHEVRON_DOWN, CHEVRON_RIGHT, PrioIcon, SegBar } from './icons.js';
 import type { Menu } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { ChecklistBadge, DrawingBadge, LockBadge, StatusDot, TaskRow, TitleEdit } from './rows.js';
@@ -24,6 +24,9 @@ import './cards.css';
  * Alles hängt an `layout === 'cards'`; fliegt die Ansicht wieder raus, gehen
  * diese Datei, `cards.css` und die paar Aufrufe mit „Karten“ im Kommentar.
  */
+
+/** Unter diesem Schlüssel merkt sich `collapsed`, ob der Baum im Inspektor zu ist. */
+const HIER_KEY = 'inspector:hierarchy';
 
 /** Ob die Karten gerade gelten – nur in Plan, Ready und Backlog. */
 export const cardsOn = (s: { layout: string; view: View }): boolean =>
@@ -42,7 +45,8 @@ export function treeRows(ws: Workspace, root: Task, collapsed: Record<string, bo
   const rows: OutlineRow[] = [];
   const walk = (t: Task, depth: number): void => {
     rows.push({ type: 'task', id: t.id, task: t, depth });
-    if (collapsed[t.id]) return;
+    // Die Wurzel ist die Karte selbst – sie klappt im Baum nicht zu.
+    if (t.id !== root.id && collapsed[t.id]) return;
     for (const k of ws.kids(t.id)) walk(k, depth + 1);
   };
   // Tiefe 1 wie die Aufgaben in einem Behälter der Liste.
@@ -62,7 +66,7 @@ export function cardRows(
   collapsed: Record<string, boolean>,
 ): { shown: OutlineRow[]; keys: OutlineRow[] } {
   const shown = rows.filter((r) => r.type !== 'task' || !r.task.parentId);
-  const root = hierarchyRoot(ws, selected);
+  const root = collapsed[HIER_KEY] ? null : hierarchyRoot(ws, selected);
   const keys = shown.flatMap((r) => (root && r.id === root.id ? treeRows(ws, root, collapsed) : [r]));
   return { shown, keys };
 }
@@ -135,9 +139,12 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
     };
 
   return (
+    // Die Zelle um die Karte ist das Ablageziel und füllt den Abstand zur
+    // nächsten mit aus – ohne tote Lücken springt beim Ziehen weder der Zeiger
+    // auf „verboten“ noch die Einfügemarke hin und her.
+    <div data-axis="x" className={`tcard-cell ${zone ? `dz-${zone}` : ''}`} {...dropTarget(target)}>
     <div
       data-row={task.id}
-      data-axis="x"
       className={[
         'tcard',
         cover ? 'has-cover' : '',
@@ -146,7 +153,6 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         holds ? 'holds' : '',
         isDone(task) ? 'done' : '',
         dragging ? 'dragging' : '',
-        zone ? `dz-${zone}` : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -159,7 +165,6 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         }
       }}
       {...dragSource('task', task.id, !editing)}
-      {...dropTarget(target)}
     >
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
 
@@ -216,6 +221,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         {(kids.length > 0 || cl.total > 0) && <SegBar segments={segments} />}
       </div>
     </div>
+    </div>
   );
 }
 
@@ -230,19 +236,29 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   if (!root) return null;
   const rows = treeRows(ws, root, state.collapsed);
   const current = ws.task(state.selected);
+  const open = !state.collapsed[HIER_KEY];
 
   return (
-    <section className="d-section hier-sec">
+    <section className={`d-section hier-sec ${open ? '' : 'shut'}`}>
       <div className="h3row">
-        <h3>
-          Hierarchie · {doneCount(ws, root)}/{total(ws, root)}
-        </h3>
-        {current && !state.multi.size && (
+        <button
+          className="hier-toggle"
+          onClick={() => state.setCollapsed(HIER_KEY, open)}
+          aria-expanded={open}
+          title={open ? 'Hierarchie zuklappen' : 'Hierarchie aufklappen'}
+        >
+          {open ? CHEVRON_DOWN : CHEVRON_RIGHT}
+          <h3>
+            Hierarchie · {doneCount(ws, root)}/{total(ws, root)}
+          </h3>
+        </button>
+        {open && current && !state.multi.size && (
           <button className="linkish" onClick={() => void addChild(current)}>
             + Unteraufgabe
           </button>
         )}
       </div>
+      {open && (
       <div
         className={`list hier ${state.multi.size ? 'has-multi' : ''}`}
         onContextMenu={(e) => {
@@ -263,9 +279,19 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
       >
         {rows.map(
           (r) =>
-            r.type === 'task' && <TaskRow key={r.id} ws={ws} task={r.task} depth={r.depth} menu={menu} />,
+            r.type === 'task' && (
+              <TaskRow
+                key={r.id}
+                ws={ws}
+                task={r.task}
+                depth={r.depth}
+                menu={menu}
+                fixed={r.id === root.id}
+              />
+            ),
         )}
       </div>
+      )}
     </section>
   );
 }
