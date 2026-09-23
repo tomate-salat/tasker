@@ -157,6 +157,16 @@ export function Gallery() {
         <span className="sum">
           {count(shown.length, 'Bild', 'Bilder')} · {humanSize(total)}
         </span>
+
+        {/* Die Verwendungen werden beim Laden nachgesehen – nach Änderungen
+            anderswo holt man sich damit den frischen Stand. */}
+        <button
+          className="btn tiny ghost"
+          title="Bestand und Verwendungen neu einlesen"
+          onClick={() => void loadImages()}
+        >
+          Aktualisieren
+        </button>
       </div>
 
       {ungenutzt.length > 0 && filter === 'ungenutzt' && (
