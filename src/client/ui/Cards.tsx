@@ -122,12 +122,18 @@ const coverOf = (task: Task): string | null =>
 
 /**
  * Das Titelbild dezent hinter dem Inspektor – oben bündig, auf Breite gebracht,
- * überdeckt von der Fläche (Wunsch des Nutzers). Nur in der Kartenansicht.
+ * unten weich ausgeblendet (Wunsch des Nutzers). Nur in der Kartenansicht.
+ * Ein echtes Bild statt eines Hintergrunds, damit der Verlauf an seinem
+ * eigenen unteren Rand sitzt, egal wie hoch es ist.
  */
-export function useInspectorCover(task: Task | null | undefined): React.CSSProperties | undefined {
+export function InspectorCover({ task }: { task: Task | null | undefined }) {
   const on = useStore((s) => cardsOn(s));
-  if (!on || !task?.coverImageId) return undefined;
-  return { '--inspector-cover': `url(${imageUrl(task.coverImageId)})` } as React.CSSProperties;
+  if (!on || !task?.coverImageId) return null;
+  return (
+    <div className="d-cover" aria-hidden>
+      <img src={imageUrl(task.coverImageId)} alt="" />
+    </div>
+  );
 }
 
 /** Der Ordner der Galerie, in dem hochgeladene Titelbilder landen – je Projekt. */
