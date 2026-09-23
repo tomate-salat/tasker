@@ -120,6 +120,16 @@ export function CardGrid({
 const coverOf = (task: Task): string | null =>
   task.coverImageId ? imageUrl(task.coverImageId, 'klein') : null;
 
+/**
+ * Das Titelbild dezent hinter dem Inspektor – oben bündig, auf Breite gebracht,
+ * überdeckt von der Fläche (Wunsch des Nutzers). Nur in der Kartenansicht.
+ */
+export function useInspectorCover(task: Task | null | undefined): React.CSSProperties | undefined {
+  const on = useStore((s) => cardsOn(s));
+  if (!on || !task?.coverImageId) return undefined;
+  return { '--inspector-cover': `url(${imageUrl(task.coverImageId)})` } as React.CSSProperties;
+}
+
 /** Der Ordner der Galerie, in dem hochgeladene Titelbilder landen – je Projekt. */
 const COVER_FOLDER = 'Cardimages';
 

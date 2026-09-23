@@ -356,3 +356,14 @@
 .tcard-mark .mk-emoji {
   font-size: 17px;
 }
+
+/* Titelbild dezent hinter dem Inspektor: oben bündig, auf Breite gebracht,
+   nicht gestreckt; die Fläche liegt halbtransparent darüber. */
+.detail.has-cover {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--surface) 86%, transparent), color-mix(in srgb, var(--surface) 86%, transparent)),
+    var(--inspector-cover);
+  background-size: auto, 100% auto;
+  background-position: top center;
+  background-repeat: no-repeat;
+}

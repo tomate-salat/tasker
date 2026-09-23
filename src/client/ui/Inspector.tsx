@@ -17,7 +17,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
-import { cardsOn, CoverRow, Hierarchy, hierarchyRoot } from './Cards.js';
+import { cardsOn, CoverRow, Hierarchy, hierarchyRoot, useInspectorCover } from './Cards.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dropTarget, useDrag, useZone } from './dnd.js';
 import { DrawingEmbed, useDrawings } from './Drawings.js';
@@ -62,6 +62,8 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
   const select = useStore((s) => s.select);
   const menu = useMenu();
   const hier = useStore((s) => cardsOn(s)) && !!hierarchyRoot(ws, id);
+  // Karten: das Titelbild liegt dezent im Hintergrund.
+  const cover = useInspectorCover(task);
 
   // Der Inhalt wird als Ganzes bearbeitet – beim Wechsel des Objekts zurück.
   const [editing, setEditing] = useState(false);
@@ -72,7 +74,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
   const item = (task ?? milestone) as Task | Milestone;
 
   return (
-    <aside className="detail">
+    <aside className={cover ? 'detail has-cover' : 'detail'} style={cover}>
       <div className="d-top">
         <Crumbs ws={ws} task={task} milestone={milestone} />
         <button

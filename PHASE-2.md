@@ -54,7 +54,8 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Klick für den Dateidialog, mit Bild nur „Entfernen“), per „Als Titelbild von …“ im
   Kontextmenü der Galerie, durch Ziehen auf die Karte oder mit Strg+V auf der ausgewählten Karte. Was vom Rechner kommt, landet in der
   Galerie im Ordner „Cardimages“ des Projekts (wird bei Bedarf angelegt). Endgültig gelöschte Bilder
-  leeren das Feld. Offen, erst wenn die Karten bleiben: Vorgabe-Hintergründe mit der Kette
+  leeren das Feld. Ist ein Titelbild gesetzt, liegt es dezent hinter dem Inspektor (oben bündig,
+  auf Breite gebracht, von der Fläche zu 86 % überdeckt). Offen, erst wenn die Karten bleiben: Vorgabe-Hintergründe mit der Kette
   Projekt → Kategorie → Task. Den Baum darunter zeigt
   der Inspektor an seinem Ende, klebend am unteren Rand und als Ganzes einklappbar (standardmäßig
   offen), immer ab der Wurzel – auch wenn eine Unteraufgabe ausgewählt ist –, mit Auswahl, Ziehen und
