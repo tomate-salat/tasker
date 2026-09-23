@@ -312,8 +312,8 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
      und Bildschirm auseinander.
    - **Tastatur:** Pfeile/`j`/`k` bewegen die Auswahl, `←/→` klappen, `Enter` legt eine
      Geschwisteraufgabe direkt darunter an (mit `Shift` eine Unteraufgabe), `Tab`/`Shift+Tab` rücken
-     ein und aus, `Alt+↑/↓` sortieren um, `Leertaste` schaltet den Status weiter (auch bei
-     Milestones), `e`/`F2` bearbeitet den Titel in der Zeile, `a` archiviert, `Entf` legt in den
+     ein und aus, `Alt+↑/↓` sortieren um, `Leertaste` schaltet den Status weiter und
+     `Shift+Leertaste` zurück (auch bei Milestones), `e`/`F2` bearbeitet den Titel in der Zeile, `a` archiviert, `Entf` legt in den
      Papierkorb, `n` oder `/` springt in die Erfassungszeile.
    - **Drag & Drop:** über einer Aufgabe drei Zonen (davor, hinein, danach), über Milestone und
      Gruppe nur „hinein“. Der Platz geht als `index` an den Server, der die Geschwister lückenlos
@@ -613,7 +613,8 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   Prototyp auf Wunsch: Unklar und Blockiert sind Sonderstatus und werden nur ausdrücklich gesetzt;
   die Leertaste führt von dort zurück auf Offen. Später ebenfalls auf Wunsch: dieses Durchschalten
   liegt auf der **Leertaste** – `S` ist ersatzlos entfallen, und es gibt keine Taste mehr, die
-  unmittelbar auf „erledigt“ setzt.
+  unmittelbar auf „erledigt“ setzt. Die Reihe läuft nicht im Kreis: bei Erledigt ist Schluss,
+  zurück geht es mit **`Shift`+Leertaste**.
 - ~~Leertaste auf Dokumentationsseiten~~ **Erledigt:** wirkt dort nicht.
 - ~~`Esc` schließt immer~~ **Erledigt:** den Inspektor nur bis 1240 px Breite.
 - ~~Menüs ohne Pfeiltasten~~ **Erledigt** (`ctxKey`): ↑/↓ reihum, → bzw. `Enter` öffnet ein

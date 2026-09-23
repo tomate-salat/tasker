@@ -133,7 +133,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
             return;
           case ' ':
             e.preventDefault();
-            void store.setMilestoneStatus(m.id, nextMsStatus(m.status));
+            void store.setMilestoneStatus(m.id, stepMsStatus(m.status, e.shiftKey ? -1 : 1));
             return;
           case 'p':
           case 'P':
@@ -180,7 +180,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
           return;
         case ' ':
           e.preventDefault();
-          if (!doc) void store.patch('task', t.id, { status: nextStatus(t.status) });
+          if (!doc) void store.patch('task', t.id, { status: stepStatus(t.status, e.shiftKey ? -1 : 1) });
           return;
         case 'm':
         case 'M': {
@@ -290,13 +290,28 @@ const rowEl = (id: string): HTMLElement | null => document.querySelector(`[data-
  *
  * Auf Wunsch des Nutzers gibt es keine Taste mehr, die unmittelbar auf
  * „erledigt“ setzt; das frühere `S` ist damit entfallen.
+ *
+ * Die Reihe läuft nicht im Kreis: bei Erledigt ist Schluss, sonst käme man mit
+ * einem Druck zu viel versehentlich wieder auf Offen. Zurück geht es mit
+ * Umschalt und Leertaste.
  */
 const STATUS_CYCLE: Status[] = ['open', 'progress', 'done'];
 
-const nextStatus = (s: Status): Status =>
-  STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length] ?? 'open';
+/** Einen Schritt weiter oder zurück; an den Enden bleibt es stehen. */
+const stepStatus = (s: Status, dir: 1 | -1): Status => {
+  const at = STATUS_CYCLE.indexOf(s);
+  // Aus einem Sonderstatus heraus beginnt die Reihe wieder bei Offen.
+  if (at < 0) return 'open';
+  const next = Math.max(0, Math.min(STATUS_CYCLE.length - 1, at + dir));
+  return STATUS_CYCLE[next] ?? s;
+};
 
 const MS_CYCLE = ['open', 'progress', 'done'] as const;
+type MsStatus = (typeof MS_CYCLE)[number];
 
-const nextMsStatus = (s: Milestone['status']): (typeof MS_CYCLE)[number] =>
-  MS_CYCLE[(MS_CYCLE.indexOf(s as (typeof MS_CYCLE)[number]) + 1) % MS_CYCLE.length] ?? 'open';
+const stepMsStatus = (s: Milestone['status'], dir: 1 | -1): MsStatus => {
+  const at = MS_CYCLE.indexOf(s as MsStatus);
+  if (at < 0) return 'open';
+  const next = Math.max(0, Math.min(MS_CYCLE.length - 1, at + dir));
+  return MS_CYCLE[next] ?? 'open';
+};

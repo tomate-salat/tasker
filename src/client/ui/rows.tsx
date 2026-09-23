@@ -418,7 +418,7 @@ export function StatusDot({ task, implicit }: { task: Task; implicit: boolean })
     <span
       className={`check status-dot st-${task.status} ${implicit ? 'implicit-progress' : ''}`}
       role="img"
-      title={`${label} · Leertaste: nächster Status`}
+      title={`${label} · Leertaste: nächster Status, mit Shift zurück`}
       aria-label={`Status ${STATUS_LABEL[task.status]}${implicit ? ', Unteraufgabe in Arbeit' : ''}`}
     >
       {statusMark(task.status)}

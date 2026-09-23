@@ -643,10 +643,10 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>Verschieben (auch Milestones)</dd>
         <dt>
-          <kbd>Leertaste</kbd>
+          <kbd>Leertaste</kbd> / <kbd>Shift</kbd>+<kbd>Leertaste</kbd>
         </dt>
         {/* Abweichung vom Prototyp, auf Wunsch: Unklar und Blockiert nur ausdrücklich. */}
-        <dd>Nächster Status: Offen → In Progress → Erledigt</dd>
+        <dd>Status weiter / zurück: Offen → In Progress → Erledigt</dd>
         <dt>
           <kbd>F2</kbd> / <kbd>E</kbd>
         </dt>
