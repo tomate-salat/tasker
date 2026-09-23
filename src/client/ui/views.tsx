@@ -156,7 +156,7 @@ function KbdHint() {
         <kbd>Tab</kbd> einrücken
       </span>
       <span>
-        <kbd>Leertaste</kbd> erledigt
+        <kbd>Leertaste</kbd> nächster Status
       </span>
       <span>
         <kbd>P</kbd> Milestone planen

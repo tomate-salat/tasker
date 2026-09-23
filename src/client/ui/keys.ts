@@ -131,8 +131,8 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
             e.preventDefault();
             store.edit(m.id);
             return;
-          case 's':
-          case 'S':
+          case ' ':
+            e.preventDefault();
             void store.setMilestoneStatus(m.id, nextMsStatus(m.status));
             return;
           case 'p':
@@ -159,7 +159,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
       if (row.type !== 'task') return;
 
       const t = row.task;
-      // Dokumentationsseiten haben keinen Status – Leertaste und `S` gehen ins Leere.
+      // Dokumentationsseiten haben keinen Status – die Leertaste geht ins Leere.
       const doc = ws.isDoc(t);
 
       if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
@@ -180,7 +180,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
           return;
         case ' ':
           e.preventDefault();
-          if (!doc) void store.patch('task', t.id, { status: isDone(t) ? 'open' : 'done' });
+          if (!doc) void store.patch('task', t.id, { status: nextStatus(t.status) });
           return;
         case 'm':
         case 'M': {
@@ -193,10 +193,6 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
         case 'F2':
           e.preventDefault();
           store.edit(t.id);
-          return;
-        case 's':
-        case 'S':
-          if (!doc) void store.patch('task', t.id, { status: nextStatus(t.status) });
           return;
         case 'a':
         case 'A':
@@ -288,9 +284,12 @@ const hidden = (ws: Workspace, id: string | null): OutlineRow | undefined => {
 const rowEl = (id: string): HTMLElement | null => document.querySelector(`[data-row="${id}"]`);
 
 /**
- * `S` schaltet nur durch den normalen Ablauf. Unklar und Blockiert sind
- * Sonderstatus, die ausdrücklich gesetzt werden – von dort führt `S` zurück
- * auf Offen. (Abweichung vom Prototyp, auf Wunsch.)
+ * Die Leertaste schaltet nur durch den normalen Ablauf. Unklar und Blockiert
+ * sind Sonderstatus, die ausdrücklich gesetzt werden – von dort führt sie
+ * zurück auf Offen. (Abweichung vom Prototyp, auf Wunsch.)
+ *
+ * Auf Wunsch des Nutzers gibt es keine Taste mehr, die unmittelbar auf
+ * „erledigt“ setzt; das frühere `S` ist damit entfallen.
  */
 const STATUS_CYCLE: Status[] = ['open', 'progress', 'done'];
 

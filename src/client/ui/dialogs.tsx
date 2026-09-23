@@ -645,10 +645,6 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <dt>
           <kbd>Leertaste</kbd>
         </dt>
-        <dd>Erledigt umschalten</dd>
-        <dt>
-          <kbd>S</kbd>
-        </dt>
         {/* Abweichung vom Prototyp, auf Wunsch: Unklar und Blockiert nur ausdrücklich. */}
         <dd>Nächster Status: Offen → In Progress → Erledigt</dd>
         <dt>

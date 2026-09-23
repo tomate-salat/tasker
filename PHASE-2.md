@@ -312,9 +312,9 @@ Das Konto selbst (E-Mail, Name, Avatar, Passwort-Hash) lebt in `setting`.
      und Bildschirm auseinander.
    - **Tastatur:** Pfeile/`j`/`k` bewegen die Auswahl, `←/→` klappen, `Enter` legt eine
      Geschwisteraufgabe direkt darunter an (mit `Shift` eine Unteraufgabe), `Tab`/`Shift+Tab` rücken
-     ein und aus, `Alt+↑/↓` sortieren um, `Leertaste` erledigt, `e`/`F2` bearbeitet den Titel in der
-     Zeile, `s` schaltet den Status weiter, `a` archiviert, `Entf` legt in den Papierkorb, `n`
-     oder `/` springt in die Erfassungszeile.
+     ein und aus, `Alt+↑/↓` sortieren um, `Leertaste` schaltet den Status weiter (auch bei
+     Milestones), `e`/`F2` bearbeitet den Titel in der Zeile, `a` archiviert, `Entf` legt in den
+     Papierkorb, `n` oder `/` springt in die Erfassungszeile.
    - **Drag & Drop:** über einer Aufgabe drei Zonen (davor, hinein, danach), über Milestone und
      Gruppe nur „hinein“. Der Platz geht als `index` an den Server, der die Geschwister lückenlos
      neu nummeriert – ganzzahlige Ordnungswerte bleiben ganzzahlig.
@@ -608,8 +608,10 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   das Zeilenmenü; der Fokus steht jeweils auf dem ersten Eintrag.
 - ~~`S`-Reihenfolge~~ **Erledigt:** Offen → In Progress → Erledigt. Bewusste Abweichung vom
   Prototyp auf Wunsch: Unklar und Blockiert sind Sonderstatus und werden nur ausdrücklich gesetzt;
-  `S` führt von dort zurück auf Offen.
-- ~~Leertaste und `S` auf Dokumentationsseiten~~ **Erledigt:** wirken dort nicht mehr.
+  die Leertaste führt von dort zurück auf Offen. Später ebenfalls auf Wunsch: dieses Durchschalten
+  liegt auf der **Leertaste** – `S` ist ersatzlos entfallen, und es gibt keine Taste mehr, die
+  unmittelbar auf „erledigt“ setzt.
+- ~~Leertaste auf Dokumentationsseiten~~ **Erledigt:** wirkt dort nicht.
 - ~~`Esc` schließt immer~~ **Erledigt:** den Inspektor nur bis 1240 px Breite.
 - ~~Menüs ohne Pfeiltasten~~ **Erledigt** (`ctxKey`): ↑/↓ reihum, → bzw. `Enter` öffnet ein
   Untermenü, ← schließt es, `Esc`/`Tab` schließt das Menü. Solange es offen ist, gehören ihm alle

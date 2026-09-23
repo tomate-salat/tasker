@@ -58,8 +58,8 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
     { label: 'Details öffnen', onSelect: () => store.select(t.id) },
     { label: 'Umbenennen', kbd: 'F2', onSelect: () => store.edit(t.id) },
     {
+      // Ohne Tastenkürzel: die Leertaste schaltet durch, sie setzt nichts direkt.
       label: done ? 'Als offen markieren' : 'Als erledigt markieren',
-      kbd: 'Leertaste',
       onSelect: () => void store.patch('task', t.id, { status: done ? 'open' : 'done' }),
     },
     { label: 'Status', sub: statusSub(t) },
