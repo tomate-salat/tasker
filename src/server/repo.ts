@@ -311,6 +311,7 @@ const COLUMN: Record<string, string> = {
   groupId: 'group_id',
   categoryId: 'category_id',
   markId: 'mark_id',
+  coverImageId: 'cover_image_id',
   order: 'sort_order',
   qorder: 'queue_order',
   startDate: 'start_date',
@@ -1730,7 +1731,7 @@ type TaskRow = {
   id: string; ref: number; version: number; project_id: string; parent_id: string | null; milestone_id: string | null;
   group_id: string | null; doc: number; title: string; desc: string; prio: number; status: string;
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
-  ready: number; archived_at: string | null; hidden_by: string | null;
+  ready: number; archived_at: string | null; hidden_by: string | null; cover_image_id: string | null;
 };
 
 const toProject = (r: ProjectRow): Project => ({
@@ -1785,6 +1786,7 @@ const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   categoryId: r.category_id,
   markId: r.mark_id,
   ready: !!r.ready,
+  coverImageId: r.cover_image_id ?? null,
   archivedAt: r.archived_at,
   tags,
   deps,

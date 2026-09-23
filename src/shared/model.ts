@@ -91,6 +91,8 @@ export type Task = {
   markId: string | null;
   /** Fertig vorbereitet – nur an losen Wurzeln: steht dann in „Ready“ statt im Backlog. */
   ready: boolean;
+  /** Titelbild der Karte (Kartenansicht, Versuch) – ID eines Galeriebildes. */
+  coverImageId: string | null;
   archivedAt: string | null;
   tags: string[];
   /** IDs anderer Tasks, von denen dieser abhängt. */

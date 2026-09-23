@@ -47,8 +47,15 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Zeichnungen** gehören zu einem Task und werden über `![[zeichnung:Name]]` in die Beschreibung eingebettet.
 - **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready und Backlog als Karten erscheinen,
   angelehnt an Codecks – ein gemeinsamer Umschalter „Liste/Karten“ in der Reiterleiste, gemerkt pro
-  Gerät. Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild (erstes Bild der
-  Beschreibung), Status, Priorität, Markierung und Fortschrittssegmenten. Den Baum darunter zeigt
+  Gerät. Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
+  Markierung und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
+  Task; Bilder in der Beschreibung zählen nicht): über das Feld „Titelbild“ rechts neben dem Status im Inspektor (ohne Vorschau –
+  die zeigt die Karte; ohne Bild ein Ablagefeld für Ziehen aus Galerie oder vom Rechner, Strg+V und
+  Klick für den Dateidialog, mit Bild nur „Entfernen“), per „Als Titelbild von …“ im
+  Kontextmenü der Galerie oder durch Ziehen auf die Karte. Was vom Rechner kommt, landet in der
+  Galerie im Ordner „Cardimages“ des Projekts (wird bei Bedarf angelegt). Endgültig gelöschte Bilder
+  leeren das Feld. Offen, erst wenn die Karten bleiben: Vorgabe-Hintergründe mit der Kette
+  Projekt → Kategorie → Task. Den Baum darunter zeigt
   der Inspektor an seinem Ende, klebend am unteren Rand und als Ganzes einklappbar (standardmäßig
   offen), immer ab der Wurzel – auch wenn eine Unteraufgabe ausgewählt ist –, mit Auswahl, Ziehen und
   Kontextmenü wie in der Liste. Die Wurzel selbst ist dort nicht einklappbar. Nicht im Prototyp, Wunsch des Nutzers; ob sie

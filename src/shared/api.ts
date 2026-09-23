@@ -79,6 +79,8 @@ export const patchSchemas = {
       order: z.number(),
       categoryId: id.nullable(),
       markId: id.nullable(),
+      /** Titelbild der Karte – ID eines Galeriebildes. */
+      coverImageId: id.nullable(),
       doc: z.boolean(),
       tags: z.array(tag),
       deps: z.array(id),

@@ -71,6 +71,13 @@
       "when": 1790168870912,
       "tag": "0009_cuddly_warstar",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790194929265,
+      "tag": "0010_titelbild",
+      "breakpoints": true
     }
   ]
 }

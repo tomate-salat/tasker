@@ -98,7 +98,8 @@
   opacity: 0.4;
 }
 
-.tcard-cell.dz-child .tcard {
+.tcard-cell.dz-child .tcard,
+.tcard-cell.dz-into .tcard {
   box-shadow: 0 0 0 3px var(--accent);
   background: var(--accent-soft);
 }
@@ -304,4 +305,42 @@
   padding: 0;
   margin: 0 -6px;
   border-top: 1px solid var(--line);
+}
+
+/* ------------------------------------------------- Titelbild im Inspektor */
+
+/* Wie die leeren Werte daneben („Keine“), nur als Ablagefeld. */
+.cover-drop {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.cover-drop:hover,
+.cover-drop:focus-visible {
+  border-color: var(--accent);
+  color: var(--muted);
+  outline: none;
+}
+
+/* Beim Ziehen eines Bildes über die Zeile – auch zum Ersetzen. */
+.cover-val.dz-on .prop {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Status und Titelbild teilen sich eine Zeile über die volle Breite: der
+   Status behält seine natürliche Breite, das Titelbild rückt nach rechts und
+   bricht bei schmalem Inspektor lieber um, als den Status zu quetschen. */
+.status-line {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 20px;
+}
+
+.status-line > .m-row[data-r='cover'] {
+  margin-left: auto;
 }

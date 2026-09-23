@@ -157,6 +157,11 @@ export const tasks = sqliteTable(
      * unter einer anderen Aufgabe ist es immer aus.
      */
     ready: integer('ready', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Titelbild der Karte (Kartenansicht, Versuch). Wie beim Bild selbst ohne
+     * Fremdschlüssel: das endgültige Löschen eines Bildes leert das Feld.
+     */
+    coverImageId: text('cover_image_id'),
     /** Gesetzt nur beim ausdrücklich archivierten Eintrag. */
     archivedAt: text('archived_at'),
     /**

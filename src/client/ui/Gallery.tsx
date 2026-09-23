@@ -6,6 +6,7 @@ import { dragSource, dropTarget, useZone } from './dnd.js';
 import { appendImages, hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
 import { useMenu, type MenuItem } from './Menu.js';
+import { setCover } from './Cards.js';
 
 /**
  * Die Galerie: ein Bestand wie das Archiv, keine Liste von Aufgaben. Sie zeigt
@@ -191,6 +192,18 @@ export function Gallery() {
           if (open) void appendImages(openKind, open, list);
         },
       },
+      // Karten: nur in der Kartenansicht, nur für einen Task und genau ein Bild.
+      ...(state.layout === 'cards' && openTask && !ws?.isDoc(openTask)
+        ? [
+            {
+              label: `Als Titelbild von „${openTask.title || 'Ohne Titel'}“`,
+              disabled: list.length !== 1,
+              onSelect: () => {
+                if (list[0]) void setCover(openTask, list[0].id);
+              },
+            } as MenuItem,
+          ]
+        : []),
       { label: 'In Ordner verschieben', sub: folderTargets((to) => void sortIntoFolder(ids, to)) },
       { sep: true },
       { label: 'Alle auswählen', onSelect: () => setImageSel(shown.map((b) => b.id)) },

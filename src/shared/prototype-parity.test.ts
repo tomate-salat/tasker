@@ -102,6 +102,7 @@ function toData(d: Dump['data']): Data {
       // Im Prototyp steht eine lose Aufgabe mit Markierung in der smarten Gruppe –
       // hier heißt das: ready (die smarten Gruppen stehen im Reiter „Ready“).
       ready: String(t['group'] ?? '').startsWith('k:'),
+      coverImageId: null,
       archivedAt: (t['archived'] as string | null) ?? null,
       tags: t['tags'] as string[],
       deps: t['deps'] as string[],

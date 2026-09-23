@@ -78,6 +78,7 @@ export class Builder {
       categoryId: null,
       markId: null,
       ready: false,
+      coverImageId: null,
       archivedAt: null,
       tags: [],
       deps: [],

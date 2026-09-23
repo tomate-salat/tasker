@@ -361,6 +361,14 @@ export function usage(ctx: DbCtx): Map<string, Usage> {
     }
   }
 
+  // Karten: ein Titelbild ist auch eine Verwendung.
+  const covers = ctx.sqlite
+    .prepare('SELECT id, title, archived_at, cover_image_id FROM task WHERE cover_image_id IS NOT NULL')
+    .all() as (DescRow & { cover_image_id: string })[];
+  for (const r of covers) {
+    add(r.cover_image_id, r.archived_at ? 'archived' : 'live', { kind: 'task', id: r.id, title: r.title });
+  }
+
   // Der Papierkorb: die gelöschten Zeilen liegen als JSON im Eintrag.
   const entries = ctx.sqlite
     .prepare("SELECT payload FROM trash WHERE kind != 'image'")
@@ -489,6 +497,12 @@ export function stripRefs(ctx: DbCtx, imageId: string): number {
 /** Endgültig – hier sind die Bytes wirklich weg, und die Texte sagen es. */
 export function purgeImage(ctx: DbCtx, id: string): void {
   stripRefs(ctx, id);
+  // Karten: ein Titelbild, das es nicht mehr gibt, fällt einfach weg.
+  ctx.sqlite
+    .prepare(
+      'UPDATE task SET cover_image_id = NULL, updated_at = ?, version = version + 1 WHERE cover_image_id = ?',
+    )
+    .run(new Date().toISOString(), id);
   ctx.sqlite.prepare('DELETE FROM image WHERE id = ?').run(id);
 }
 

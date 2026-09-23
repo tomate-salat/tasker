@@ -17,7 +17,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
-import { cardsOn, Hierarchy, hierarchyRoot } from './Cards.js';
+import { cardsOn, CoverRow, Hierarchy, hierarchyRoot } from './Cards.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dropTarget, useDrag, useZone } from './dnd.js';
 import { DrawingEmbed, useDrawings } from './Drawings.js';
@@ -276,9 +276,13 @@ function TaskHead({
   return (
     <>
       {!doc && (
-        <MetaRow k="status" label="Status">
-          <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
-        </MetaRow>
+        // Karten: rechts neben dem Status steht das Titelbild (nur in der Kartenansicht).
+        <div className="status-line">
+          <MetaRow k="status" label="Status">
+            <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
+          </MetaRow>
+          <CoverRow task={task} />
+        </div>
       )}
 
       {!doc && (cl.total > 0 || kids.length > 0) && (

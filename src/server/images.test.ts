@@ -24,7 +24,7 @@ import {
   untrashImage,
   usage,
 } from './images.js';
-import { archive, create, expireTrash, loadTrash, purgeTrash, remove, restoreTrash } from './repo.js';
+import { archive, create, expireTrash, loadTrash, patch, purgeTrash, remove, restoreTrash } from './repo.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tasker-bilder-'));
 const opened: DbCtx[] = [];
@@ -239,6 +239,23 @@ describe('Bilder löschen', () => {
     // Wiederhergestellt steht dort der Hinweis und kein kaputtes Bild.
     restoreTrash(ctx, eintrag.id);
     assert.equal(readDesc('task', t.id), GONE_NOTE);
+  });
+
+  it('ein Titelbild zählt als Verwendung und fällt beim Entfernen weg', () => {
+    const p = mkProject();
+    const bild = put('titel');
+    const t = mkTask({ projectId: p.id, title: 'Karte' });
+    const gesetzt = patch(ctx, 'task', t.id, t.version, { coverImageId: bild.id }) as Task;
+    assert.equal(gesetzt.coverImageId, bild.id);
+    assert.deepEqual(usage(ctx).get(bild.id)?.live.map((e) => e.id), [t.id]);
+
+    purgeImage(ctx, bild.id);
+    const row = ctx.sqlite
+      .prepare('SELECT cover_image_id, version FROM task WHERE id = ?')
+      .get(t.id) as { cover_image_id: string | null; version: number };
+    assert.equal(row.cover_image_id, null);
+    // Die Version zählt hoch, damit ein offener Tab nicht auf altem Stand speichert.
+    assert.equal(row.version, gesetzt.version + 1);
   });
 
   it('lässt andere Bilder im selben Text unberührt', () => {

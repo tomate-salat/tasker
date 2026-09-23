@@ -1,9 +1,13 @@
+import { useRef, useState } from 'react';
 import { checklist } from '@shared/checklist.js';
 import { isDone, type Task } from '@shared/model.js';
 import type { OutlineRow, OutlineView } from '@shared/outline.js';
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
+import { api, imageUrl } from '../api.js';
 import { useStore, type View } from '../store.js';
+import { hasFiles, refreshGallery } from './imageDrop.js';
+import { ImageRejected, imagesIn, prepareImage } from './imageFile.js';
 import { addChild } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
@@ -106,21 +110,194 @@ export function CardGrid({
   );
 }
 
-/** Erstes Bild der Beschreibung – als Titelbild, in der kleinen Fassung. */
-const IMAGE_RE = /!\[[^\]]*\]\((\/api\/bilder\/[^)\s?]+)[^)]*\)/;
-const coverOf = (desc: string): string | null => {
-  const m = IMAGE_RE.exec(desc);
-  return m ? `${m[1]}?v=klein` : null;
-};
+/* ------------------------------------------------------------ Titelbild */
+
+/**
+ * Das Titelbild einer Karte, in der kleinen Fassung. Nur das ausdrücklich
+ * gesetzte – Bilder in der Beschreibung zählen nicht (Wunsch des Nutzers).
+ * Später sollen hier Vorgaben greifen: Task → Kategorie → Projekt.
+ */
+const coverOf = (task: Task): string | null =>
+  task.coverImageId ? imageUrl(task.coverImageId, 'klein') : null;
+
+/** Der Ordner der Galerie, in dem hochgeladene Titelbilder landen – je Projekt. */
+const COVER_FOLDER = 'Cardimages';
+
+/** Setzt oder entfernt das Titelbild (`null`). */
+export async function setCover(task: Task, imageId: string | null): Promise<void> {
+  const store = useStore.getState();
+  await store.patch('task', task.id, { coverImageId: imageId });
+  // Die Galerie soll die neue Verwendung sehen.
+  refreshGallery();
+  store.say(
+    imageId
+      ? `Titelbild für „${task.title || 'Ohne Titel'}“ gesetzt`
+      : `Titelbild von „${task.title || 'Ohne Titel'}“ entfernt`,
+  );
+}
+
+/** Der Ordner „Cardimages“ oben im Projekt – legt ihn an, wenn es ihn nicht gibt. */
+async function coverFolder(projectId: string): Promise<string> {
+  const find = (): string | undefined =>
+    useStore
+      .getState()
+      .folders.find((f) => f.projectId === projectId && !f.parentId && f.name === COVER_FOLDER)?.id;
+  // Ohne geladene Galerie kennt der Speicher die Ordner noch nicht.
+  if (!useStore.getState().imagesLoaded) await useStore.getState().loadImages();
+  const known = find();
+  if (known) return known;
+  const folder = await api.addFolder({ projectId, parentId: null, name: COVER_FOLDER });
+  await useStore.getState().loadImages();
+  return folder.id;
+}
+
+/**
+ * Eine Datei vom Rechner (gezogen oder eingefügt) wird zum Titelbild: wie jedes
+ * Bild verkleinert und als WebP hochgeladen, abgelegt in „Cardimages“.
+ */
+export async function uploadCover(task: Task, list: FileList | File[] | null | undefined): Promise<void> {
+  const file = imagesIn(list)[0];
+  if (!file) return;
+  const store = useStore.getState();
+  store.say('Titelbild wird vorbereitet …');
+  try {
+    const { imageMaxKb, imageMaxEdge } = store.settings;
+    const prepared = await prepareImage(file, { maxKb: imageMaxKb, maxEdge: imageMaxEdge });
+    const folderId = await coverFolder(task.projectId);
+    const meta = await api.addImage({ ...prepared, projectId: task.projectId, folderId });
+    const current = useStore.getState().ws?.task(task.id) ?? task;
+    await setCover(current, meta.id);
+  } catch (e) {
+    store.say(
+      e instanceof ImageRejected || e instanceof Error ? e.message : 'Das Bild konnte nicht hochgeladen werden.',
+    );
+  }
+}
+
+/** Dateien vom Rechner als Ablage: hervorheben, beim Loslassen hochladen. */
+function useFileDrop(task: Task): {
+  over: boolean;
+  events: Pick<React.HTMLAttributes<HTMLElement>, 'onDragOver' | 'onDragLeave' | 'onDrop'>;
+} {
+  const [over, setOver] = useState(false);
+  return {
+    over,
+    events: {
+      onDragOver: (e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        setOver(true);
+      },
+      onDragLeave: (e) => {
+        // Nur wenn der Zeiger das Element ganz verlässt, nicht beim Wechsel aufs Kind.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      },
+      onDrop: (e) => {
+        setOver(false);
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        void uploadCover(task, e.dataTransfer.files);
+      },
+    },
+  };
+}
+
+/** Führt die Ablage von Dateien und die aus der Galerie auf einem Element zusammen. */
+function mergeDrop(
+  files: ReturnType<typeof useFileDrop>['events'],
+  gallery: ReturnType<typeof dropTarget>,
+): { onDragOver: (e: React.DragEvent<HTMLElement>) => void; onDrop: (e: React.DragEvent<HTMLElement>) => void } {
+  return {
+    onDragOver: (e) => {
+      if (hasFiles(e.dataTransfer)) files.onDragOver?.(e);
+      else gallery.onDragOver(e);
+    },
+    onDrop: (e) => {
+      if (hasFiles(e.dataTransfer)) files.onDrop?.(e);
+      else gallery.onDrop(e);
+    },
+  };
+}
+
+/**
+ * Die Zeile „Titelbild“ im Inspektor – nur in der Kartenansicht. Eine Vorschau
+ * gibt es bewusst nicht, das Bild sieht man an der Karte (Wunsch des Nutzers).
+ * Ohne Titelbild steht hier ein Ablagefeld: ein Bild aus der Galerie oder vom
+ * Rechner daraufziehen, mit Strg+V einfügen (das Feld braucht dafür den Fokus)
+ * oder klicken und eine Datei wählen. Mit Titelbild steht hier nur „Entfernen“;
+ * die Zeile nimmt aber weiter ein Bild an und ersetzt damit das alte.
+ */
+export function CoverRow({ task }: { task: Task }) {
+  const on = useStore((s) => cardsOn(s));
+  const file = useRef<HTMLInputElement>(null);
+  const target = { type: 'cover', task } as const;
+  const zone = useZone(target);
+  const drop = useFileDrop(task);
+  if (!on) return null;
+
+  return (
+    <div className="m-row" data-r="cover">
+      <span className="m-lbl">Titelbild</span>
+      <div
+        className={`m-val cover-val ${zone || drop.over ? 'dz-on' : ''}`}
+        onDragLeave={drop.events.onDragLeave}
+        {...mergeDrop(drop.events, dropTarget(target))}
+      >
+        {task.coverImageId ? (
+          <button className="prop" title="Titelbild entfernen" onClick={() => void setCover(task, null)}>
+            Entfernen
+          </button>
+        ) : (
+          <div
+            className="prop empty cover-drop"
+            role="button"
+            tabIndex={0}
+            title="Bild aus der Galerie oder vom Rechner hierher ziehen, mit Strg+V einfügen oder klicken"
+            onClick={() => file.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                file.current?.click();
+              }
+            }}
+            onPaste={(e) => {
+              if (!imagesIn(e.clipboardData.files).length) return;
+              e.preventDefault();
+              void uploadCover(task, e.clipboardData.files);
+            }}
+          >
+            + Bild
+          </div>
+        )}
+        <input
+          ref={file}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            void uploadCover(task, e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- Karte */
 
 function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu }) {
   const { selected, select, editing, multi, toggleMulti, rangeMulti, clearMulti } = useStore();
-  const target = { type: 'task', task } as const;
+  const target = { type: 'task', task, card: true } as const;
   const zone = useZone(target);
+  const files = useFileDrop(task);
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
   const mark = ws.mark(task.markId);
-  const cover = coverOf(task.desc);
+  const cover = coverOf(task);
   const segments = statusSegments(ws, task);
   const cl = checklist(task.desc);
   // Ist eine Unteraufgabe dieser Karte ausgewählt, bleibt die Karte markiert.
@@ -142,7 +319,13 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
     // Die Zelle um die Karte ist das Ablageziel und füllt den Abstand zur
     // nächsten mit aus – ohne tote Lücken springt beim Ziehen weder der Zeiger
     // auf „verboten“ noch die Einfügemarke hin und her.
-    <div data-axis="x" className={`tcard-cell ${zone ? `dz-${zone}` : ''}`} {...dropTarget(target)}>
+    // Eine Datei vom Rechner auf der Karte wird ihr Titelbild.
+    <div
+      data-axis="x"
+      className={`tcard-cell ${zone ? `dz-${zone}` : ''} ${files.over ? 'dz-into' : ''}`}
+      onDragLeave={files.events.onDragLeave}
+      {...mergeDrop(files.events, dropTarget(target))}
+    >
     <div
       data-row={task.id}
       className={[

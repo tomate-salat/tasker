@@ -16,6 +16,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { folderPath, useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
 import { appendImages } from './imageDrop.js';
+import { setCover } from './Cards.js';
 
 /**
  * Ziehen und Ablegen, Regeln wie im Prototyp (`dragover`/`applyDrop`):
@@ -59,7 +60,10 @@ type GroupRowT = Extract<OutlineRow, { type: 'group' }>;
 type EmptyRowT = Extract<OutlineRow, { type: 'empty' }>;
 
 export type Target =
-  | { type: 'task'; task: Task }
+  /** `card`: eine Karte – nimmt zusätzlich ein Galeriebild als Titelbild. */
+  | { type: 'task'; task: Task; card?: boolean }
+  /** Karten: das Feld „Titelbild“ im Inspektor, nimmt ein Galeriebild. */
+  | { type: 'cover'; task: Task }
   | { type: 'milestone'; milestone: Milestone }
   | { type: 'group'; row: GroupRowT }
   | { type: 'empty'; row: EmptyRowT }
@@ -93,6 +97,8 @@ const keyOf = (t: Target): string => {
       return `proj:${t.project.id}`;
     case 'dep':
       return `dep:${t.dir}:${t.item.id}`;
+    case 'cover':
+      return `cover:${t.task.id}`;
     case 'desc':
       return `desc:${t.item.id}`;
     case 'folder':
@@ -318,6 +324,10 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
     const ahnen = folderPath(target.id).map((f) => f.id);
     return target.id === drag.id || ahnen.includes(drag.id) ? null : 'into';
   }
+  // Karten: ein Galeriebild auf Karte oder Titelbild-Feld wird das Titelbild.
+  if (target.type === 'cover' || (target.type === 'task' && target.card && drag.kind === 'image')) {
+    return drag.kind === 'image' ? 'into' : null;
+  }
   if (drag.kind === 'image' || drag.kind === 'folder') return null;
 
   switch (drag.kind) {
@@ -357,6 +367,10 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
   if (!ws) return;
   if (target.type === 'dep') return dropDep(drag, target);
   if (target.type === 'desc') return dropImage(drag, target);
+  if (drag.kind === 'image' && (target.type === 'cover' || target.type === 'task')) {
+    const id = drag.ids[0];
+    return id ? setCover(target.task, id) : undefined;
+  }
   if (target.type === 'folder') {
     const store = useStore.getState();
     if (drag.kind === 'folder') return store.moveFolder(drag.id, target.id);
