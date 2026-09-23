@@ -2085,9 +2085,19 @@ button.prop:hover {
   padding: 4px 6px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--ink);
   font-size: 12px;
+}
+
+/*
+ * Die aufgeklappte Liste zeichnet der Browser selbst. Ohne eigene Farben nimmt
+ * er dafür seine hellen Vorgaben – im dunklen Erscheinungsbild ist das kaum zu
+ * lesen. Es sind die einzigen Auswahlfelder der Anwendung.
+ */
+.gal-age option {
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .gal-sweep {
@@ -2114,7 +2124,7 @@ button.prop:hover {
   margin: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface);
   overflow: hidden;
   cursor: grab;
 }
