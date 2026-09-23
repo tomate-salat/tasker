@@ -64,6 +64,13 @@
       "when": 1790153139486,
       "tag": "0008_woozy_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790168870912,
+      "tag": "0009_cuddly_warstar",
+      "breakpoints": true
     }
   ]
 }

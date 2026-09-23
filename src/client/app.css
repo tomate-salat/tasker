@@ -2178,6 +2178,82 @@ button.prop:hover {
   cursor: grab;
 }
 
+/* Die Spur über der Leiste: wo man steht und der Weg zurück. */
+.gal-path {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.gal-crumb-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.gal-path .sep {
+  color: var(--faint);
+}
+
+.gal-crumb {
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.gal-crumb:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.gal-crumb.on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Auch die Stufen nehmen Ablagen an – so hebt man etwas mehrere Ebenen hoch. */
+.gal-crumb.dz-into {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* Ein Ordner ist eine Kachel wie ein Bild, nur ohne Vorschau. */
+.gal-folder {
+  cursor: pointer;
+}
+
+.gal-folder-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  background: var(--bg);
+  font-size: 40px;
+}
+
+.gal-folder.dz-into {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.gal-folder.dz-into .gal-folder-face {
+  background: var(--accent-soft);
+}
+
+/* Unter einem Filter sind die Ordner weg – das gehört gesagt. */
+.gal-hint {
+  margin-bottom: 10px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
 /* Ausgewählt wie eine Zeile in der Liste: Rahmen in der Akzentfarbe. */
 .gal-item.sel {
   border-color: var(--accent);

@@ -23,6 +23,7 @@ import {
   type Bootstrap,
   type DrawingOwner,
   type ImageEntry,
+  type ImageFolder,
   type Settings,
   type TrashList,
 } from './api.js';
@@ -206,6 +207,17 @@ type State = {
   setImageSel: (ids: string[]) => void;
   toggleImageSel: (id: string) => void;
   clearImageSel: () => void;
+
+  /** Die Ordner der Galerie und der, in dem sie gerade steht. */
+  folders: ImageFolder[];
+  folderAt: string | null;
+  openFolder: (id: string | null) => void;
+  addFolder: (name: string, projectId: string | null, parentId: string | null) => Promise<void>;
+  renameFolder: (id: string, name: string) => Promise<void>;
+  /** `null` als Ziel heißt: ganz nach oben. */
+  moveFolder: (id: string, parentId: string | null) => Promise<void>;
+  deleteFolder: (id: string) => Promise<void>;
+  sortIntoFolder: (ids: string[], folderId: string | null) => Promise<void>;
 
   patch: (kind: Kind, id: string, changes: Record<string, unknown>) => Promise<void>;
   /** Legt eine Aufgabe an und gibt ihre ID zurück – für „danach gleich umbenennen“. */
@@ -1154,8 +1166,16 @@ export const useStore = create<State>((set, get) => ({
 
   loadImages: async () => {
     try {
-      const { images } = await api.images();
-      set({ images, imagesLoaded: true });
+      const { images, folders } = await api.images();
+      // Stand der Ordner gerade nicht mehr da (anderer Tab), steht die Galerie
+      // sonst in einem Ordner, den es nicht gibt, und wirkt leer.
+      const at = get().folderAt;
+      set({
+        images,
+        folders,
+        imagesLoaded: true,
+        folderAt: at && folders.some((f) => f.id === at) ? at : null,
+      });
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Bilder konnten nicht geladen werden' });
     }
@@ -1214,6 +1234,87 @@ export const useStore = create<State>((set, get) => ({
     if (get().imageSel.size) set({ imageSel: new Set() });
   },
 
+  /* ---------------------------------------------------- Ordner der Galerie */
+
+  folders: [],
+  folderAt: null,
+
+  // Beim Wechsel fällt die Auswahl: sie zeigte auf Bilder, die man nicht mehr sieht.
+  openFolder: (folderAt) => set({ folderAt, imageSel: new Set() }),
+
+  addFolder: async (name, projectId, parentId) => {
+    try {
+      const folder = await api.addFolder({ projectId, parentId, name });
+      await get().loadImages();
+      set({ toast: `Ordner „${folder.name}“ angelegt`, toastUndo: false, toastLink: null });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Ordner anlegen fehlgeschlagen', toastUndo: false });
+    }
+  },
+
+  renameFolder: async (id, name) => {
+    try {
+      await api.patchFolder(id, { name });
+      await get().loadImages();
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Umbenennen fehlgeschlagen', toastUndo: false });
+    }
+  },
+
+  moveFolder: async (id, parentId) => {
+    const before = get().folders.find((f) => f.id === id)?.parentId ?? null;
+    try {
+      const folder = await api.patchFolder(id, { parentId });
+      await get().loadImages();
+      linked(`„${folder.name}“ verschoben`, 'Rückgängig', () => void get().moveFolder(id, before));
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Verschieben fehlgeschlagen', toastUndo: false });
+    }
+  },
+
+  /**
+   * Der Inhalt rückt dabei eine Ebene höher – es geht nichts verloren, deshalb
+   * gibt es hier weder Rückfrage noch Papierkorb.
+   */
+  deleteFolder: async (id) => {
+    const name = get().folders.find((f) => f.id === id)?.name ?? 'Ordner';
+    try {
+      await api.deleteFolder(id);
+      if (get().folderAt === id) get().openFolder(get().folders.find((f) => f.id === id)?.parentId ?? null);
+      await get().loadImages();
+      set({ toast: `Ordner „${name}“ aufgelöst – der Inhalt liegt eine Ebene höher`, toastUndo: false, toastLink: null });
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen', toastUndo: false });
+    }
+  },
+
+  sortIntoFolder: async (ids, folderId) => {
+    if (!ids.length) return;
+    // Wo sie herkamen – je Bild, denn eine Auswahl kann aus mehreren Ordnern stammen.
+    const before = new Map(get().images.filter((b) => ids.includes(b.id)).map((b) => [b.id, b.folderId]));
+    const ziel = folderId ? `„${get().folders.find((f) => f.id === folderId)?.name ?? 'Ordner'}“` : 'ganz nach oben';
+    try {
+      await api.sortIntoFolder(ids, folderId);
+      await get().loadImages();
+      linked(
+        `${ids.length === 1 ? 'Bild' : `${ids.length} Bilder`} ${folderId ? `in ${ziel} gelegt` : 'nach oben gelegt'}`,
+        'Rückgängig',
+        () => {
+          void (async () => {
+            // Je Herkunft ein Aufruf – so landet jedes Bild wieder dort, wo es lag.
+            const groups = new Map<string | null, string[]>();
+            for (const [id, folder] of before) groups.set(folder, [...(groups.get(folder) ?? []), id]);
+            for (const [folder, list] of groups) await api.sortIntoFolder(list, folder);
+            await get().loadImages();
+            set({ toast: 'Zurückgelegt', toastUndo: false, toastLink: null });
+          })();
+        },
+      );
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Verschieben fehlgeschlagen', toastUndo: false });
+    }
+  },
+
   restoreImage: async (id) => {
     try {
       await api.restoreImage(id);
@@ -1232,6 +1333,26 @@ const inWeeks = (weeks: number): string => {
   d.setDate(d.getDate() + Math.round(weeks * 7));
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 };
+
+/**
+ * Die Kette vom obersten Ordner bis zu diesem – für die Spur über dem Raster
+ * und für die Frage, ob ein Ordner in sich selbst wandern soll.
+ *
+ * Die Schleife zählt mit: eine Kette, die sich schließt, wäre in der Datenbank
+ * zwar nicht vorgesehen, hier aber eine Endlosschleife.
+ */
+export function folderPath(id: string | null, list?: ImageFolder[]): ImageFolder[] {
+  const folders = list ?? useStore.getState().folders;
+  const out: ImageFolder[] = [];
+  let at = id;
+  while (at && out.length < 100) {
+    const folder = folders.find((f) => f.id === at);
+    if (!folder) break;
+    out.unshift(folder);
+    at = folder.parentId;
+  }
+  return out;
+}
 
 /** Wo etwas liegt, in Worten – `whereLabel` aus dem Prototyp. */
 export function whereLabel(ws: Workspace, t: Task): string {

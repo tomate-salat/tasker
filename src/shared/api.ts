@@ -229,6 +229,29 @@ export type TrashRow = z.infer<typeof trashRow>;
 /** „Endgültig löschen“ für einen oder mehrere Einträge („Papierkorb leeren“). */
 export const purgeBody = z.object({ ids: z.array(id).min(1).max(10_000) });
 
+/* ---------------------------------------------------- Ordner der Galerie */
+
+const folderName = z.string().min(1).max(120);
+
+export const folderCreate = z.object({
+  projectId: id.nullable().default(null),
+  parentId: id.nullable().default(null),
+  name: folderName,
+});
+
+export const folderPatch = z
+  .object({ name: folderName, parentId: id.nullable() })
+  .partial()
+  .refine((b) => b.name !== undefined || b.parentId !== undefined, {
+    message: 'Nichts zu ändern',
+  });
+
+/** Bilder in einen Ordner legen – `folderId: null` heißt: ganz nach oben. */
+export const folderSort = z.object({
+  ids: z.array(id).min(1).max(1000),
+  folderId: id.nullable(),
+});
+
 export const stepSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('patch'),

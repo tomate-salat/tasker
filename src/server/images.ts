@@ -18,6 +18,7 @@ import type { DbCtx } from './db.js';
 export type ImageMeta = {
   id: string;
   projectId: string | null;
+  folderId: string | null;
   name: string;
   mime: string;
   width: number;
@@ -30,6 +31,7 @@ export type ImageMeta = {
 type Row = {
   id: string;
   project_id: string | null;
+  folder_id: string | null;
   name: string;
   mime: string;
   width: number;
@@ -39,11 +41,13 @@ type Row = {
   deleted_at: string | null;
 };
 
-const META_COLUMNS = 'id, project_id, name, mime, width, height, size, created_at, deleted_at';
+const META_COLUMNS =
+  'id, project_id, folder_id, name, mime, width, height, size, created_at, deleted_at';
 
 const toMeta = (r: Row): ImageMeta => ({
   id: r.id,
   projectId: r.project_id,
+  folderId: r.folder_id,
   name: r.name,
   mime: r.mime,
   width: r.width,
@@ -59,6 +63,8 @@ export const hashOf = (bytes: Buffer): string =>
 
 export type NewImage = {
   projectId: string | null;
+  /** Der Ordner, in dem die Galerie gerade steht – sonst ganz oben. */
+  folderId?: string | null;
   name: string;
   mime: string;
   width: number;
@@ -89,12 +95,13 @@ export function putImage(ctx: DbCtx, input: NewImage): ImageMeta {
 
     ctx.sqlite
       .prepare(
-        `INSERT INTO image (id, project_id, name, mime, width, height, size, bytes, thumb)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO image (id, project_id, folder_id, name, mime, width, height, size, bytes, thumb)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.projectId,
+        input.folderId ?? null,
         input.name,
         input.mime,
         input.width,
@@ -103,7 +110,9 @@ export function putImage(ctx: DbCtx, input: NewImage): ImageMeta {
         input.bytes,
         input.thumb,
       );
-    return ctx.sqlite.prepare(`SELECT ${META_COLUMNS} FROM image WHERE id = ?`).get(id) as Row;
+    // Durch `toMeta`, wie der Fall oben: sonst ginge die rohe Zeile mit ihren
+    // Spaltennamen (`project_id`, `folder_id` …) an den Browser.
+    return toMeta(ctx.sqlite.prepare(`SELECT ${META_COLUMNS} FROM image WHERE id = ?`).get(id) as Row);
   })() as ImageMeta;
 }
 
@@ -132,6 +141,154 @@ export const getImage = (ctx: DbCtx, id: string): ImageMeta | null => {
     | undefined;
   return row ? toMeta(row) : null;
 };
+
+/* ----------------------------------------------------------------- Ordner */
+
+/**
+ * Ordner sind eine reine Ablage: sie gehören einem Projekt, dürfen ineinander
+ * liegen, und ein Bild liegt in genau einem oder in keinem. Verwendungen und
+ * Filter kümmern sich nicht um sie – ein Bild bleibt auffindbar, egal wo es
+ * abgelegt ist.
+ */
+export type FolderMeta = {
+  id: string;
+  projectId: string | null;
+  parentId: string | null;
+  name: string;
+  createdAt: string;
+};
+
+type FolderRow = {
+  id: string;
+  project_id: string | null;
+  parent_id: string | null;
+  name: string;
+  created_at: string;
+};
+
+const toFolder = (r: FolderRow): FolderMeta => ({
+  id: r.id,
+  projectId: r.project_id,
+  parentId: r.parent_id,
+  name: r.name,
+  createdAt: r.created_at,
+});
+
+const FOLDER_COLUMNS = 'id, project_id, parent_id, name, created_at';
+
+export const listFolders = (ctx: DbCtx): FolderMeta[] =>
+  (
+    ctx.sqlite.prepare(`SELECT ${FOLDER_COLUMNS} FROM image_folder ORDER BY name`).all() as FolderRow[]
+  ).map(toFolder);
+
+export const getFolder = (ctx: DbCtx, id: string): FolderMeta | null => {
+  const row = ctx.sqlite.prepare(`SELECT ${FOLDER_COLUMNS} FROM image_folder WHERE id = ?`).get(id) as
+    | FolderRow
+    | undefined;
+  return row ? toFolder(row) : null;
+};
+
+export function addFolder(
+  ctx: DbCtx,
+  input: { id: string; projectId: string | null; parentId: string | null; name: string },
+): FolderMeta {
+  ctx.sqlite
+    .prepare('INSERT INTO image_folder (id, project_id, parent_id, name) VALUES (?, ?, ?, ?)')
+    .run(input.id, input.projectId, input.parentId, input.name);
+  return getFolder(ctx, input.id) as FolderMeta;
+}
+
+/** Die IDs eines Ordners samt allem, was darin liegt – für Umhängen und Löschen. */
+export function folderTree(ctx: DbCtx, id: string): string[] {
+  const kids = ctx.sqlite.prepare('SELECT id FROM image_folder WHERE parent_id = ?');
+  const out: string[] = [];
+  const walk = (at: string): void => {
+    out.push(at);
+    for (const r of kids.all(at) as { id: string }[]) walk(r.id);
+  };
+  walk(id);
+  return out;
+}
+
+export function renameFolder(ctx: DbCtx, id: string, name: string): FolderMeta | null {
+  const res = ctx.sqlite
+    .prepare('UPDATE image_folder SET name = ?, updated_at = ?, version = version + 1 WHERE id = ?')
+    .run(name, new Date().toISOString(), id);
+  return res.changes ? getFolder(ctx, id) : null;
+}
+
+/**
+ * Umhängen. Ein Ordner darf nicht in sich selbst wandern – sonst hinge der
+ * ganze Ast danach nirgends mehr und wäre in der Galerie nicht mehr erreichbar.
+ */
+export function moveFolder(ctx: DbCtx, id: string, parentId: string | null): FolderMeta | null {
+  return ctx.sqlite.transaction(() => {
+    const self = getFolder(ctx, id);
+    if (!self) return null;
+    const tree = folderTree(ctx, id);
+    if (parentId && tree.includes(parentId)) return null;
+    const parent = parentId ? getFolder(ctx, parentId) : null;
+    if (parentId && !parent) return null;
+
+    const at = new Date().toISOString();
+    ctx.sqlite
+      .prepare('UPDATE image_folder SET parent_id = ?, updated_at = ?, version = version + 1 WHERE id = ?')
+      .run(parentId, at, id);
+
+    // Das Projekt des neuen Platzes gilt für den ganzen Ast, nicht nur für den
+    // obersten Ordner – sonst lägen darin Bilder eines anderen Projekts.
+    const project = parent ? parent.projectId : self.projectId;
+    if (parent && project !== self.projectId) {
+      const list = tree.map(() => '?').join(', ');
+      ctx.sqlite.prepare(`UPDATE image_folder SET project_id = ? WHERE id IN (${list})`).run(project, ...tree);
+      ctx.sqlite.prepare(`UPDATE image SET project_id = ? WHERE folder_id IN (${list})`).run(project, ...tree);
+    }
+    return getFolder(ctx, id);
+  })() as FolderMeta | null;
+}
+
+/**
+ * Ein Ordner ist nur eine Hülle: Löschen wirft nichts weg, sondern hebt seinen
+ * Inhalt eine Ebene höher. Deshalb geht er auch nicht in den Papierkorb – es
+ * gäbe dort nichts zurückzuholen als den Namen.
+ */
+export function deleteFolder(ctx: DbCtx, id: string): boolean {
+  return ctx.sqlite.transaction(() => {
+    const folder = getFolder(ctx, id);
+    if (!folder) return false;
+    ctx.sqlite.prepare('UPDATE image SET folder_id = ? WHERE folder_id = ?').run(folder.parentId, id);
+    ctx.sqlite
+      .prepare('UPDATE image_folder SET parent_id = ? WHERE parent_id = ?')
+      .run(folder.parentId, id);
+    ctx.sqlite.prepare('DELETE FROM image_folder WHERE id = ?').run(id);
+    return true;
+  })() as boolean;
+}
+
+/**
+ * Bilder in einen Ordner legen. Sie nehmen dabei dessen Projekt an: unter „Alle
+ * Projekte“ liegen die Ordner mehrerer Projekte nebeneinander, und ein Bild,
+ * das in einem fremden Ordner läge, wäre im eigenen Projekt nicht mehr zu sehen.
+ */
+export function moveImages(ctx: DbCtx, ids: string[], folderId: string | null): number {
+  const folder = folderId ? getFolder(ctx, folderId) : null;
+  if (folderId && !folder) return 0;
+  const at = new Date().toISOString();
+  return ctx.sqlite.transaction(() => {
+    let n = 0;
+    for (const id of ids) {
+      const res = ctx.sqlite
+        .prepare(
+          folder
+            ? 'UPDATE image SET folder_id = ?, project_id = ?, updated_at = ? WHERE id = ?'
+            : 'UPDATE image SET folder_id = ?, updated_at = ? WHERE id = ?',
+        )
+        .run(...(folder ? [folderId, folder.projectId, at, id] : [null, at, id]));
+      n += res.changes;
+    }
+    return n;
+  })() as number;
+}
 
 /* ------------------------------------------------------------ Verwendungen */
 

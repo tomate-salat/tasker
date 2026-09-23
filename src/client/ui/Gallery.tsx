@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { ImageEntry, ImageUse } from '../api.js';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ImageEntry, ImageFolder, ImageUse } from '../api.js';
 import { imageUrl } from '../api.js';
-import { scopeProjectIds, useStore } from '../store.js';
-import { dragSource } from './dnd.js';
+import { folderPath, scopeProjectIds, useStore } from '../store.js';
+import { dragSource, dropTarget, useZone } from './dnd.js';
 import { appendImages, hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
 import { useMenu, type MenuItem } from './Menu.js';
@@ -56,6 +56,7 @@ export function Gallery() {
   const state = useStore();
   const { images, imagesLoaded, loadImages, scope, trashImage, restoreImage, select, reveal } = state;
   const { ws, selected, imageSel, setImageSel, toggleImageSel, clearImageSel, trashImages } = state;
+  const { folders, folderAt, openFolder, addFolder, renameFolder, deleteFolder, sortIntoFolder } = state;
   const [filter, setFilter] = useState<Filter>('alle');
   const [months, setMonths] = useState(12);
   const [sort, setSort] = useState<Sort>('neu');
@@ -64,7 +65,9 @@ export function Gallery() {
   const [anchor, setAnchor] = useState<string | null>(null);
   const menu = useMenu();
   const projectId = scope === 'all' ? null : scope;
-  const uploader = useUpload(projectId);
+  const here = folders.find((f) => f.id === folderAt) ?? null;
+  // Im Ordner gilt dessen Projekt: dort abgelegte Bilder gehören dorthin.
+  const uploader = useUpload(here ? here.projectId : projectId, folderAt);
 
   useEffect(() => {
     if (!imagesLoaded) void loadImages();
@@ -78,14 +81,42 @@ export function Gallery() {
   }, [filter, months, scope, clearImageSel]);
 
   const projectIds = scopeProjectIds(state);
+
+  /** Ein Ordner mit allem, was darin liegt – für Zählung und für die Filter. */
+  const subtree = useCallback(
+    (id: string): Set<string> => {
+      const ids = new Set([id]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const f of folders) {
+          if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) {
+            ids.add(f.id);
+            grew = true;
+          }
+        }
+      }
+      return ids;
+    },
+    [folders],
+  );
+
   const shown = useMemo(() => {
     const cutoff = new Date(Date.now() - months * 30 * 864e5).toISOString();
+    // „Alle“ zeigt einen Ordner; die übrigen Filter suchen – und zwar in diesem
+    // Ordner und allem darunter, sonst verlöre die Suche ihren Ort.
+    const tree = folderAt ? subtree(folderAt) : null;
     const list = images.filter((b) => {
       // Ein Bild aus einem gelöschten Projekt hat keinen Bezug mehr – es steht
       // unter „Alle Projekte“ und muss dort erreichbar bleiben.
       const bekannt = !b.projectId || projectIds.includes(b.projectId);
       if (scope !== 'all' && !bekannt) return false;
       if (b.deletedAt) return false;
+      if (filter === 'alle') {
+        if ((b.folderId ?? null) !== folderAt) return false;
+      } else if (tree && !(b.folderId && tree.has(b.folderId))) {
+        return false;
+      }
       switch (filter) {
         case 'ungenutzt':
           return uses(b).length === 0;
@@ -100,11 +131,25 @@ export function Gallery() {
       }
     });
     return list.sort((a, b) => (sort === 'gross' ? b.size - a.size : b.createdAt.localeCompare(a.createdAt)));
-  }, [images, filter, months, sort, scope, projectIds]);
+  }, [images, filter, months, sort, scope, projectIds, folderAt, subtree]);
 
   const total = shown.reduce((n, b) => n + b.size, 0);
   const deleted = images.filter((b) => b.deletedAt);
   const ungenutzt = images.filter((b) => !b.deletedAt && uses(b).length === 0);
+
+  /** Die Ordner dieser Ebene. Ein Ordner ohne Projekt steht überall. */
+  const hier = folders
+    .filter((f) => (f.parentId ?? null) === folderAt)
+    .filter((f) => scope === 'all' || !f.projectId || f.projectId === scope)
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+  /** Wie viele Bilder in einem Ordner liegen – samt allem darunter. */
+  const countInFolder = (id: string): number => {
+    const ids = subtree(id);
+    return images.filter((b) => !b.deletedAt && b.folderId && ids.has(b.folderId)).length;
+  };
+
+  const spur = folderPath(folderAt, folders);
 
   /**
    * Was im Inspektor offen steht, bleibt beim Reiterwechsel stehen – genau
@@ -146,6 +191,7 @@ export function Gallery() {
           if (open) void appendImages(openKind, open, list);
         },
       },
+      { label: 'In Ordner verschieben', sub: folderTargets((to) => void sortIntoFolder(ids, to)) },
       { sep: true },
       { label: 'Alle auswählen', onSelect: () => setImageSel(shown.map((b) => b.id)) },
       { label: 'Auswahl aufheben', disabled: !imageSel.size, onSelect: clearImageSel },
@@ -157,6 +203,46 @@ export function Gallery() {
       },
     ];
   };
+
+  /**
+   * Alle Ordner als Ziele, eingerückt nach Tiefe – dieselbe Liste dient dem
+   * Einsortieren von Bildern und dem Umhängen eines Ordners. `skip` nimmt den
+   * Ordner samt Inhalt heraus, der gerade selbst verschoben wird.
+   */
+  const folderTargets = (go: (to: string | null) => void, skip?: string): MenuItem[] => {
+    const aus = skip ? subtree(skip) : null;
+    const out: MenuItem[] = [{ label: 'Ganz nach oben', onSelect: () => go(null) }];
+    const walk = (parent: string | null, depth: number): void => {
+      for (const f of folders
+        .filter((f) => (f.parentId ?? null) === parent)
+        .filter((f) => scope === 'all' || !f.projectId || f.projectId === scope)
+        .sort((a, b) => a.name.localeCompare(b.name, 'de'))) {
+        if (aus?.has(f.id)) continue;
+        out.push({ label: '   '.repeat(depth) + f.name, onSelect: () => go(f.id) });
+        walk(f.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out.length > 1 ? out : [{ label: 'Noch keine Ordner', disabled: true }];
+  };
+
+  /** Das Menü einer Ordnerkachel. */
+  const folderMenu = (folder: ImageFolder): MenuItem[] => [
+    { label: 'Öffnen', onSelect: () => openFolder(folder.id) },
+    {
+      label: 'Umbenennen',
+      sub: [{ input: folder.name, onSubmit: (name) => void renameFolder(folder.id, name) }],
+    },
+    { label: 'Verschieben nach', sub: folderTargets((to) => void moveFolderTo(folder, to), folder.id) },
+    { sep: true },
+    { label: 'Neuer Ordner darin', sub: [{ input: 'Name', onSubmit: (name) => void addFolder(name, folder.projectId, folder.id) }] },
+    { sep: true },
+    // Kein Papierkorb: es geht nichts verloren, der Inhalt rückt nur hoch.
+    { label: 'Ordner auflösen', danger: true, onSelect: () => void deleteFolder(folder.id) },
+  ];
+
+  const moveFolderTo = (folder: ImageFolder, to: string | null): Promise<void> =>
+    state.moveFolder(folder.id, to);
 
   /** Rechtsklick auf eine Kachel außerhalb der Auswahl meint nur diese Kachel. */
   const onContext = (e: React.MouseEvent, id: string): void => {
@@ -187,6 +273,35 @@ export function Gallery() {
 
   return (
     <div className={`gallery ${over ? 'dz-on' : ''}`} {...dropZone}>
+      {/* Die Spur: wo man steht, und zugleich der Weg zurück. Man kann Bilder
+          und Ordner auf eine Stufe ziehen, um sie dorthin zu heben. */}
+      <div className="gal-path">
+        <Crumb id={null} label="Alle Bilder" at={folderAt} onGo={openFolder} />
+        {spur.map((f) => (
+          <span key={f.id} className="gal-crumb-wrap">
+            <span className="sep" aria-hidden="true">
+              ›
+            </span>
+            <Crumb id={f.id} label={f.name} at={folderAt} onGo={openFolder} />
+          </span>
+        ))}
+        <span className="spacer" />
+        <button
+          className="btn tiny ghost"
+          title="Ordner an dieser Stelle anlegen"
+          onClick={(e) =>
+            menu.openAt(e.currentTarget, [
+              {
+                input: 'Name des Ordners',
+                onSubmit: (name) => void addFolder(name, here ? here.projectId : projectId, folderAt),
+              },
+            ])
+          }
+        >
+          + Ordner
+        </button>
+      </div>
+
       <div className="gal-bar">
         <div className="seg" role="radiogroup" aria-label="Filter">
           {(Object.keys(FILTER_LABEL) as Filter[]).map((f) => (
@@ -289,14 +404,37 @@ export function Gallery() {
         </div>
       )}
 
-      {shown.length === 0 ? (
+      {/* Unter einem Filter verschwinden die Ordner – dann ist es eine Suche
+          und keine Ablage. Das sollte dastehen, sonst wirkt der Bestand leer. */}
+      {filter !== 'alle' && folders.length > 0 && (
+        <div className="gal-hint">
+          Gesucht wird in allen Ordnern{here ? ` unterhalb von „${here.name}“` : ''}.
+        </div>
+      )}
+
+      {shown.length === 0 && (filter !== 'alle' || hier.length === 0) ? (
         <div className="empty-state">
-          {images.length
-            ? 'Kein Bild passt zu diesem Filter.'
-            : 'Noch keine Bilder. Füge in einer Beschreibung eines ein – mit Strg+V oder indem du es hineinziehst.'}
+          {here
+            ? 'Dieser Ordner ist leer. Zieh Bilder hierher oder lege einen Unterordner an.'
+            : images.length
+              ? 'Kein Bild passt zu diesem Filter.'
+              : 'Noch keine Bilder. Füge in einer Beschreibung eines ein – mit Strg+V oder indem du es hineinziehst.'}
         </div>
       ) : (
         <div className="gal-grid">
+          {filter === 'alle' &&
+            hier.map((f) => (
+              <FolderTile
+                key={f.id}
+                folder={f}
+                count={countInFolder(f.id)}
+                onOpen={() => openFolder(f.id)}
+                onMenu={(e) => {
+                  e.preventDefault();
+                  menu.openAtPoint(e.clientX, e.clientY, folderMenu(f));
+                }}
+              />
+            ))}
           {shown.map((b) => (
             <figure
               key={b.id}
@@ -354,6 +492,71 @@ export function Gallery() {
       </div>
       {menu.node}
     </div>
+  );
+}
+
+/**
+ * Eine Stufe der Spur. Sie ist zugleich Ablagefläche: ein Bild oder ein Ordner
+ * darauf gezogen wandert eine oder mehrere Ebenen nach oben, ohne dass man erst
+ * dorthin wechseln muss.
+ */
+function Crumb({
+  id,
+  label,
+  at,
+  onGo,
+}: {
+  id: string | null;
+  label: string;
+  at: string | null;
+  onGo: (id: string | null) => void;
+}) {
+  const target = { type: 'folder', id } as const;
+  const zone = useZone(target);
+  return (
+    <button
+      className={`gal-crumb ${at === id ? 'on' : ''} ${zone ? 'dz-into' : ''}`}
+      onClick={() => onGo(id)}
+      {...dropTarget(target)}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Ein Ordner im Raster – er sieht aus wie eine Kachel und nimmt welche auf. */
+function FolderTile({
+  folder,
+  count: n,
+  onOpen,
+  onMenu,
+}: {
+  folder: ImageFolder;
+  count: number;
+  onOpen: () => void;
+  onMenu: (e: React.MouseEvent) => void;
+}) {
+  const target = { type: 'folder', id: folder.id } as const;
+  const zone = useZone(target);
+  return (
+    <figure
+      className={`gal-item gal-folder ${zone ? 'dz-into' : ''}`}
+      onDoubleClick={onOpen}
+      onClick={onOpen}
+      onContextMenu={onMenu}
+      {...dragSource('folder', folder.id)}
+      {...dropTarget(target)}
+    >
+      <div className="gal-folder-face" aria-hidden="true">
+        📁
+      </div>
+      <figcaption>
+        <span className="gal-name" title={folder.name}>
+          {folder.name}
+        </span>
+        <span className="gal-meta">{n === 1 ? '1 Bild' : `${n} Bilder`}</span>
+      </figcaption>
+    </figure>
   );
 }
 

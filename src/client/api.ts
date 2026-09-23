@@ -130,6 +130,8 @@ export type Purged = Undoable & { images: number };
 export type ImageMeta = {
   id: string;
   projectId: string | null;
+  /** Der Ordner der Galerie; `null` heißt: ganz oben. */
+  folderId: string | null;
   name: string;
   mime: string;
   width: number;
@@ -146,6 +148,15 @@ export type ImageUsage = { live: ImageUse[]; archived: ImageUse[]; trashed: Imag
 /** Ein Bild in der Galerie: Angaben plus Verwendungen, nie die Bytes. */
 export type ImageEntry = ImageMeta & { usage: ImageUsage | null };
 
+/** Ein Ordner der Galerie – sie liegen ineinander und gehören einem Projekt. */
+export type ImageFolder = {
+  id: string;
+  projectId: string | null;
+  parentId: string | null;
+  name: string;
+  createdAt: string;
+};
+
 /** Was hochgeladen wird – im Browser bereits verkleinert und als WebP. */
 export type ImageUpload = {
   blob: Blob;
@@ -154,6 +165,8 @@ export type ImageUpload = {
   height: number;
   name: string;
   projectId: string | null;
+  /** Der Ordner, in dem die Galerie gerade steht. */
+  folderId?: string | null;
 };
 
 /** Die Adresse eines Bildes. Der Hash im Pfad macht sie für immer gültig. */
@@ -256,7 +269,7 @@ export const api = {
 
   deleteDrawing: (id: string) => request<Undoable>(`/api/drawings/${id}`, { method: 'DELETE' }),
 
-  images: () => request<{ images: ImageEntry[] }>('/api/bilder'),
+  images: () => request<{ images: ImageEntry[]; folders: ImageFolder[] }>('/api/bilder'),
 
   /**
    * Das Bild ist beim Hochladen schon fertig – verkleinert und als WebP. Hier
@@ -271,6 +284,7 @@ export const api = {
     form.append('breite', String(p.width));
     form.append('hoehe', String(p.height));
     if (p.projectId) form.append('projekt', p.projectId);
+    if (p.folderId) form.append('ordner', p.folderId);
     return request<ImageMeta>('/api/bilder', { method: 'POST', body: form });
   },
 
@@ -278,6 +292,23 @@ export const api = {
   trashImage: (id: string) => post<ImageMeta>(`/api/bilder/${id}/loeschen`),
 
   restoreImage: (id: string) => post<ImageMeta>(`/api/bilder/${id}/zurueck`),
+
+  /* --------------------------------------------- Ordner der Galerie */
+
+  addFolder: (p: { projectId: string | null; parentId: string | null; name: string }) =>
+    post<ImageFolder>('/api/bildordner', p),
+
+  patchFolder: (id: string, changes: { name?: string; parentId?: string | null }) =>
+    request<ImageFolder>(`/api/bildordner/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+    }),
+
+  /** Der Inhalt geht dabei nicht verloren, er rückt eine Ebene höher. */
+  deleteFolder: (id: string) => request<{ ok: true }>(`/api/bildordner/${id}`, { method: 'DELETE' }),
+
+  sortIntoFolder: (ids: string[], folderId: string | null) =>
+    post<{ moved: number }>('/api/bildordner/einsortieren', { ids, folderId }),
 
   settings: () => request<Settings>('/api/settings'),
 

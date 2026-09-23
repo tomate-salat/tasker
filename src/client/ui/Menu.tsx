@@ -120,7 +120,10 @@ function Panel({
       left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
     });
-    (keyboard ? (buttonsOf(el)[0] ?? el) : el).focus();
+    // Ein Menü, das mit einem Textfeld anfängt, ist zum Tippen da – dann gehört
+    // der Fokus dorthin, sonst liefen die ersten Anschläge ins Leere.
+    const field = el.querySelector<HTMLInputElement>(':scope > .ctx-input:first-child');
+    (field ?? (keyboard ? (buttonsOf(el)[0] ?? el) : el)).focus();
   }, [x, y, keyboard]);
 
   useEffect(() => {

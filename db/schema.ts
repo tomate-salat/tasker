@@ -248,12 +248,37 @@ export const drawings = sqliteTable(
  * Bilder unter „Ohne Projekt“, und ein wiederhergestelltes Projekt hat seine
  * Bilder wieder.
  */
+/**
+ * Ordner der Galerie. Sie gehören einem Projekt und dürfen ineinander liegen;
+ * ein Bild liegt in genau einem oder in keinem.
+ *
+ * Wie beim Bild selbst steht hier bewusst kein Fremdschlüssel auf das Projekt:
+ * ein gelöschtes Projekt soll die Ordner nicht stillschweigend mitnehmen.
+ */
+export const imageFolders = sqliteTable(
+  'image_folder',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id'),
+    /** Der übergeordnete Ordner; `null` heißt: ganz oben. */
+    parentId: text('parent_id'),
+    name: text('name').notNull(),
+    ...tracked,
+  },
+  (t) => [
+    index('image_folder_project_idx').on(t.projectId),
+    index('image_folder_parent_idx').on(t.parentId),
+  ],
+);
+
 export const images = sqliteTable(
   'image',
   {
     /** Inhalts-Hash, gekürzt. */
     id: text('id').primaryKey(),
     projectId: text('project_id'),
+    /** Der Ordner der Galerie; `null` heißt: ganz oben. */
+    folderId: text('folder_id'),
     name: text('name').notNull(),
     mime: text('mime').notNull(),
     width: integer('width').notNull(),
@@ -267,7 +292,11 @@ export const images = sqliteTable(
     deletedAt: text('deleted_at'),
     ...tracked,
   },
-  (t) => [index('image_project_idx').on(t.projectId), index('image_deleted_idx').on(t.deletedAt)],
+  (t) => [
+    index('image_project_idx').on(t.projectId),
+    index('image_deleted_idx').on(t.deletedAt),
+    index('image_folder_idx').on(t.folderId),
+  ],
 );
 
 /**

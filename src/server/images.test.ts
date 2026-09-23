@@ -8,7 +8,13 @@ import type { Milestone, Task } from '../shared/model.js';
 import { createDbCtx, type DbCtx } from './db.js';
 import {
   GONE_NOTE,
+  addFolder,
+  deleteFolder,
+  folderTree,
+  getFolder,
   getImage,
+  moveFolder,
+  moveImages,
   imageBytes,
   imageRefs,
   listImages,
@@ -258,5 +264,105 @@ describe('Bilder löschen', () => {
 
     assert.equal(expireTrash(ctx), 1);
     assert.equal(getImage(ctx, bild.id), null);
+  });
+});
+
+describe('Ordner der Galerie', () => {
+  const folder = (name: string, o: { projectId?: string | null; parentId?: string | null } = {}) =>
+    addFolder(ctx, {
+      id: 'o' + name,
+      projectId: o.projectId ?? null,
+      parentId: o.parentId ?? null,
+      name,
+    });
+
+  it('legt Ordner ineinander und findet die Kette wieder', () => {
+    const oben = folder('Screenshots');
+    const drin = folder('2025', { parentId: oben.id });
+    assert.equal(drin.parentId, oben.id);
+    assert.deepEqual(folderTree(ctx, oben.id).sort(), [drin.id, oben.id].sort());
+  });
+
+  it('ein hochgeladenes Bild landet im mitgegebenen Ordner', () => {
+    const o = folder('Karten');
+    const m = putImage(ctx, {
+      projectId: null,
+      folderId: o.id,
+      name: 'karte.webp',
+      mime: 'image/webp',
+      width: 10,
+      height: 10,
+      bytes: Buffer.from('karte'),
+      thumb: Buffer.from('k'),
+    });
+    assert.equal(m.folderId, o.id);
+    assert.equal(getImage(ctx, m.id)?.folderId, o.id);
+  });
+
+  it('sortiert Bilder ein und wieder heraus', () => {
+    const o = folder('Karten');
+    const a = put('a');
+    const b = put('b');
+    assert.equal(moveImages(ctx, [a.id, b.id], o.id), 2);
+    assert.equal(getImage(ctx, a.id)?.folderId, o.id);
+    assert.equal(moveImages(ctx, [a.id], null), 1);
+    assert.equal(getImage(ctx, a.id)?.folderId, null);
+  });
+
+  it('ein Bild nimmt beim Einsortieren das Projekt des Ordners an', () => {
+    const p = mkProject();
+    const o = folder('Spielkram', { projectId: p.id });
+    const bild = put('ohne projekt');
+    moveImages(ctx, [bild.id], o.id);
+    assert.equal(getImage(ctx, bild.id)?.projectId, p.id);
+  });
+
+  it('auflösen wirft nichts weg: der Inhalt rückt eine Ebene höher', () => {
+    const oben = folder('Oben');
+    const unten = folder('Unten', { parentId: oben.id });
+    const bild = put('inhalt');
+    moveImages(ctx, [bild.id], unten.id);
+
+    assert.equal(deleteFolder(ctx, unten.id), true);
+    assert.equal(getFolder(ctx, unten.id), null);
+    assert.equal(getImage(ctx, bild.id)?.folderId, oben.id);
+
+    // Und eine Ebene weiter: ganz oben ist `null`, nicht verloren.
+    assert.equal(deleteFolder(ctx, oben.id), true);
+    assert.equal(getImage(ctx, bild.id)?.folderId, null);
+  });
+
+  it('ein Ordner kann nicht in sich selbst wandern', () => {
+    const oben = folder('Oben');
+    const unten = folder('Unten', { parentId: oben.id });
+    assert.equal(moveFolder(ctx, oben.id, unten.id), null);
+    assert.equal(moveFolder(ctx, oben.id, oben.id), null);
+    assert.equal(getFolder(ctx, oben.id)?.parentId, null);
+  });
+
+  it('umgehängt gilt das neue Projekt für den ganzen Ast', () => {
+    const a = mkProject();
+    const b = create(ctx, 'project', { name: 'Anderes' }) as { id: string };
+    const ziel = folder('Ziel', { projectId: b.id });
+    const oben = folder('Oben', { projectId: a.id });
+    const unten = folder('Unten', { projectId: a.id, parentId: oben.id });
+    const bild = put('wandert');
+    moveImages(ctx, [bild.id], unten.id);
+
+    moveFolder(ctx, oben.id, ziel.id);
+    assert.equal(getFolder(ctx, unten.id)?.projectId, b.id);
+    assert.equal(getImage(ctx, bild.id)?.projectId, b.id);
+  });
+
+  it('ein Ordner ändert nichts an den Verwendungen', () => {
+    const p = mkProject();
+    const o = folder('Egal', { projectId: p.id });
+    const bild = put('benutzt');
+    moveImages(ctx, [bild.id], o.id);
+    const t = mkTask({ projectId: p.id, title: 'Mit Bild', desc: `![x](/api/bilder/${bild.id})` });
+    assert.deepEqual(
+      usage(ctx).get(bild.id)?.live.map((e) => e.id),
+      [t.id],
+    );
   });
 });

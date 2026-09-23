@@ -20,7 +20,7 @@ export type Uploader = {
   busy: boolean;
 };
 
-export function useUpload(projectId: string | null): Uploader {
+export function useUpload(projectId: string | null, folderId: string | null = null): Uploader {
   const [busy, setBusy] = useState(false);
 
   const upload = useCallback(
@@ -34,7 +34,7 @@ export function useUpload(projectId: string | null): Uploader {
       try {
         for (const file of files) {
           const prepared = await prepareImage(file, { maxKb: imageMaxKb, maxEdge: imageMaxEdge });
-          done.push(await api.addImage({ ...prepared, projectId }));
+          done.push(await api.addImage({ ...prepared, projectId, folderId }));
         }
         useStore.setState({
           toast: done.length > 1 ? `${done.length} Bilder hinzugefügt` : 'Bild hinzugefügt',
@@ -55,7 +55,7 @@ export function useUpload(projectId: string | null): Uploader {
       }
       return done;
     },
-    [projectId],
+    [projectId, folderId],
   );
 
   return { upload, busy };

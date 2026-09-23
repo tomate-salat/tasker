@@ -10,6 +10,9 @@ import {
   drawingCreate,
   drawingPatch,
   duplicateBody,
+  folderCreate,
+  folderPatch,
+  folderSort,
   kindSchema,
   moveBody,
   purgeBody,
@@ -25,7 +28,22 @@ import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
-import { getImage, imageBytes, listImages, putImage, trashImage, untrashImage, usage } from './images.js';
+import {
+  addFolder,
+  deleteFolder,
+  getFolder,
+  getImage,
+  imageBytes,
+  listFolders,
+  listImages,
+  moveFolder,
+  moveImages,
+  putImage,
+  renameFolder,
+  trashImage,
+  untrashImage,
+  usage,
+} from './images.js';
 import { newId } from './ids.js';
 import {
   Conflict,
@@ -126,6 +144,7 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     const uses = usage(ctx);
     return c.json({
       images: listImages(ctx).map((m) => ({ ...m, usage: uses.get(m.id) ?? null })),
+      folders: listFolders(ctx),
     });
   });
 
@@ -173,6 +192,8 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
 
     const meta = putImage(ctx, {
       projectId: typeof body['projekt'] === 'string' && body['projekt'] ? body['projekt'] : null,
+      // Die Galerie schickt mit, in welchem Ordner sie gerade steht.
+      folderId: typeof body['ordner'] === 'string' && body['ordner'] ? body['ordner'] : null,
       name: typeof body['name'] === 'string' && body['name'] ? body['name'].slice(0, 200) : 'Bild',
       mime: bild.type,
       width: Math.round(width),
@@ -202,6 +223,49 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       return getImage(ctx, c.req.param('id'));
     }),
   );
+
+  /* ------------------------------------------------- Ordner der Galerie */
+
+  /**
+   * Eigener Pfad statt `/bilder/ordner`: so kann sich nichts mit `/bilder/:id`
+   * überschneiden, und die Reihenfolge der Registrierung bleibt gleichgültig.
+   */
+  app.post('/bildordner', async (c) => {
+    const body = folderCreate.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return run(c, bus, () => addFolder(ctx, { id: newId('o'), ...body.data }), { status: 201 });
+  });
+
+  app.patch('/bildordner/:id', async (c) => {
+    const body = folderPatch.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return run(c, bus, () => {
+      const id = c.req.param('id');
+      let meta = getFolder(ctx, id);
+      if (!meta) throw new NotFound();
+      if (body.data.parentId !== undefined) {
+        // `null` kommt auch zurück, wenn der Ordner in sich selbst sollte.
+        meta = moveFolder(ctx, id, body.data.parentId);
+        if (!meta) throw new Conflict('Ein Ordner kann nicht in sich selbst liegen.');
+      }
+      if (body.data.name !== undefined) meta = renameFolder(ctx, id, body.data.name);
+      return meta;
+    });
+  });
+
+  /** Löschen hebt den Inhalt eine Ebene höher – es geht dabei nichts verloren. */
+  app.delete('/bildordner/:id', (c) =>
+    run(c, bus, () => {
+      if (!deleteFolder(ctx, c.req.param('id'))) throw new NotFound();
+      return { ok: true };
+    }),
+  );
+
+  app.post('/bildordner/einsortieren', async (c) => {
+    const body = folderSort.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    return run(c, bus, () => ({ moved: moveImages(ctx, body.data.ids, body.data.folderId) }));
+  });
 
   /* ---------------------------------------------------------- Schreiben */
 

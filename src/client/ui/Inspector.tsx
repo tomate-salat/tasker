@@ -856,7 +856,8 @@ function Deps({
   const { patch, select } = useStore();
   // Solange eine Zeile gezogen wird, zeigt der Bereich seine beiden Ablagefelder.
   // Ein Bild gehört nicht hierher – dafür Felder anzubieten, wäre ein leeres Versprechen.
-  const dragging = useDrag((s) => !!s.drag && s.drag.kind !== 'image');
+  // Was aus der Galerie kommt, ergibt hier keine Abhängigkeit – also auch keine Fläche.
+  const dragging = useDrag((s) => !!s.drag && s.drag.kind !== 'image' && s.drag.kind !== 'folder');
   const isMs = kind === 'milestone';
   const [dir, setDir] = useState<'by' | 'blocks'>('by');
   // Wonach die Suche sucht, hängt an der Richtung: ein Milestone wartet nur auf

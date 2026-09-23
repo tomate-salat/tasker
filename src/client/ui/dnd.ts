@@ -13,7 +13,7 @@ import type { Step } from '@shared/api.js';
 import { dependsOn } from '@shared/blocking.js';
 import type { Milestone, Project, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore, whereLabel, type View } from '../store.js';
+import { folderPath, useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
 import { appendImages } from './imageDrop.js';
 
@@ -37,7 +37,7 @@ import { appendImages } from './imageDrop.js';
  */
 export type Zone = 'before' | 'after' | 'child' | 'into';
 
-type DragKind = 'task' | 'milestone' | 'group' | 'project' | 'image';
+type DragKind = 'task' | 'milestone' | 'group' | 'project' | 'image' | 'folder';
 
 type Drag = {
   kind: DragKind;
@@ -71,7 +71,12 @@ export type Target =
    * Die Beschreibung im Inspektor. Nimmt nur Bilder aus der Galerie: auswählen,
    * zum Reiter „Bilder“ wechseln, das Bild auf den Text ziehen.
    */
-  | { type: 'desc'; kind: 'task' | 'milestone'; item: Task | Milestone };
+  | { type: 'desc'; kind: 'task' | 'milestone'; item: Task | Milestone }
+  /**
+   * Ein Ordner der Galerie – die Kachel selbst und die Spur oben. `null` ist
+   * die oberste Ebene, also „aus dem Ordner heraus“.
+   */
+  | { type: 'folder'; id: string | null };
 
 const keyOf = (t: Target): string => {
   switch (t.type) {
@@ -90,6 +95,8 @@ const keyOf = (t: Target): string => {
       return `dep:${t.dir}:${t.item.id}`;
     case 'desc':
       return `desc:${t.item.id}`;
+    case 'folder':
+      return `folder:${t.id ?? 'oben'}`;
   }
 };
 
@@ -302,7 +309,16 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
 
   // Die Beschreibung nimmt nur Bilder – eine Zeile fällt dort durch.
   if (target.type === 'desc') return drag.kind === 'image' ? 'into' : null;
-  if (drag.kind === 'image') return null;
+
+  // Ein Ordner der Galerie nimmt Bilder und andere Ordner auf – aber nie sich
+  // selbst und nichts, worin er schon liegt: der Ast hinge danach nirgends.
+  if (target.type === 'folder') {
+    if (drag.kind === 'image') return 'into';
+    if (drag.kind !== 'folder') return null;
+    const ahnen = folderPath(target.id).map((f) => f.id);
+    return target.id === drag.id || ahnen.includes(drag.id) ? null : 'into';
+  }
+  if (drag.kind === 'image' || drag.kind === 'folder') return null;
 
   switch (drag.kind) {
     case 'task':
@@ -336,8 +352,15 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
   if (!ws) return;
   if (target.type === 'dep') return dropDep(drag, target);
   if (target.type === 'desc') return dropImage(drag, target);
+  if (target.type === 'folder') {
+    const store = useStore.getState();
+    if (drag.kind === 'folder') return store.moveFolder(drag.id, target.id);
+    if (drag.kind === 'image') return store.sortIntoFolder(drag.ids, target.id);
+    return;
+  }
   switch (drag.kind) {
     case 'image':
+    case 'folder':
       return;
     case 'task':
       return dropTasks(ws, drag, target, zone);

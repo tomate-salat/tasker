@@ -146,6 +146,8 @@ Zugriffsmuster sind bekannt.
 - `GET /api/bilder/:id` (`?v=klein`) – die Bytes, dauerhaft zwischenspeicherbar
 - `POST /api/bilder` – ein fertiges Bild hochladen (`FormData`, kein JSON)
 - `POST /api/bilder/:id/loeschen` bzw. `/zurueck` – in den Papierkorb und zurück
+- `POST|PATCH|DELETE /api/bildordner[/:id]` – Ordner der Galerie anlegen, umbenennen, umhängen, auflösen
+- `POST /api/bildordner/einsortieren` – Bilder in einen Ordner legen (`folderId: null` heißt ganz oben)
 
 Die Objektrouten liegen bewusst unter dem Präfix `/kind`, damit sie sich mit festen Pfaden wie
 `/move`, `/trash` oder `/settings` nicht überschneiden können. Sonst hinge die Korrektheit an der
@@ -410,6 +412,13 @@ ist eine Zeile, und die Auslieferung darf `immutable` setzen.
   Sie zeigt je Bild Maße, Größe, Datum und die Verwendungen (anklickbar) und filtert nach: ohne
   Verwendung, nur noch archiviert, nur noch im Papierkorb, älter als. Dazu Sortierung und die
   Gesamtgröße – ohne die weiß man nie, ob Aufräumen lohnt.
+- **Ordner** (`image_folder`, Wunsch des Nutzers): verschachtelt, je Projekt, und ein Bild liegt in
+  genau einem oder in keinem. Sie stehen als Kacheln im Raster, die Spur darüber führt zurück und
+  nimmt selbst Ablagen an. Ein Ordner ist eine reine Hülle: Auflösen hebt seinen Inhalt eine Ebene
+  höher, deshalb gibt es dafür weder Rückfrage noch Papierkorb. Umgehängt gilt das Projekt des neuen
+  Platzes für den ganzen Ast – sonst lägen in einem Ordner Bilder, die im eigenen Projekt nicht mehr
+  zu sehen sind. Die Filter kennen keine Ordner: unter „Alle“ ist die Galerie eine Ablage, unter
+  jedem anderen Filter eine Suche durch den ganzen Ast darunter.
 - **Auswahl in der Galerie** (`imageSel` im Speicher): anklicken wählt eines, Strg nimmt dazu,
   Umschalt den Bereich. Bewusst nicht `selected` und nicht `multi` – der Inspektor soll weiter die
   offene Aufgabe zeigen, während man daneben Bilder für sie zusammenstellt; ein Bild wird nie im
