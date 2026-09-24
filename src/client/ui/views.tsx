@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
 import { outline, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
@@ -7,6 +7,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
+import { useDropFlip } from './dropFlip.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
@@ -37,6 +38,10 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
 
   const plan = view === 'plan' ? schedule(ws, { velocity: settings.velocity }) : null;
 
+  // Nach dem Ablegen gleiten Zeilen und Karten an ihren neuen Platz.
+  const listRef = useRef<HTMLDivElement>(null);
+  useDropFlip(listRef, ws);
+
   if (!rows.length) {
     return (
       <div className="list">
@@ -49,6 +54,7 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   return (
     <>
       <div
+        ref={listRef}
         className={`list ${state.multi.size ? 'has-multi' : ''} ${cards ? 'cards' : ''}`}
         onContextMenu={(e) => {
           const el = e.target as HTMLElement;

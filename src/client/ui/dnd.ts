@@ -16,6 +16,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { folderPath, useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
 import { appendImages } from './imageDrop.js';
+import { snapshotDrop } from './dropFlip.js';
 import { setCover } from './Cards.js';
 
 /**
@@ -307,6 +308,8 @@ export function dropTarget(target: Target) {
       if (!drag || !over || over.key !== keyOf(target)) return;
       e.preventDefault();
       e.stopPropagation();
+      // Lage vor dem Umsortieren merken, solange die Kopie einer Karte noch da ist (`dropFlip.ts`).
+      if (drag.kind === 'task' || drag.kind === 'milestone' || drag.kind === 'group') snapshotDrop(drag.ids);
       clear();
       void applyDrop(drag, target, over.zone);
     },
