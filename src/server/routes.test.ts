@@ -155,6 +155,26 @@ describe('Routen', () => {
     assert.ok(log.every((e) => e.at.endsWith('Z')));
   });
 
+  it('archivierte erledigte Aufgaben bleiben im Burnup', async () => {
+    const p = await mk('project', { name: 'P' });
+    const m = await mk('milestone', { projectId: p.id, title: 'M' });
+    const a = await mk('task', { projectId: p.id, title: 'A', milestoneId: m.id });
+    const b = await mk('task', { projectId: p.id, title: 'B', milestoneId: m.id });
+    await mk('task', { projectId: p.id, title: 'C', milestoneId: m.id });
+    await send('PATCH', `/kind/task/${a.id}`, { version: a.version, changes: { status: 'done' } });
+    await send('POST', `/kind/task/${a.id}/archive`);
+    // Offen archiviert gilt als verworfen.
+    await send('POST', `/kind/task/${b.id}/archive`);
+
+    const boot = (await send('GET', '/bootstrap')).body as {
+      milestoneLog: Record<string, { s: number; dn: number }[]>;
+      archivedPoints: Record<string, { s: number; dn: number }>;
+    };
+    const last = boot.milestoneLog[m.id]?.at(-1);
+    assert.deepEqual(last && [last.s, last.dn], [2, 1]);
+    assert.deepEqual(boot.archivedPoints[m.id], { s: 1, dn: 1 });
+  });
+
   it('Zeichnungen: anlegen, speichern, umbenennen, löschen', async () => {
     const p = await mk('project', { name: 'P' });
     const t = await mk('task', { projectId: p.id, title: 'Mit Skizze' });

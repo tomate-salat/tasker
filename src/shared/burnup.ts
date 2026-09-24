@@ -1,5 +1,5 @@
-import { type Milestone, isDone } from './model.js';
-import { milestoneStats, sumBy, total } from './progress.js';
+import { type Milestone, type Task, isArchived, isDone } from './model.js';
+import { sumBy } from './progress.js';
 import { weeksFromToday } from './schedule.js';
 import type { Workspace } from './workspace.js';
 
@@ -31,10 +31,42 @@ const SINCE_EVER = '1970-01-01T00:00:00.000Z';
 export const dayKey = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-/** Umfang und Erledigtes heute, gezählt wie überall: Aufgaben, nicht Punkte. */
-export function msPoints(ws: Workspace, m: Milestone): { s: number; dn: number } {
-  const st = milestoneStats(ws, m);
-  return { s: st.total, dn: st.done };
+export type Points = { s: number; dn: number };
+
+/**
+ * Was im Burnup zählt, gezählt wie überall: Aufgaben, nicht Punkte. Anders
+ * als der Prototyp behält der Burnup archivierte Aufgaben, sofern sie erledigt
+ * sind – Archivieren räumt nur auf, es nimmt nichts aus dem Milestone. Offen
+ * Archiviertes gilt als verworfen und fällt heraus.
+ *
+ * Archivierte Aufgaben kennt nur der Server; auf dem Client, mit nur dem
+ * aktiven Bestand, ist das dieselbe Zählung wie in `milestoneStats`.
+ */
+function counting(ws: Workspace) {
+  const finished = (t: Task): boolean => {
+    if (isDone(t)) return true;
+    const ks = kids(t);
+    return ks.length > 0 && ks.every(finished);
+  };
+  const counted = (t: Task): boolean => !isArchived(t) || finished(t);
+  const kids = (t: Task): Task[] => ws.allKids(t.id).filter(counted);
+  const tot = (t: Task): number => {
+    const ks = kids(t);
+    return ks.length ? sumBy(ks, tot) : 1;
+  };
+  const dn = (t: Task): number => (isDone(t) ? tot(t) : sumBy(kids(t), dn));
+  const roots = (m: Milestone): Task[] => ws.msAllRoots(m).filter(counted);
+  return { kids, tot, dn, roots };
+}
+
+/** Umfang und Erledigtes heute. `archived` ist der Anteil archivierter Aufgaben, den der Server mitliefert. */
+export function msPoints(ws: Workspace, m: Milestone, archived?: Points): Points {
+  const c = counting(ws);
+  const roots = c.roots(m);
+  return {
+    s: sumBy(roots, c.tot) + (archived?.s ?? 0),
+    dn: sumBy(roots, c.dn) + (archived?.dn ?? 0),
+  };
 }
 
 /**
@@ -43,15 +75,16 @@ export function msPoints(ws: Workspace, m: Milestone): { s: number; dn: number }
  * Zeitpunkt zählen von Anfang an als erledigt.
  */
 export function backfillLog(ws: Workspace, m: Milestone): LogEntry[] {
-  const roots = ws.msRoots(m);
-  const s = sumBy(roots, (r) => total(ws, r));
+  const c = counting(ws);
+  const roots = c.roots(m);
+  const s = sumBy(roots, c.tot);
   const ev: { at: string | null; p: number }[] = [];
-  const walk = (t: (typeof roots)[number]): void => {
+  const walk = (t: Task): void => {
     if (isDone(t)) {
-      ev.push({ at: t.doneAt, p: total(ws, t) });
+      ev.push({ at: t.doneAt, p: c.tot(t) });
       return;
     }
-    ws.kids(t.id).forEach(walk);
+    c.kids(t).forEach(walk);
   };
   roots.forEach(walk);
 

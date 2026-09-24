@@ -37,6 +37,8 @@ export class Workspace {
   private readonly allKidsOf = new Map<string, Task[]>();
   /** Wurzelaufgaben je Milestone, nach order sortiert. */
   private readonly rootsOfMilestone = new Map<string, Task[]>();
+  /** Auch archivierte Wurzelaufgaben. */
+  private readonly allRootsOfMilestone = new Map<string, Task[]>();
   /** Wer hängt von diesem Task oder Milestone ab. */
   private readonly blocksOf = new Map<string, Task[]>();
 
@@ -59,8 +61,9 @@ export class Workspace {
       if (t.parentId) {
         push(this.allKidsOf, t.parentId, t);
         if (!isArchived(t)) push(this.kidsOf, t.parentId, t);
-      } else if (t.milestoneId && !isArchived(t)) {
-        push(this.rootsOfMilestone, t.milestoneId, t);
+      } else if (t.milestoneId) {
+        push(this.allRootsOfMilestone, t.milestoneId, t);
+        if (!isArchived(t)) push(this.rootsOfMilestone, t.milestoneId, t);
       }
       for (const d of t.deps) push(this.blocksOf, d, t);
     }
@@ -68,6 +71,7 @@ export class Workspace {
     for (const list of this.kidsOf.values()) list.sort(byOrder);
     for (const list of this.allKidsOf.values()) list.sort(byOrder);
     for (const list of this.rootsOfMilestone.values()) list.sort(byOrder);
+    for (const list of this.allRootsOfMilestone.values()) list.sort(byOrder);
   }
 
   task = (id: string | null): Task | null => (id ? (this.taskById.get(id) ?? null) : null);
@@ -87,6 +91,9 @@ export class Workspace {
 
   /** Aktive Wurzelaufgaben eines Milestones. */
   msRoots = (m: Milestone): Task[] => this.rootsOfMilestone.get(m.id) ?? [];
+
+  /** Wurzelaufgaben eines Milestones einschließlich archivierter. */
+  msAllRoots = (m: Milestone): Task[] => this.allRootsOfMilestone.get(m.id) ?? [];
 
   /** Tasks, die von diesem Task oder Milestone abhängen. */
   blocks = (x: { id: string }): Task[] => this.blocksOf.get(x.id) ?? [];

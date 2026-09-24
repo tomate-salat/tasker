@@ -19,11 +19,12 @@ const fmtD = (d: Date): string => d.toLocaleDateString('de-DE', { day: '2-digit'
  */
 export function Burnup({ ws, milestone: m }: { ws: Workspace; milestone: Milestone }) {
   const stored = useStore((s) => s.boot?.milestoneLog?.[m.id]);
+  const archived = useStore((s) => s.boot?.archivedPoints?.[m.id]);
   const velocity = useStore((s) => s.settings.velocity);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<{ i: number; s: number; dn: number; fc: boolean } | null>(null);
 
-  const { s: nowS, dn: nowDn } = msPoints(ws, m);
+  const { s: nowS, dn: nowDn } = msPoints(ws, m, archived);
   const log = withNow(stored?.length ? stored : backfillLog(ws, m), nowS, nowDn, new Date().toISOString());
   const d = burnupData(m, log, velocity);
   if (!d) return null;

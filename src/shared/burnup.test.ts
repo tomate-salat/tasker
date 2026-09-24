@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { backfillLog, burnupData, monotonePath, withNow } from './burnup.js';
+import { backfillLog, burnupData, monotonePath, msPoints, withNow } from './burnup.js';
 import { Builder } from './testing.js';
 
 const NOW = new Date('2026-09-21T09:00:00');
@@ -22,6 +22,30 @@ describe('backfillLog', () => {
       { at: '2026-09-12T10:00:00.000Z', s: 4, dn: 2 },
       { at: '2026-09-15T10:00:00.000Z', s: 4, dn: 3 },
     ]);
+  });
+});
+
+describe('msPoints', () => {
+  it('zählt erledigte archivierte Aufgaben weiter, offen archivierte nicht', () => {
+    const AT = '2026-09-20T10:00:00.000Z';
+    const ws = new Builder()
+      .project('p')
+      .milestone('m', 'p')
+      .task('a', 'p', { milestoneId: 'm', status: 'done', archivedAt: AT })
+      .task('b', 'p', { milestoneId: 'm', archivedAt: AT })
+      .task('c', 'p', { milestoneId: 'm' })
+      // Eine aktive Sammel-Aufgabe mit einem erledigten archivierten Kind.
+      .task('d', 'p', { milestoneId: 'm' })
+      .task('d1', 'p', { parentId: 'd', status: 'done', archivedAt: AT })
+      .task('d2', 'p', { parentId: 'd' })
+      // Archiviert samt Kindern, alle erledigt.
+      .task('e', 'p', { milestoneId: 'm', archivedAt: AT })
+      .task('e1', 'p', { parentId: 'e', status: 'done' })
+      .task('e2', 'p', { parentId: 'e', status: 'done' })
+      .build();
+    // a + c + (d1, d2) + (e1, e2)
+    assert.deepEqual(msPoints(ws, ws.milestone('m')!), { s: 6, dn: 4 });
+    assert.deepEqual(msPoints(ws, ws.milestone('m')!, { s: 2, dn: 1 }), { s: 8, dn: 5 });
   });
 });
 

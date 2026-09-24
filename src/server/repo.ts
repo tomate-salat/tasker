@@ -134,6 +134,16 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
   };
 }
 
+/**
+ * Alle Aufgaben, auch archivierte und verdeckte – für den Burnup, der
+ * erledigte archivierte Aufgaben weiter zählt. Ohne Labels und Abhängigkeiten.
+ */
+export function loadAllTasks(ctx: DbCtx): Task[] {
+  return (ctx.sqlite.prepare('SELECT * FROM task ORDER BY sort_order').all() as TaskRow[]).map((t) =>
+    toTask(t, [], []),
+  );
+}
+
 /** Ob ein Objekt zum aktiven Bestand gehört, den `loadBootstrap` ausliefert. */
 export function inBootstrap(ctx: DbCtx, kind: Kind, id: string): boolean {
   const row = readRow(ctx, kind, id);
