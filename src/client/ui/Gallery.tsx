@@ -218,6 +218,11 @@ export function Gallery() {
         danger: true,
         onSelect: () => void trashImages(ids),
       },
+      {
+        label: list.length > 1 ? `${list.length} Bilder endgültig löschen` : 'Endgültig löschen',
+        danger: true,
+        onSelect: () => void state.destroyImages(ids),
+      },
     ];
   };
 

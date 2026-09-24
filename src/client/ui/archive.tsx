@@ -156,7 +156,6 @@ export function ArchiveView() {
           const id = el.closest('[data-row]')?.getAttribute('data-row');
           if (!id) return;
           ev.preventDefault();
-          select(id);
           menu.openAtPoint(ev.clientX, ev.clientY, archMenu(ws, id));
         }}
       >
@@ -200,6 +199,12 @@ function archMenu(ws: Workspace, id: string): MenuItem[] {
       danger: true,
       disabled: !top,
       onSelect: () => void purgeItem(ws, id),
+    },
+    {
+      label: 'Endgültig löschen',
+      danger: true,
+      disabled: !top,
+      onSelect: () => void useStore.getState().destroy(kindOf(ws, id), id),
     },
   ];
 }

@@ -160,6 +160,8 @@ type State = {
   clearMulti: () => void;
   /** Eine Handlung auf der ganzen Auswahl – ein Aufruf, eine Transaktion. */
   bulk: (action: BulkAction, message: (count: number) => string) => Promise<void>;
+  /** Die ganze Auswahl endgültig löschen – über den Papierkorb, siehe `purgeAfterTrash`. */
+  destroyMulti: () => Promise<void>;
 
   /**
    * Der Rücknahme-Stapel. Er lebt im Tab, nicht auf dem Server: jede
@@ -216,6 +218,8 @@ type State = {
   loadImages: () => Promise<void>;
   trashImage: (id: string) => Promise<void>;
   trashImages: (ids: string[]) => Promise<void>;
+  /** Endgültig, ohne „Rückgängig“: die Bytes eines Bildes kommen nicht zurück. */
+  destroyImages: (ids: string[]) => Promise<void>;
   restoreImage: (id: string) => Promise<void>;
 
   /**
@@ -249,7 +253,7 @@ type State = {
   setEditProject: (id: string | null) => void;
   renameProject: (id: string, name: string) => Promise<void>;
   /** Wie im Prototyp: das letzte Projekt bleibt. */
-  trashProject: (id: string) => Promise<void>;
+  trashProject: (id: string, forGood?: boolean) => Promise<void>;
   /** Für welches Projekt der Kategorien-Dialog gilt; ohne Angabe das aktuelle. */
   catProject: string | null;
   openCategories: (projectId?: string) => void;
@@ -287,6 +291,8 @@ type State = {
   setMilestoneStatus: (id: string, status: 'open' | 'progress' | 'done') => Promise<void>;
   /** `message` ersetzt die übliche Meldung – etwa „In den Papierkorb verschoben“ im Archiv. */
   remove: (kind: Kind, id: string, message?: string) => Promise<void>;
+  /** Endgültig löschen – über den Papierkorb, siehe `purgeAfterTrash`. */
+  destroy: (kind: Kind, id: string) => Promise<void>;
   /** Nimmt auch die Einbettung aus der Beschreibung, mit „Rückgängig“. */
   removeDrawing: (id: string, name: string) => Promise<void>;
 
@@ -569,38 +575,10 @@ export const useStore = create<State>((set, get) => ({
     set({ multi: new Set(), anchor: null });
   },
 
-  bulk: async (action, message) => {
-    const { ws, multi, visible } = get();
-    if (!ws || !multi.size) return;
-    const order = (id: string): number => {
-      const i = visible.indexOf(id);
-      return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-    };
-    const items = [...multi]
-      .sort((a, b) => order(a) - order(b))
-      .map((id) => ws.task(id))
-      .filter((t): t is Task => !!t)
-      .map((t) => ({ id: t.id, version: t.version }));
-    if (!items.length) return;
+  bulk: async (action, message) => bulkRun(action, message),
 
-    try {
-      const { count, undo } = await api.bulk(items, action);
-      await get().load();
-      // Archivieren und Löschen nehmen die Zeilen weg – danach ist nichts mehr ausgewählt.
-      const gone = action.type === 'archive' || action.type === 'trash';
-      remember(message(count), undo);
-      set({
-        ...(gone ? { multi: new Set<string>(), anchor: null, selected: null } : {}),
-      });
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        await get().load();
-        set({ toast: 'Inzwischen woanders geändert – nichts geändert, bitte nochmal.' });
-        return;
-      }
-      set({ toast: e instanceof Error ? e.message : 'Stapel-Änderung fehlgeschlagen' });
-    }
-  },
+  destroyMulti: async () =>
+    bulkRun({ type: 'trash' }, (c) => `${c} ${c === 1 ? 'Aufgabe' : 'Aufgaben'} endgültig gelöscht`, true),
 
   /* ------------------------------------------------------------ Rücknahme */
 
@@ -834,7 +812,7 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  trashProject: async (id) => {
+  trashProject: async (id, forGood = false) => {
     const { ws } = get();
     const p = ws?.project(id);
     if (!ws || !p) return;
@@ -849,14 +827,21 @@ export const useStore = create<State>((set, get) => ({
       const fallback = rest[0]?.id ?? 'all';
       if (get().scope === id) get().setScope(fallback);
       if (get().lastProject === id) set({ lastProject: fallback === 'all' ? null : fallback });
-      await get().load();
+      const n = entry?.taskCount ?? 0;
+      const tasks = `${n} ${n === 1 ? 'Task' : 'Tasks'}`;
+      if (forGood) {
+        await purgeAfterTrash(
+          [trashId],
+          [{ op: 'untrash', trashId }],
+          `Projekt „${p.name}“ mit ${tasks} endgültig gelöscht`,
+        );
+      } else {
+        await get().load();
+        remember(`Projekt „${p.name}“ mit ${tasks} im Papierkorb`, [{ op: 'untrash', trashId }]);
+      }
       if (get().selected && !get().ws?.task(get().selected) && !get().ws?.milestone(get().selected)) {
         set({ selected: null });
       }
-      const n = entry?.taskCount ?? 0;
-      remember(`Projekt „${p.name}“ mit ${n} ${n === 1 ? 'Task' : 'Tasks'} im Papierkorb`, [
-        { op: 'untrash', trashId },
-      ]);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
@@ -1038,6 +1023,17 @@ export const useStore = create<State>((set, get) => ({
       await get().load();
       remember(message ?? REMOVED[kind] ?? 'In den Papierkorb gelegt', [{ op: 'untrash', trashId }]);
     } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
+    }
+  },
+
+  destroy: async (kind, id) => {
+    try {
+      const { trashId } = await api.remove(kind, id);
+      if (get().selected === id) set({ selected: null });
+      await purgeAfterTrash([trashId], [{ op: 'untrash', trashId }], DESTROYED[kind] ?? 'Endgültig gelöscht');
+    } catch (e) {
+      await get().load();
       set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen' });
     }
   },
@@ -1260,6 +1256,24 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
+  destroyImages: async (ids) => {
+    if (!ids.length) return;
+    const trashIds: string[] = [];
+    try {
+      for (const id of ids) trashIds.push((await api.trashImage(id)).trashId);
+      const rest = new Set(get().imageSel);
+      for (const id of ids) rest.delete(id);
+      set({ imageSel: rest });
+      const name = ids.length === 1 ? `„${get().images.find((b) => b.id === ids[0])?.name ?? 'Bild'}“` : `${ids.length} Bilder`;
+      // Bilder kennen kein „Rückgängig“ – `purgeTrash` lässt sie ohnehin aus.
+      await purgeAfterTrash(trashIds, [], `${name} endgültig gelöscht`);
+    } catch (e) {
+      // Was schon im Papierkorb liegt, bleibt dort – verloren geht nichts.
+      await Promise.all([get().loadImages(), get().trash ? get().loadTrash() : null]);
+      set({ toast: e instanceof Error ? e.message : 'Löschen fehlgeschlagen', toastUndo: false });
+    }
+  },
+
   imageSel: new Set(),
   setImageSel: (ids) => set({ imageSel: new Set(ids) }),
 
@@ -1438,6 +1452,74 @@ const REMOVED: Partial<Record<Kind, string>> = {
   milestone: 'Milestone im Papierkorb – seine Tasks liegen unter „Unsortiert“',
   group: 'Gruppe gelöscht – ihre Tasks liegen unter „Unsortiert“',
 };
+
+const DESTROYED: Partial<Record<Kind, string>> = {
+  milestone: 'Milestone endgültig gelöscht – seine Tasks liegen unter „Unsortiert“',
+};
+
+/**
+ * „Endgültig löschen“ ist kein eigener Weg: der Eintrag geht erst in den
+ * Papierkorb und wird von dort gleich wieder entfernt – genau wie beim Leeren.
+ * Alles, was am endgültigen Löschen hängt (Bilder, Verweise in Texten), läuft
+ * so an einer einzigen Stelle und kann nicht auseinanderlaufen.
+ *
+ * „Rückgängig“ geht beide Schritte in einem zurück: `back` sind die
+ * Gegen-Schritte des Löschens, sie laufen nach denen des Leerens.
+ */
+async function purgeAfterTrash(trashIds: string[], back: Step[], message: string): Promise<void> {
+  const s = useStore.getState();
+  if (!trashIds.length) return s.load();
+  const { undo, images } = await api.emptyTrash(trashIds);
+  await Promise.all([s.load(), images ? s.loadImages() : null]);
+  remember(message, undo.length ? [...undo, ...back] : []);
+}
+
+/**
+ * Eine Handlung auf der ganzen Auswahl. Mit `forGood` wird aus dem Papierkorb
+ * gleich wieder geleert (`purgeAfterTrash`); die Einträge nennen die
+ * Gegen-Schritte des Löschens.
+ */
+async function bulkRun(
+  action: BulkAction,
+  message: (count: number) => string,
+  forGood = false,
+): Promise<void> {
+  const { ws, multi, visible, load } = useStore.getState();
+  if (!ws || !multi.size) return;
+  const order = (id: string): number => {
+    const i = visible.indexOf(id);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const items = [...multi]
+    .sort((a, b) => order(a) - order(b))
+    .map((id) => ws.task(id))
+    .filter((t): t is Task => !!t)
+    .map((t) => ({ id: t.id, version: t.version }));
+  if (!items.length) return;
+
+  try {
+    const { count, undo } = await api.bulk(items, action);
+    if (forGood) {
+      const trashIds = undo.flatMap((s) => (s.op === 'untrash' ? [s.trashId] : []));
+      await purgeAfterTrash(trashIds, undo, message(count));
+    } else {
+      await load();
+      remember(message(count), undo);
+    }
+    // Archivieren und Löschen nehmen die Zeilen weg – danach ist nichts mehr ausgewählt.
+    if (action.type === 'archive' || action.type === 'trash') {
+      useStore.setState({ multi: new Set<string>(), anchor: null, selected: null });
+    }
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) {
+      await load();
+      useStore.setState({ toast: 'Inzwischen woanders geändert – nichts geändert, bitte nochmal.' });
+      return;
+    }
+    if (forGood) await load();
+    useStore.setState({ toast: e instanceof Error ? e.message : 'Stapel-Änderung fehlgeschlagen' });
+  }
+}
 
 /** Wie tief der Rücknahme-Stapel reicht. Mehr braucht niemand, weniger nervt. */
 const UNDO_DEPTH = 25;

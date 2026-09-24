@@ -98,6 +98,11 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
       danger: true,
       onSelect: () => void store.remove('task', t.id),
     },
+    {
+      label: 'Endgültig löschen',
+      danger: true,
+      onSelect: () => void store.destroy('task', t.id),
+    },
   ];
 }
 
@@ -123,6 +128,11 @@ export function docMenu(ws: Workspace, t: Task): MenuItem[] {
       kbd: 'Entf',
       danger: true,
       onSelect: () => void store.remove('task', t.id),
+    },
+    {
+      label: 'Endgültig löschen',
+      danger: true,
+      onSelect: () => void store.destroy('task', t.id),
     },
   ];
 }
@@ -197,6 +207,11 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       kbd: 'Entf',
       danger: true,
       onSelect: () => void store.remove('milestone', m.id),
+    },
+    {
+      label: 'Endgültig löschen',
+      danger: true,
+      onSelect: () => void store.destroy('milestone', m.id),
     },
   ];
 }
@@ -313,6 +328,12 @@ export function projectMenu(ws: Workspace, p: Project): MenuItem[] {
       danger: true,
       disabled: last,
       onSelect: () => void store.trashProject(p.id),
+    },
+    {
+      label: 'Projekt endgültig löschen',
+      danger: true,
+      disabled: last,
+      onSelect: () => void store.trashProject(p.id, true),
     },
   ];
 }

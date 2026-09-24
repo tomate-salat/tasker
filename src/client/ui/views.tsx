@@ -66,8 +66,8 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
           }
           const row = rows.find((r) => r.id === id);
           if (!row) return;
+          // Anders als im Prototyp wählt der Rechtsklick nichts aus (Wunsch des Nutzers).
           state.clearMulti();
-          if (row.type === 'task' || row.type === 'milestone') state.select(id);
           menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
         }}
       >

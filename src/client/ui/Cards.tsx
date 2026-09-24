@@ -703,7 +703,6 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
           const row = rows.find((r) => r.id === rid);
           if (!row) return;
           state.clearMulti();
-          state.select(rid);
           menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
         }}
       >

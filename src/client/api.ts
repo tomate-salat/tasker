@@ -294,7 +294,8 @@ export const api = {
   },
 
   /** Löschen heißt Papierkorb – der Platz wird erst beim Leeren frei. */
-  trashImage: (id: string) => post<ImageMeta>(`/api/bilder/${id}/loeschen`),
+  trashImage: (id: string) =>
+    post<ImageMeta & { trashId: string }>(`/api/bilder/${id}/loeschen`),
 
   restoreImage: (id: string) => post<ImageMeta>(`/api/bilder/${id}/zurueck`),
 

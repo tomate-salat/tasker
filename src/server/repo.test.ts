@@ -597,6 +597,23 @@ describe('Löschen', () => {
   });
 
   /**
+   * „Endgültig löschen“ im Kontextmenü ist Papierkorb plus sofortiges Leeren.
+   * Die Rücknahme verkettet beide Gegen-Schritte: erst zurück in den
+   * Papierkorb, dann wieder heraus – in einer Transaktion.
+   */
+  it('direkt endgültig gelöscht kommt mit einem Rückgängig ganz zurück', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const trashId = remove(ctx, 'task', a.id).trashId;
+    const { undo } = purgeTrash(ctx, [trashId]);
+    assert.deepEqual(loadTrash(ctx), []);
+
+    applySteps(ctx, [...undo, { op: 'untrash', trashId }]);
+    assert.deepEqual(loadTrash(ctx), []);
+    assert.equal(one(a.id).title, 'A');
+  });
+
+  /**
    * Ein Projekt besitzt Kategorien, Gruppen und Milestones – sie gehen mit in
    * den Papierkorb und kommen beim Wiederherstellen samt Zuordnung zurück.
    */

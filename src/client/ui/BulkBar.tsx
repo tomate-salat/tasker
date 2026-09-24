@@ -116,6 +116,7 @@ export function bulkMenu(ws: Workspace): MenuItem[] {
       onSelect: () =>
         void store.bulk({ type: 'trash' }, (c) => `${c} ${word(c)} in den Papierkorb verschoben`),
     },
+    { label: 'Endgültig löschen', danger: true, onSelect: () => void store.destroyMulti() },
   ];
 }
 

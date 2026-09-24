@@ -211,9 +211,11 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
    */
   app.post('/bilder/:id/loeschen', (c) =>
     run(c, bus, () => {
-      const meta = trashImage(ctx, c.req.param('id'), newId('x'));
+      // Die Nummer des Eintrags geht mit – „Endgültig löschen“ leert ihn gleich.
+      const trashId = newId('x');
+      const meta = trashImage(ctx, c.req.param('id'), trashId);
       if (!meta) throw new NotFound();
-      return meta;
+      return { ...meta, trashId };
     }),
   );
 
