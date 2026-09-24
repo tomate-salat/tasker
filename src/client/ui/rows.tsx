@@ -28,6 +28,7 @@ export function TaskRow({
   menu,
   fixed = false,
   compact = false,
+  noEdit = false,
 }: {
   ws: Workspace;
   task: Task;
@@ -39,6 +40,12 @@ export function TaskRow({
   fixed?: boolean;
   /** Baum im Inspektor: ohne Kategorie und Labels, damit der Titel Platz hat. */
   compact?: boolean;
+  /**
+   * Die Zeile steht zugleich in der Liste und wird dort bearbeitet. Zwei
+   * Eingabefelder für denselben Titel nähmen sich den Fokus weg – das
+   * verlassene hielte sich für leer abgebrochen und verwürfe die neue Aufgabe.
+   */
+  noEdit?: boolean;
 }) {
   const { selected, select, collapsed, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } =
     useStore();
@@ -129,7 +136,7 @@ export function TaskRow({
         </>
       )}
 
-      {editing === task.id ? (
+      {editing === task.id && !noEdit ? (
         <TitleEdit kind="task" id={task.id} title={task.title} />
       ) : (
         <span className="title" onDoubleClick={() => useStore.getState().edit(task.id)}>

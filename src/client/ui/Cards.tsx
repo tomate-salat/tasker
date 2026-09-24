@@ -670,6 +670,10 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   const current = ws.task(state.selected);
   const open = !state.collapsed[HIER_KEY];
   const doc = ws.isDoc(root);
+  // Neben der Liste wird der Titel dort bearbeitet, nicht im Baum. Bewusst ohne
+  // `visible`: das meldet die Liste erst nach dem Zeichnen – im ersten Durchgang
+  // stünden sonst doch zwei Eingabefelder da.
+  const listEdits = isLayoutView(state.view) && !cardsOn(state);
 
   return (
     <section className={`d-section hier-sec ${open ? '' : 'shut'}`}>
@@ -719,6 +723,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
                 menu={menu}
                 fixed={r.id === root.id}
                 compact
+                noEdit={listEdits}
               />
             ),
         )}
