@@ -212,7 +212,7 @@
   flex-direction: column;
   gap: 7px;
   padding: 8px 10px 10px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
   border-top: 1px solid var(--line);
   border-radius: 0 0 10px 10px;
 }
@@ -369,7 +369,7 @@
   justify-content: flex-start;
   gap: 6px;
   padding: 5px 10px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
   border-bottom: 1px solid var(--line);
   border-radius: 10px 10px 0 0;
   font: 600 12px/1.2 var(--body);
