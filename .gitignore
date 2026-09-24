@@ -1,6 +1,8 @@
 node_modules/
 dist/
 data/
+# Wegwerf-Datenbank für Prüfungen im Browser, siehe BROWSER-TESTS.md
+data-demo/
 *.db
 *.db-wal
 *.db-shm

@@ -5,6 +5,8 @@ Persönliches Projektmanagement-Werkzeug, selbst gehostet. Ersatz für Codecks.
 - `prototype/index.html` – der klickbare Prototyp aus Phase 1. Bleibt als Referenz für Gestaltung
   und Verhalten liegen.
 - `PHASE-2.md` – der Plan für die echte Anwendung: Entscheidungen, Datenmodell, API, Reihenfolge.
+- `BROWSER-TESTS.md` – wie man die laufende Anwendung im Browser prüft, ohne die eigenen Daten
+  anzufassen: Demo-Server mit Wegwerf-Datenbank und eigenem Konto.
 - `src/`, `db/` – die Anwendung selbst.
 
 ## Entwicklung
