@@ -348,10 +348,6 @@ function readLayouts(): Record<LayoutView, Layout> {
   return out;
 }
 
-/** Ob irgendeine Ansicht Karten zeigt – dann gibt es auch die Titelbild-Vorgaben. */
-export const usesCards = (s: { layouts: Record<LayoutView, Layout> }): boolean =>
-  LAYOUT_VIEWS.some((v) => s.layouts[v] === 'cards');
-
 export const useStore = create<State>((set, get) => ({
   boot: null,
   ws: null,

@@ -169,14 +169,14 @@ function coverProject(o: CoverOwner): string | null {
 
 /**
  * Das Titelbild dezent hinter dem Inspektor – oben bündig, auf Breite gebracht,
- * unten weich ausgeblendet (Wunsch des Nutzers). Nur in der Kartenansicht.
+ * unten weich ausgeblendet (Wunsch des Nutzers). In jeder Ansicht – auch wo
+ * die Liste keine Titelbilder zeigt, soll der Inspektor sie zeigen.
  * Ein echtes Bild statt eines Hintergrunds, damit der Verlauf an seinem
  * eigenen unteren Rand sitzt, egal wie hoch es ist.
  */
 export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null | undefined }) {
-  const on = useStore((s) => cardsOn(s));
   const id = task && effectiveCover(ws, task)?.imageId;
-  if (!on || !id) return null;
+  if (!id) return null;
   return (
     <div className="d-cover" aria-hidden>
       <img src={imageUrl(id)} alt="" />
@@ -328,7 +328,7 @@ function mergeDrop(
 }
 
 /**
- * Die Zeile „Titelbild“ im Inspektor – nur in der Kartenansicht. Eine Vorschau
+ * Die Zeile „Titelbild“ im Inspektor – in jeder Ansicht. Eine Vorschau
  * gibt es bewusst nicht, das Bild sieht man an der Karte (Wunsch des Nutzers).
  * Ohne Titelbild steht hier ein Ablagefeld: ein Bild aus der Galerie oder vom
  * Rechner daraufziehen, mit Strg+V einfügen (das Feld braucht dafür den Fokus)
@@ -339,14 +339,12 @@ function mergeDrop(
  * überschreibt das geerbte, „Entfernen“ gibt es nur für das eigene.
  */
 export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
-  const on = useStore((s) => cardsOn(s));
   const from = task.coverImageId ? null : effectiveCover(ws, task)?.from;
   const file = useRef<HTMLInputElement>(null);
   const owner: CoverOwner = { kind: 'task', item: task };
   const target = { type: 'cover', task } as const;
   const zone = useZone(target);
   const drop = useFileDrop(owner);
-  if (!on) return null;
 
   return (
     <div className="m-row" data-r="cover">
@@ -606,13 +604,14 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
 }
 
 /**
- * Der Baum einer Karte im Inspektor: dieselben Zeilen wie in der Liste, mit
- * Auswahl, Ziehen, Kontextmenü und Titelbearbeitung. Er steht am Ende des
- * Inspektors (Wunsch des Nutzers).
+ * Der Baum im Inspektor: dieselben Zeilen wie in der Liste, mit Auswahl,
+ * Ziehen, Kontextmenü und Titelbearbeitung. Er steht am Ende des Inspektors
+ * (Wunsch des Nutzers) – in der Karten- wie in der Listenansicht, ein
+ * Inspektor für beide.
  */
 export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; menu: Menu }) {
   const state = useStore();
-  const root = cardsOn(state) ? hierarchyRoot(ws, id) : null;
+  const root = hierarchyRoot(ws, id);
   if (!root) return null;
   const rows = treeRows(ws, root, state.collapsed);
   const current = ws.task(state.selected);

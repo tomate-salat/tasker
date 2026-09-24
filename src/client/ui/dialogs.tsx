@@ -4,7 +4,7 @@ import type { Settings } from '@shared/model.js';
 import { categoriesOf, categoryColorIndex } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account } from '../api.js';
-import { useStore, usesCards } from '../store.js';
+import { useStore } from '../store.js';
 import { CoverSlot } from './Cards.js';
 import { categoryHue } from './colors.js';
 import { THEME_LABEL } from './icons.js';
@@ -74,8 +74,6 @@ export function CategoriesDialog({
   onClose: () => void;
 }) {
   const { patch, remove, say, load } = useStore();
-  // Karten: die Vorgaben für Titelbilder gibt es nur, wenn eine Ansicht Karten zeigt.
-  const covers = useStore(usesCards);
   const project = ws.project(projectId);
   const categories = categoriesOf(ws, projectId);
   const [name, setName] = useState('');
@@ -100,7 +98,7 @@ export function CategoriesDialog({
       sub={`Für das Projekt „${project?.name ?? ''}“. Jeder Task hat höchstens eine Kategorie.`}
       onClose={onClose}
     >
-      {covers && project && (
+      {project && (
         <div className="mk-row cover-default">
           <CoverSlot owner={{ kind: 'project', item: project }} />
           <span className="hint">
@@ -124,7 +122,7 @@ export function CategoriesDialog({
               <span className="mk-count">
                 {ws.tasks.filter((t) => t.categoryId === c.id).length} Tasks
               </span>
-              {covers && <CoverSlot owner={{ kind: 'category', item: c }} />}
+              <CoverSlot owner={{ kind: 'category', item: c }} />
               <button
                 className="icon-btn"
                 title="Löschen"
@@ -166,8 +164,6 @@ const EMOJI_PICKS = ['🐞', '🔧', '✨', '📐', '🎨', '🎧', '🚀', '�
 
 export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => void }) {
   const { patch, remove, say, load } = useStore();
-  // Karten: die Vorgaben für Titelbilder gibt es nur, wenn eine Ansicht Karten zeigt.
-  const covers = useStore(usesCards);
   const [emoji, setEmoji] = useState('');
   const [name, setName] = useState('');
 
@@ -190,12 +186,10 @@ export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => voi
       sub="Das Emoji steht vor dem Titel. Jeder Task kann eine Markierung haben, sie gelten für alle Projekte."
       onClose={onClose}
     >
-      {covers && (
-        <p className="hint">
-          Das Bild rechts ist die Vorgabe für Titelbilder: es gilt für Karten mit dieser Markierung, sticht
-          das Projekt und wird von Kategorie und Task überschrieben.
-        </p>
-      )}
+      <p className="hint">
+        Das Bild rechts ist die Vorgabe für Titelbilder: es gilt für Karten mit dieser Markierung, sticht
+        das Projekt und wird von Kategorie und Task überschrieben.
+      </p>
       <h3>Vorhanden</h3>
       {ws.marks.length ? (
         <div className="mk-list">
@@ -210,7 +204,7 @@ export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => voi
               <span className="mk-count">
                 {ws.tasks.filter((t) => t.markId === k.id).length} Tasks
               </span>
-              {covers && <CoverSlot owner={{ kind: 'mark', item: k }} />}
+              <CoverSlot owner={{ kind: 'mark', item: k }} />
               <button
                 className="icon-btn"
                 title="Löschen"
