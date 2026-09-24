@@ -382,3 +382,50 @@
   -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
   mask-image: linear-gradient(to bottom, #000 55%, transparent);
 }
+
+/* Vorgaben für Titelbilder in den Dialogen Kategorien und Markierungen: ein
+   kleines Vorschaubild im Kartenformat, ohne Bild ein gestricheltes Feld. */
+.cover-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.cover-slot-pic {
+  width: 48px;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--surface) center / cover no-repeat;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.cover-slot-pic.empty {
+  border-style: dashed;
+}
+
+.cover-slot-pic:hover,
+.cover-slot-pic:focus-visible,
+.cover-slot.dz-on .cover-slot-pic {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.cover-slot.dz-on .cover-slot-pic.empty {
+  background-color: var(--accent-soft);
+}
+
+.cover-default {
+  margin-bottom: 12px;
+}
+
+.cover-default .hint {
+  margin: 0;
+}

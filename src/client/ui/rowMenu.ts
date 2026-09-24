@@ -281,7 +281,11 @@ export function projectMenu(ws: Workspace, p: Project): MenuItem[] {
   return [
     { label: 'Öffnen', onSelect: () => store.setScope(p.id) },
     { label: 'Umbenennen', kbd: 'Doppelklick', onSelect: () => store.setEditProject(p.id) },
-    { label: 'Kategorien verwalten …', onSelect: () => store.openCategories(p.id) },
+    {
+      // Karten: im selben Dialog steht das Titelbild des Projekts.
+      label: store.layout === 'cards' ? 'Kategorien & Titelbild …' : 'Kategorien verwalten …',
+      onSelect: () => store.openCategories(p.id),
+    },
     {
       label: 'Farbe',
       sub: PROJECT_COLORS.map(([color, name]) => ({

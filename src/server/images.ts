@@ -322,13 +322,25 @@ export const imageRefs = (text: string | null | undefined): string[] =>
 
 /** Wo ein Bild überall steckt – und in welchem Zustand das Umgebende ist. */
 export type Usage = {
-  /** Lebende, nicht archivierte Aufgaben und Milestones. */
-  live: { kind: 'task' | 'milestone'; id: string; title: string }[];
+  /**
+   * Lebende, nicht archivierte Aufgaben und Milestones – und Projekte,
+   * Kategorien und Markierungen, deren Vorgabe für Titelbilder es ist.
+   */
+  live: UsageEntry[];
   /** Dasselbe für Archiviertes. */
-  archived: { kind: 'task' | 'milestone'; id: string; title: string }[];
+  archived: UsageEntry[];
   /** Und für das, was nur noch im Papierkorb liegt. */
-  trashed: { kind: 'task' | 'milestone'; id: string; title: string }[];
+  trashed: UsageEntry[];
 };
+
+export type UsageEntry = {
+  kind: 'task' | 'milestone' | 'project' | 'category' | 'mark';
+  id: string;
+  title: string;
+};
+
+/** Wo ein Titelbild stehen kann. */
+const COVER_TABLES = ['task', 'project', 'category', 'mark'] as const;
 
 const empty = (): Usage => ({ live: [], archived: [], trashed: [] });
 
@@ -344,7 +356,7 @@ export function usage(ctx: DbCtx): Map<string, Usage> {
   const add = (
     imageId: string,
     where: keyof Usage,
-    entry: { kind: 'task' | 'milestone'; id: string; title: string },
+    entry: UsageEntry,
   ): void => {
     const u = out.get(imageId) ?? empty();
     if (!u[where].some((e) => e.id === entry.id)) u[where].push(entry);
@@ -368,6 +380,17 @@ export function usage(ctx: DbCtx): Map<string, Usage> {
   for (const r of covers) {
     add(r.cover_image_id, r.archived_at ? 'archived' : 'live', { kind: 'task', id: r.id, title: r.title });
   }
+  // … und die Vorgaben an Projekt, Kategorie und Markierung.
+  const defaults = ctx.sqlite
+    .prepare(
+      `SELECT 'project' AS kind, id, name AS title, cover_image_id FROM project WHERE cover_image_id IS NOT NULL
+       UNION ALL
+       SELECT 'category', id, name, cover_image_id FROM category WHERE cover_image_id IS NOT NULL
+       UNION ALL
+       SELECT 'mark', id, emoji || ' ' || name, cover_image_id FROM mark WHERE cover_image_id IS NOT NULL`,
+    )
+    .all() as { kind: 'project' | 'category' | 'mark'; id: string; title: string; cover_image_id: string }[];
+  for (const r of defaults) add(r.cover_image_id, 'live', { kind: r.kind, id: r.id, title: r.title });
 
   // Der Papierkorb: die gelöschten Zeilen liegen als JSON im Eintrag.
   const entries = ctx.sqlite
@@ -497,12 +520,16 @@ export function stripRefs(ctx: DbCtx, imageId: string): number {
 /** Endgültig – hier sind die Bytes wirklich weg, und die Texte sagen es. */
 export function purgeImage(ctx: DbCtx, id: string): void {
   stripRefs(ctx, id);
-  // Karten: ein Titelbild, das es nicht mehr gibt, fällt einfach weg.
-  ctx.sqlite
-    .prepare(
-      'UPDATE task SET cover_image_id = NULL, updated_at = ?, version = version + 1 WHERE cover_image_id = ?',
-    )
-    .run(new Date().toISOString(), id);
+  // Karten: ein Titelbild, das es nicht mehr gibt, fällt einfach weg – am Task
+  // wie an den Vorgaben von Projekt, Kategorie und Markierung.
+  const at = new Date().toISOString();
+  for (const table of COVER_TABLES) {
+    ctx.sqlite
+      .prepare(
+        `UPDATE ${table} SET cover_image_id = NULL, updated_at = ?, version = version + 1 WHERE cover_image_id = ?`,
+      )
+      .run(at, id);
+  }
   ctx.sqlite.prepare('DELETE FROM image WHERE id = ?').run(id);
 }
 

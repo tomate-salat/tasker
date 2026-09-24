@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { checklist } from '@shared/checklist.js';
-import { isDone, type Task } from '@shared/model.js';
+import { coverFromLabel, effectiveCategory, effectiveCover, effectiveMark } from '@shared/inherit.js';
+import { isDone, type Category, type Mark, type Project, type Task } from '@shared/model.js';
 import type { OutlineRow, OutlineView } from '@shared/outline.js';
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
@@ -13,7 +14,7 @@ import { bulkMenu } from './BulkBar.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { CHEVRON_DOWN, CHEVRON_RIGHT, PrioIcon, SegBar } from './icons.js';
-import type { Menu } from './Menu.js';
+import type { Menu, MenuItem } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { ChecklistBadge, DrawingBadge, LockBadge, StatusDot, TaskRow, TitleEdit } from './rows.js';
 import './cards.css';
@@ -113,22 +114,56 @@ export function CardGrid({
 /* ------------------------------------------------------------ Titelbild */
 
 /**
- * Das Titelbild einer Karte, in der kleinen Fassung. Nur das ausdrücklich
- * gesetzte – Bilder in der Beschreibung zählen nicht (Wunsch des Nutzers).
- * Später sollen hier Vorgaben greifen: Task → Kategorie → Projekt.
+ * Das Titelbild einer Karte, in der kleinen Fassung. Nur ausdrücklich gesetzte
+ * Bilder – die in der Beschreibung zählen nicht (Wunsch des Nutzers). Es gilt
+ * die Kette Projekt → Markierung → Kategorie → Task → Unteraufgabe, siehe
+ * `effectiveCover`.
  */
 const coverOf = (ws: Workspace, task: Task): string | null => {
-  const id = coverSource(ws, task)?.coverImageId;
+  const id = effectiveCover(ws, task)?.imageId;
   return id ? imageUrl(id, 'klein') : null;
 };
 
 /**
- * Woher das Titelbild kommt: die Aufgabe selbst oder – geerbt – die nächste
- * darüber, die eins hat. Ein eigenes Bild überschreibt das geerbte.
+ * Wer ein Titelbild tragen kann: der Task selbst oder – als Vorgabe für alle
+ * darunter – Projekt, Kategorie und Markierung.
  */
-function coverSource(ws: Workspace, task: Task): Task | null {
-  for (let t: Task | null = task; t; t = ws.task(t.parentId)) if (t.coverImageId) return t;
-  return null;
+export type CoverOwner =
+  | { kind: 'task'; item: Task }
+  | { kind: 'project'; item: Project }
+  | { kind: 'category'; item: Category }
+  | { kind: 'mark'; item: Mark };
+
+/** Für Meldungen: „Titelbild für … gesetzt“. */
+export function coverOwnerLabel(o: CoverOwner): string {
+  switch (o.kind) {
+    case 'task':
+      return `„${o.item.title || 'Ohne Titel'}“`;
+    case 'project':
+      return `Projekt „${o.item.name}“`;
+    case 'category':
+      return `Kategorie „${o.item.name}“`;
+    case 'mark':
+      return `Markierung ${o.item.emoji} ${o.item.name}`;
+  }
+}
+
+/**
+ * Das Projekt, in dessen Galerie ein hochgeladenes Titelbild landet. Die
+ * Markierung gilt projektübergreifend – ihr Bild kommt ins zuletzt offene Projekt.
+ */
+function coverProject(o: CoverOwner): string | null {
+  switch (o.kind) {
+    case 'task':
+    case 'category':
+      return o.item.projectId;
+    case 'project':
+      return o.item.id;
+    case 'mark': {
+      const s = useStore.getState();
+      return s.lastProject ?? s.ws?.projects[0]?.id ?? null;
+    }
+  }
 }
 
 /**
@@ -139,7 +174,7 @@ function coverSource(ws: Workspace, task: Task): Task | null {
  */
 export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null | undefined }) {
   const on = useStore((s) => cardsOn(s));
-  const id = task && coverSource(ws, task)?.coverImageId;
+  const id = task && effectiveCover(ws, task)?.imageId;
   if (!on || !id) return null;
   return (
     <div className="d-cover" aria-hidden>
@@ -148,24 +183,58 @@ export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null 
   );
 }
 
+/**
+ * Die Einträge „Als Titelbild …“ im Kontextmenü der Galerie: für den offenen
+ * Task und, als Vorgabe, für seine Kategorie, Markierung und sein Projekt –
+ * ohne offenen Task für das gewählte Projekt.
+ */
+export function coverMenu(
+  ws: Workspace,
+  task: Task | null,
+  projectId: string | null,
+  imageId: string | null,
+): MenuItem[] {
+  const own: CoverOwner | null = task && !ws.isDoc(task) ? { kind: 'task', item: task } : null;
+  const owners: CoverOwner[] = [];
+  const category = task && effectiveCategory(ws, task)?.category;
+  const mark = task && effectiveMark(ws, task);
+  const project = ws.project(task?.projectId ?? projectId);
+  if (category) owners.push({ kind: 'category', item: category });
+  if (mark) owners.push({ kind: 'mark', item: mark });
+  if (project) owners.push({ kind: 'project', item: project });
+  const item = (o: CoverOwner, label: string): MenuItem => ({
+    label,
+    disabled: !imageId,
+    check: !!imageId && o.item.coverImageId === imageId,
+    onSelect: () => {
+      if (imageId) void setCover(o, imageId);
+    },
+  });
+
+  return [
+    ...(own ? [item(own, `Als Titelbild von ${coverOwnerLabel(own)}`)] : []),
+    ...(owners.length
+      ? [{ label: 'Als Titelbild-Vorgabe für', sub: owners.map((o) => item(o, coverOwnerLabel(o))) } as MenuItem]
+      : []),
+  ];
+}
+
 /** Der Ordner der Galerie, in dem hochgeladene Titelbilder landen – je Projekt. */
 const COVER_FOLDER = 'Cardimages';
 
-/** Setzt oder entfernt das Titelbild (`null`). */
-export async function setCover(task: Task, imageId: string | null): Promise<void> {
+/** Setzt oder entfernt das Titelbild (`null`) – am Task oder als Vorgabe. */
+export async function setCover(owner: CoverOwner, imageId: string | null): Promise<void> {
   const store = useStore.getState();
-  await store.patch('task', task.id, { coverImageId: imageId });
+  await store.patch(owner.kind, owner.item.id, { coverImageId: imageId });
   // Die Galerie soll die neue Verwendung sehen.
   refreshGallery();
   store.say(
-    imageId
-      ? `Titelbild für „${task.title || 'Ohne Titel'}“ gesetzt`
-      : `Titelbild von „${task.title || 'Ohne Titel'}“ entfernt`,
+    imageId ? `Titelbild für ${coverOwnerLabel(owner)} gesetzt` : `Titelbild von ${coverOwnerLabel(owner)} entfernt`,
   );
 }
 
 /** Der Ordner „Cardimages“ oben im Projekt – legt ihn an, wenn es ihn nicht gibt. */
-async function coverFolder(projectId: string): Promise<string> {
+async function coverFolder(projectId: string | null): Promise<string> {
   const find = (): string | undefined =>
     useStore
       .getState()
@@ -183,7 +252,7 @@ async function coverFolder(projectId: string): Promise<string> {
  * Eine Datei vom Rechner (gezogen oder eingefügt) wird zum Titelbild: wie jedes
  * Bild verkleinert und als WebP hochgeladen, abgelegt in „Cardimages“.
  */
-export async function uploadCover(task: Task, list: FileList | File[] | null | undefined): Promise<void> {
+export async function uploadCover(owner: CoverOwner, list: FileList | File[] | null | undefined): Promise<void> {
   const file = imagesIn(list)[0];
   if (!file) return;
   const store = useStore.getState();
@@ -191,10 +260,10 @@ export async function uploadCover(task: Task, list: FileList | File[] | null | u
   try {
     const { imageMaxKb, imageMaxEdge } = store.settings;
     const prepared = await prepareImage(file, { maxKb: imageMaxKb, maxEdge: imageMaxEdge });
-    const folderId = await coverFolder(task.projectId);
-    const meta = await api.addImage({ ...prepared, projectId: task.projectId, folderId });
-    const current = useStore.getState().ws?.task(task.id) ?? task;
-    await setCover(current, meta.id);
+    const projectId = coverProject(owner);
+    const folderId = await coverFolder(projectId);
+    const meta = await api.addImage({ ...prepared, projectId, folderId });
+    await setCover(owner, meta.id);
   } catch (e) {
     store.say(
       e instanceof ImageRejected || e instanceof Error ? e.message : 'Das Bild konnte nicht hochgeladen werden.',
@@ -203,7 +272,7 @@ export async function uploadCover(task: Task, list: FileList | File[] | null | u
 }
 
 /** Dateien vom Rechner als Ablage: hervorheben, beim Loslassen hochladen. */
-function useFileDrop(task: Task): {
+function useFileDrop(owner: CoverOwner): {
   over: boolean;
   events: Pick<React.HTMLAttributes<HTMLElement>, 'onDragOver' | 'onDragLeave' | 'onDrop'>;
 } {
@@ -227,7 +296,7 @@ function useFileDrop(task: Task): {
         if (!hasFiles(e.dataTransfer)) return;
         e.preventDefault();
         e.stopPropagation();
-        void uploadCover(task, e.dataTransfer.files);
+        void uploadCover(owner, e.dataTransfer.files);
       },
     },
   };
@@ -257,16 +326,18 @@ function mergeDrop(
  * Rechner daraufziehen, mit Strg+V einfügen (das Feld braucht dafür den Fokus)
  * oder klicken und eine Datei wählen. Mit Titelbild steht hier nur „Entfernen“;
  * die Zeile nimmt aber weiter ein Bild an und ersetzt damit das alte.
- * Erbt eine Unteraufgabe das Bild, bleibt das Ablagefeld – ein eigenes Bild
+ * Erbt der Task das Bild (vom Elternteil oder als Vorgabe von Kategorie,
+ * Markierung oder Projekt), bleibt das Ablagefeld – ein eigenes Bild
  * überschreibt das geerbte, „Entfernen“ gibt es nur für das eigene.
  */
 export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
   const on = useStore((s) => cardsOn(s));
-  const from = task.coverImageId ? null : coverSource(ws, task);
+  const from = task.coverImageId ? null : effectiveCover(ws, task)?.from;
   const file = useRef<HTMLInputElement>(null);
+  const owner: CoverOwner = { kind: 'task', item: task };
   const target = { type: 'cover', task } as const;
   const zone = useZone(target);
-  const drop = useFileDrop(task);
+  const drop = useFileDrop(owner);
   if (!on) return null;
 
   return (
@@ -278,7 +349,7 @@ export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
         {...mergeDrop(drop.events, dropTarget(target))}
       >
         {task.coverImageId ? (
-          <button className="prop" title="Titelbild entfernen" onClick={() => void setCover(task, null)}>
+          <button className="prop" title="Titelbild entfernen" onClick={() => void setCover(owner, null)}>
             Entfernen
           </button>
         ) : (
@@ -287,7 +358,7 @@ export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
             role="button"
             tabIndex={0}
             title={
-              (from ? `Geerbt von „${from.title || 'Ohne Titel'}“ – ein eigenes Bild überschreibt es.\n` : '') +
+              (from ? `Geerbt von ${coverFromLabel(from)} – ein eigenes Bild überschreibt es.\n` : '') +
               'Bild aus der Galerie oder vom Rechner hierher ziehen, mit Strg+V einfügen oder klicken'
             }
             onClick={() => file.current?.click()}
@@ -300,7 +371,7 @@ export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
             onPaste={(e) => {
               if (!imagesIn(e.clipboardData.files).length) return;
               e.preventDefault();
-              void uploadCover(task, e.clipboardData.files);
+              void uploadCover(owner, e.clipboardData.files);
             }}
           >
             + Bild
@@ -312,12 +383,76 @@ export function CoverRow({ ws, task }: { ws: Workspace; task: Task }) {
           accept="image/*"
           hidden
           onChange={(e) => {
-            void uploadCover(task, e.target.files);
+            void uploadCover(owner, e.target.files);
             e.target.value = '';
           }}
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Das Titelbild als Vorgabe an Projekt, Kategorie oder Markierung – ein kleines
+ * Feld in deren Verwaltungsdialog. Ohne Bild ein Ablagefeld (Datei vom Rechner
+ * daraufziehen, Strg+V, Klick für den Dateidialog), mit Bild ein Vorschaubild
+ * zum Ersetzen und ✕ zum Entfernen. Aus der Galerie geht es über deren
+ * Kontextmenü, weil der Dialog die Galerie verdeckt.
+ */
+export function CoverSlot({ owner }: { owner: Exclude<CoverOwner, { kind: 'task' }> }) {
+  const file = useRef<HTMLInputElement>(null);
+  const drop = useFileDrop(owner);
+  const id = owner.item.coverImageId;
+  const pick = (): void => file.current?.click();
+
+  return (
+    <span className={`cover-slot ${drop.over ? 'dz-on' : ''}`} {...drop.events}>
+      <span
+        className={`cover-slot-pic ${id ? '' : 'empty'}`}
+        role="button"
+        tabIndex={0}
+        style={id ? { backgroundImage: `url(${imageUrl(id, 'klein')})` } : undefined}
+        title={
+          `Titelbild-Vorgabe für ${coverOwnerLabel(owner)} – gilt für alle Karten darunter ohne eigenes.\n` +
+          (id ? 'Klicken, ein Bild hierher ziehen oder Strg+V ersetzt es.' : 'Klicken, ein Bild hierher ziehen oder Strg+V.')
+        }
+        aria-label={`Titelbild für ${coverOwnerLabel(owner)}`}
+        onClick={pick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            pick();
+          }
+        }}
+        onPaste={(e) => {
+          if (!imagesIn(e.clipboardData.files).length) return;
+          e.preventDefault();
+          void uploadCover(owner, e.clipboardData.files);
+        }}
+      >
+        {id ? null : '+'}
+      </span>
+      {id && (
+        <button
+          className="icon-btn cover-slot-del"
+          title="Titelbild entfernen"
+          aria-label={`Titelbild von ${coverOwnerLabel(owner)} entfernen`}
+          onClick={() => void setCover(owner, null)}
+        >
+          ✕
+        </button>
+      )}
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          void uploadCover(owner, e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </span>
   );
 }
 
@@ -327,7 +462,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const { selected, select, editing, multi, toggleMulti, rangeMulti, clearMulti } = useStore();
   const target = { type: 'task', task, card: true } as const;
   const zone = useZone(target);
-  const files = useFileDrop(task);
+  const files = useFileDrop({ kind: 'task', item: task });
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
   const mark = ws.mark(task.markId);
@@ -353,7 +488,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
       const files = e.clipboardData?.files;
       if (!imagesIn(files).length) return;
       e.preventDefault();
-      void uploadCover(task, files);
+      void uploadCover({ kind: 'task', item: task }, files);
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);

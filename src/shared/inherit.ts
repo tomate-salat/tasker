@@ -1,4 +1,4 @@
-import type { Category, Task } from './model.js';
+import type { Category, Mark, Project, Task } from './model.js';
 import type { Workspace } from './workspace.js';
 
 /**
@@ -22,6 +22,70 @@ export function effectiveCategory(
     x = ws.task(x.parentId);
   }
   return null;
+}
+
+/** Die Markierung eines Tasks, ohne eigene die des nächsten Vorfahren – wie `effectiveCategory`. */
+export function effectiveMark(ws: Workspace, t: Task): Mark | null {
+  const seen = new Set<string>();
+  for (let x: Task | null = t; x && !seen.has(x.id); x = ws.task(x.parentId)) {
+    seen.add(x.id);
+    const mark = ws.mark(x.markId);
+    if (mark) return mark;
+  }
+  return null;
+}
+
+/** Wem das Titelbild einer Karte gehört – der Task selbst oder eine Vorgabe darüber. */
+export type CoverFrom =
+  | { kind: 'task'; task: Task }
+  | { kind: 'category'; category: Category }
+  | { kind: 'mark'; mark: Mark }
+  | { kind: 'project'; project: Project };
+
+/**
+ * Das Titelbild einer Karte (Kartenansicht, Versuch) über die Kette
+ * Projekt → Markierung → Kategorie → Task → Unteraufgabe → …: es gilt das
+ * spezifischste gesetzte Bild, das Projekt ist die letzte Vorgabe. Zuerst der
+ * Task und seine Vorfahren (der nächste gewinnt), dann seine Kategorie, dann
+ * seine Markierung – beide wie die Kategorie auch geerbt –, zuletzt das Projekt.
+ *
+ * Abgeleitet, nie gespeichert – wie `effectiveCategory`.
+ */
+export function effectiveCover(ws: Workspace, t: Task): { imageId: string; from: CoverFrom } | null {
+  const chain: Task[] = [];
+  const seen = new Set<string>();
+  for (let x: Task | null = t; x && !seen.has(x.id); x = ws.task(x.parentId)) {
+    seen.add(x.id);
+    chain.push(x);
+  }
+
+  const task = chain.find((x) => x.coverImageId);
+  if (task?.coverImageId) return { imageId: task.coverImageId, from: { kind: 'task', task } };
+
+  const category = effectiveCategory(ws, t)?.category;
+  if (category?.coverImageId) return { imageId: category.coverImageId, from: { kind: 'category', category } };
+
+  const mark = effectiveMark(ws, t);
+  if (mark?.coverImageId) return { imageId: mark.coverImageId, from: { kind: 'mark', mark } };
+
+  const project = ws.project(t.projectId);
+  if (project?.coverImageId) return { imageId: project.coverImageId, from: { kind: 'project', project } };
+
+  return null;
+}
+
+/** Für Tooltips: woher ein geerbtes Titelbild kommt. */
+export function coverFromLabel(from: CoverFrom): string {
+  switch (from.kind) {
+    case 'task':
+      return `„${from.task.title || 'Ohne Titel'}“`;
+    case 'category':
+      return `der Kategorie „${from.category.name}“`;
+    case 'mark':
+      return `der Markierung ${from.mark.emoji} ${from.mark.name}`;
+    case 'project':
+      return `dem Projekt „${from.project.name}“`;
+  }
 }
 
 export type EffectiveTags = {

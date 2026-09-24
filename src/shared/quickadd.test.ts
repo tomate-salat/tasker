@@ -15,7 +15,7 @@ function ws() {
     .task('t1', 'p1', { title: 'Kampfsystem', milestoneId: 'm1' })
     .task('t2', 'p1', { title: 'Nahkampf', parentId: 't1' })
     .task('t3', 'p2', { title: 'Kontaktformular' });
-  b.raw().marks.push({ id: 'k1', version: 1, emoji: '🐞', name: 'Bug', order: 0 });
+  b.raw().marks.push({ id: 'k1', version: 1, emoji: '🐞', name: 'Bug', order: 0, coverImageId: null });
   return b.build();
 }
 

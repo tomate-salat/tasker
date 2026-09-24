@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, beforeEach, describe, it } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import type { Milestone, Task } from '../shared/model.js';
+import type { Category, Mark, Milestone, Project, Task } from '../shared/model.js';
 import { createDbCtx, type DbCtx } from './db.js';
 import {
   GONE_NOTE,
@@ -256,6 +256,38 @@ describe('Bilder löschen', () => {
     assert.equal(row.cover_image_id, null);
     // Die Version zählt hoch, damit ein offener Tab nicht auf altem Stand speichert.
     assert.equal(row.version, gesetzt.version + 1);
+  });
+
+  it('Titelbild-Vorgaben an Projekt, Kategorie und Markierung zählen und fallen beim Entfernen weg', () => {
+    const p = mkProject() as Project;
+    const c = create(ctx, 'category', { projectId: p.id, name: 'Player' }) as Category;
+    const k = create(ctx, 'mark', { emoji: '🐞', name: 'Bug' }) as Mark;
+    const bild = put('vorgabe');
+    const gp = patch(ctx, 'project', p.id, p.version, { coverImageId: bild.id }) as Project;
+    const gc = patch(ctx, 'category', c.id, c.version, { coverImageId: bild.id }) as Category;
+    const gk = patch(ctx, 'mark', k.id, k.version, { coverImageId: bild.id }) as Mark;
+    assert.deepEqual([gp.coverImageId, gc.coverImageId, gk.coverImageId], [bild.id, bild.id, bild.id]);
+    assert.deepEqual(
+      usage(ctx).get(bild.id)?.live.map((e) => [e.kind, e.title]),
+      [
+        ['project', 'Spiel'],
+        ['category', 'Player'],
+        ['mark', '🐞 Bug'],
+      ],
+    );
+
+    purgeImage(ctx, bild.id);
+    for (const [table, vorher] of [
+      ['project', gp],
+      ['category', gc],
+      ['mark', gk],
+    ] as const) {
+      const row = ctx.sqlite
+        .prepare(`SELECT cover_image_id, version FROM ${table} WHERE id = ?`)
+        .get(vorher.id) as { cover_image_id: string | null; version: number };
+      assert.equal(row.cover_image_id, null, table);
+      assert.equal(row.version, vorher.version + 1, table);
+    }
   });
 
   it('lässt andere Bilder im selben Text unberührt', () => {
