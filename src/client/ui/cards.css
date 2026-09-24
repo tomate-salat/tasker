@@ -113,6 +113,8 @@
   margin: 0;
   pointer-events: none;
   will-change: transform;
+  /* Folgt dem Zeiger sofort – das Ausweichen der Karten darf hier nicht nachziehen. */
+  transition: none !important;
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
 }
 
@@ -143,6 +145,29 @@
 
 .tcard-cell.dz-after::after {
   right: -1.5px;
+}
+
+/* Die beiden Karten an der Einfügemarke weichen zur Seite, als machten sie
+   Platz (Wunsch des Nutzers). Verschoben wird nur die Karte, nicht ihre
+   Zelle – das Ablageziel bleibt stehen, die Marke springt nicht. */
+.tcard {
+  transition: transform 160ms ease;
+}
+
+.tcard-cell.dz-before .tcard,
+.tcard-cell.dz-after + .tcard-cell .tcard {
+  transform: translateX(10px);
+}
+
+.tcard-cell.dz-after .tcard,
+.tcard-cell:has(+ .tcard-cell.dz-before) .tcard {
+  transform: translateX(-10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tcard {
+    transition: none;
+  }
 }
 
 
