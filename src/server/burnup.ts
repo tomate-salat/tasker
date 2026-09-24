@@ -1,15 +1,7 @@
-import { backfillLog, type LogEntry, msPoints, nextEntry, type Points } from '../shared/burnup.js';
+import { backfillLog, type LogEntry, msPoints, nextEntry } from '../shared/burnup.js';
 import { Workspace } from '../shared/workspace.js';
 import type { DbCtx } from './db.js';
-import { loadAllTasks, loadBootstrap } from './repo.js';
-
-/**
- * Der Bestand, wie der Burnup ihn braucht: aktive Milestones, aber alle
- * Aufgaben – erledigte archivierte zählen weiter (siehe `msPoints`).
- */
-function burnupWorkspace(ctx: DbCtx): Workspace {
-  return new Workspace({ ...loadBootstrap(ctx), tasks: loadAllTasks(ctx) });
-}
+import { loadBootstrap } from './repo.js';
 
 /**
  * Schreibt das Burnup-Protokoll aller aktiven Milestones fort, wie `logScopes`
@@ -20,7 +12,7 @@ function burnupWorkspace(ctx: DbCtx): Workspace {
  */
 export function logScopes(ctx: DbCtx, at: string = new Date().toISOString()): void {
   ctx.sqlite.transaction(() => {
-    const ws = burnupWorkspace(ctx);
+    const ws = new Workspace(loadBootstrap(ctx));
     const logs = loadLogs(ctx);
     const put = ctx.sqlite.prepare(
       'INSERT OR REPLACE INTO milestone_log (milestone_id, at, scope, done) VALUES (?, ?, ?, ?)',
@@ -37,23 +29,6 @@ export function logScopes(ctx: DbCtx, at: string = new Date().toISOString()): vo
       if (e) put.run(m.id, e.at, e.s, e.dn);
     }
   })();
-}
-
-/**
- * Der Anteil archivierter Aufgaben am Burnup je aktivem Milestone. Der Client
- * kennt nur den aktiven Bestand und rechnet den heutigen Stand selbst; das
- * hier legt er drauf. Milestones ohne archivierten Anteil fehlen.
- */
-export function archivedPoints(ctx: DbCtx): Record<string, Points> {
-  const full = burnupWorkspace(ctx);
-  const active = new Workspace(loadBootstrap(ctx));
-  const out: Record<string, Points> = {};
-  for (const m of full.milestones) {
-    const a = msPoints(full, m);
-    const b = msPoints(active, m);
-    if (a.s !== b.s || a.dn !== b.dn) out[m.id] = { s: a.s - b.s, dn: a.dn - b.dn };
-  }
-  return out;
 }
 
 /** Die Protokolle der aktiven Milestones, je Milestone zeitlich sortiert. */

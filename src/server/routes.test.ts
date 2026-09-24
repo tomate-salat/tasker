@@ -13,6 +13,9 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { Hono } from 'hono';
 import type { Envelope } from '../shared/events.js';
 import { CLIENT_HEADER } from '../shared/events.js';
+import type { Data } from '../shared/model.js';
+import { milestoneStats } from '../shared/progress.js';
+import { Workspace } from '../shared/workspace.js';
 import { createDbCtx, type DbCtx } from './db.js';
 import { EventBus } from './events.js';
 import { dataRoutes } from './routes.js';
@@ -167,12 +170,21 @@ describe('Routen', () => {
     await send('POST', `/kind/task/${b.id}/archive`);
 
     const boot = (await send('GET', '/bootstrap')).body as {
+      tasks: { id: string }[];
+      archivedTasks: { id: string }[];
       milestoneLog: Record<string, { s: number; dn: number }[]>;
-      archivedPoints: Record<string, { s: number; dn: number }>;
     };
     const last = boot.milestoneLog[m.id]?.at(-1);
     assert.deepEqual(last && [last.s, last.dn], [2, 1]);
-    assert.deepEqual(boot.archivedPoints[m.id], { s: 1, dn: 1 });
+    // Archiviertes an aktivem Ort kommt getrennt vom aktiven Bestand mit.
+    assert.deepEqual(boot.archivedTasks.map((t) => t.id).sort(), [a.id, b.id].sort());
+    assert.ok(!boot.tasks.some((t) => t.id === a.id));
+
+    // Zähler und Liste im Inspektor: 1/2 bleibt, das offen Archivierte fällt heraus.
+    const ws = new Workspace(boot as unknown as Data);
+    const ms = ws.milestone(m.id)!;
+    assert.deepEqual([milestoneStats(ws, ms).done, milestoneStats(ws, ms).total], [1, 2]);
+    assert.deepEqual(ws.msCounted(ms).map((t) => t.title), ['A', 'C']);
   });
 
   it('Zeichnungen: anlegen, speichern, umbenennen, löschen', async () => {

@@ -45,7 +45,6 @@ describe('msPoints', () => {
       .build();
     // a + c + (d1, d2) + (e1, e2)
     assert.deepEqual(msPoints(ws, ws.milestone('m')!), { s: 6, dn: 4 });
-    assert.deepEqual(msPoints(ws, ws.milestone('m')!, { s: 2, dn: 1 }), { s: 8, dn: 5 });
   });
 });
 

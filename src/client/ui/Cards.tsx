@@ -471,6 +471,8 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const files = useFileDrop({ kind: 'task', item: task });
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
+  // Zähler und Balken zählen erledigt Archiviertes mit (siehe `countedKids`).
+  const counted = ws.countedKids(task.id).length;
   const doc = ws.isDoc(task);
   const mark = ws.mark(task.markId);
   const cover = coverOf(ws, task);
@@ -585,19 +587,20 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
             <LockBadge ws={ws} task={task} />
             <ChecklistBadge desc={task.desc} />
             <DrawingBadge ownerId={task.id} />
-            {kids.length > 0 &&
-              (doc ? (
-                <span className="tcard-count" title={`${kids.length} ${kids.length === 1 ? 'Unterseite' : 'Unterseiten'}`}>
-                  {kids.length}
-                </span>
-              ) : (
-                <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
-                  {doneCount(ws, task)}/{total(ws, task)}
-                </span>
-              ))}
+            {doc
+              ? kids.length > 0 && (
+                  <span className="tcard-count" title={`${kids.length} ${kids.length === 1 ? 'Unterseite' : 'Unterseiten'}`}>
+                    {kids.length}
+                  </span>
+                )
+              : counted > 0 && (
+                  <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
+                    {doneCount(ws, task)}/{total(ws, task)}
+                  </span>
+                )}
           </span>
         </div>
-        {!doc && (kids.length > 0 || cl.total > 0) && <SegBar segments={segments} />}
+        {!doc && (counted > 0 || cl.total > 0) && <SegBar segments={segments} />}
       </div>
     </div>
     </div>

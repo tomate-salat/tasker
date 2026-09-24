@@ -8,7 +8,7 @@ import type {
   Stub,
   Undoable,
 } from '@shared/api.js';
-import type { LogEntry, Points } from '@shared/burnup.js';
+import type { LogEntry } from '@shared/burnup.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data, Milestone, Task } from '@shared/model.js';
 import type { RefStub } from '@shared/refs.js';
@@ -54,8 +54,6 @@ export type Bootstrap = Data & {
   drawings: DrawingMeta[];
   /** Burnup-Protokoll je aktivem Milestone; den heutigen Stand rechnet der Client selbst. */
   milestoneLog: Record<string, LogEntry[]>;
-  /** Erledigte archivierte Aufgaben je Milestone – zählen im Burnup weiter mit. */
-  archivedPoints: Record<string, Points>;
 };
 
 export class ApiError extends Error {

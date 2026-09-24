@@ -112,6 +112,12 @@ export type Data = {
   groups: Group[];
   milestones: Milestone[];
   tasks: Task[];
+  /**
+   * Archivierte Aufgaben, deren Ort noch aktiv ist, samt ihren Unteraufgaben.
+   * Sie gehören nicht zu `tasks`: die Arbeitsansichten zeigen sie nicht, nur
+   * Zähler und die Listen im Inspektor (siehe `Workspace.countedKids`).
+   */
+  archivedTasks?: Task[];
 };
 
 /** Dauerhafte Einstellungen – im Gegensatz zum reinen Anzeigezustand im Client. */

@@ -7,20 +7,20 @@ import type { Workspace } from './workspace.js';
  * eine Sammel-Aufgabe zählt die Summe ihrer Unteraufgaben.
  */
 export function total(ws: Workspace, t: Task): number {
-  const kids = ws.kids(t.id);
+  const kids = ws.countedKids(t.id);
   return kids.length ? sumBy(kids, (k) => total(ws, k)) : 1;
 }
 
 /** Erledigte Aufgaben darunter. */
 export function doneCount(ws: Workspace, t: Task): number {
   if (isDone(t)) return total(ws, t);
-  return sumBy(ws.kids(t.id), (k) => doneCount(ws, k));
+  return sumBy(ws.countedKids(t.id), (k) => doneCount(ws, k));
 }
 
 /** Erledigt oder nur noch aus erledigten Unteraufgaben bestehend. */
 export function allDone(ws: Workspace, t: Task): boolean {
   if (isDone(t)) return true;
-  const kids = ws.kids(t.id);
+  const kids = ws.countedKids(t.id);
   return kids.length > 0 && kids.every((k) => allDone(ws, k));
 }
 
@@ -31,7 +31,7 @@ export function allDone(ws: Workspace, t: Task): boolean {
  */
 export function progressUnits(ws: Workspace, t: Task): number {
   if (isDone(t)) return total(ws, t);
-  const kids = ws.kids(t.id);
+  const kids = ws.countedKids(t.id);
   const own = checklist(t.desc);
   const fromChecklist = own.total && !kids.length ? own.done / own.total : 0;
   return fromChecklist + sumBy(kids, (k) => progressUnits(ws, k));
@@ -41,7 +41,7 @@ export function progressPct(ws: Workspace, t: Task): number {
   const tot = total(ws, t);
   if (tot) return Math.round((progressUnits(ws, t) / tot) * 100);
   if (isDone(t)) return 100;
-  return partsPct(checklist(t.desc), ws.kids(t.id), ws);
+  return partsPct(checklist(t.desc), ws.countedKids(t.id), ws);
 }
 
 export type MilestoneStats = {
@@ -60,7 +60,7 @@ export type MilestoneStats = {
 };
 
 export function milestoneStats(ws: Workspace, m: Milestone): MilestoneStats {
-  const roots = ws.msRoots(m);
+  const roots = ws.msCounted(m);
   const tot = sumBy(roots, (r) => total(ws, r));
   const dn = sumBy(roots, (r) => doneCount(ws, r));
   const done = m.status === 'done';
@@ -86,7 +86,7 @@ export function milestoneDone(ws: Workspace, m: Milestone): boolean {
 
 export function milestoneProgressPct(ws: Workspace, m: Milestone): number {
   if (m.status === 'done') return 100;
-  const roots = ws.msRoots(m);
+  const roots = ws.msCounted(m);
   const tot = sumBy(roots, (r) => total(ws, r));
   if (tot) return Math.round((sumBy(roots, (r) => progressUnits(ws, r)) / tot) * 100);
   return partsPct(checklist(m.desc), roots, ws);
@@ -110,12 +110,12 @@ export function statusSegments(ws: Workspace, x: Task | Milestone): Segment[] {
   }));
 
   const walk = (t: Task): void => {
-    const kids = ws.kids(t.id);
+    const kids = ws.countedKids(t.id);
     if (kids.length) kids.forEach(walk);
     else segs.push({ kind: 'task', status: t.status });
   };
 
-  const roots = isMilestone(x) ? ws.msRoots(x) : ws.kids(x.id);
+  const roots = isMilestone(x) ? ws.msCounted(x) : ws.countedKids(x.id);
   roots.forEach(walk);
   return segs;
 }

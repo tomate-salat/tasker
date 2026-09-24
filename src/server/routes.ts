@@ -23,7 +23,7 @@ import {
   type Kind,
 } from '../shared/api.js';
 import { CLIENT_HEADER, type ChangeEvent } from '../shared/events.js';
-import { archivedPoints, loadLogs, logScopes } from './burnup.js';
+import { loadLogs, logScopes } from './burnup.js';
 import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
@@ -88,11 +88,7 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   // Das Burnup-Protokoll kommt mit; ein neuer Tag bekommt dabei seinen Eintrag.
   app.get('/bootstrap', (c) => {
     logScopes(ctx);
-    return c.json({
-      ...loadBootstrap(ctx),
-      milestoneLog: loadLogs(ctx),
-      archivedPoints: archivedPoints(ctx),
-    });
+    return c.json({ ...loadBootstrap(ctx), milestoneLog: loadLogs(ctx) });
   });
 
   app.get('/archive', (c) => {

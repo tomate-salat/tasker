@@ -7,6 +7,7 @@ import {
   type Project,
   type Task,
   isArchived,
+  isDone,
 } from './model.js';
 
 /**
@@ -68,6 +69,13 @@ export class Workspace {
       for (const d of t.deps) push(this.blocksOf, d, t);
     }
 
+    // Archiviertes an aktivem Ort steht nur unter seinem Ort, nicht in `tasks`.
+    for (const t of data.archivedTasks ?? []) {
+      if (this.taskById.has(t.id)) continue;
+      if (t.parentId) push(this.allKidsOf, t.parentId, t);
+      else if (t.milestoneId) push(this.allRootsOfMilestone, t.milestoneId, t);
+    }
+
     for (const list of this.kidsOf.values()) list.sort(byOrder);
     for (const list of this.allKidsOf.values()) list.sort(byOrder);
     for (const list of this.rootsOfMilestone.values()) list.sort(byOrder);
@@ -94,6 +102,29 @@ export class Workspace {
 
   /** Wurzelaufgaben eines Milestones einschließlich archivierter. */
   msAllRoots = (m: Milestone): Task[] => this.allRootsOfMilestone.get(m.id) ?? [];
+
+  /**
+   * Was zählt und im Inspektor unter seinem Ort steht: aktive Unteraufgaben
+   * und erledigt Archiviertes – Archivieren räumt nur auf, es nimmt nichts
+   * weg. Offen Archiviertes gilt als verworfen und fällt heraus.
+   */
+  countedKids = (id: string): Task[] => this.allKids(id).filter(this.counted);
+
+  /** Wie `countedKids`, für die Wurzelaufgaben eines Milestones. */
+  msCounted = (m: Milestone): Task[] => this.msAllRoots(m).filter(this.counted);
+
+  private readonly finishedOf = new Map<string, boolean>();
+  private readonly counted = (t: Task): boolean => !isArchived(t) || this.finished(t);
+  /** Erledigt oder nur noch aus erledigten (gezählten) Unteraufgaben bestehend. */
+  private readonly finished = (t: Task): boolean => {
+    let v = this.finishedOf.get(t.id);
+    if (v === undefined) {
+      const ks = isDone(t) ? [] : this.countedKids(t.id);
+      v = isDone(t) || (ks.length > 0 && ks.every(this.finished));
+      this.finishedOf.set(t.id, v);
+    }
+    return v;
+  };
 
   /** Tasks, die von diesem Task oder Milestone abhängen. */
   blocks = (x: { id: string }): Task[] => this.blocksOf.get(x.id) ?? [];

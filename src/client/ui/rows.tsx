@@ -48,7 +48,9 @@ export function TaskRow({
   const tot = total(ws, task);
   const done = doneCount(ws, task);
   const cl = checklist(task.desc);
-  const showBar = kids.length > 0 || cl.total > 0;
+  // Zähler und Balken zählen erledigt Archiviertes mit (siehe `countedKids`).
+  const counted = ws.countedKids(task.id).length;
+  const showBar = counted > 0 || cl.total > 0;
 
   // Klick auf eine Zelle öffnet ihr Menü darunter, statt die Zeile auszuwählen.
   const cell =
@@ -147,7 +149,7 @@ export function TaskRow({
         ) : (
           <>
             <span className="pts sum" title={`${done} von ${tot} Aufgaben erledigt`}>
-              {kids.length ? `${done}/${tot}` : ''}
+              {counted ? `${done}/${tot}` : ''}
             </span>
             <span
               className={`bar ${showBar ? '' : 'empty'}`}

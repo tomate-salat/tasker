@@ -260,7 +260,7 @@ function TaskHead({
   menu: ReturnType<typeof useMenu>;
 }) {
   const patch = useStore((s) => s.patch);
-  const kids = ws.kids(task.id);
+  const kids = ws.countedKids(task.id);
   const cl = checklist(task.desc);
   const cat = effectiveCategory(ws, task);
   const mark = ws.mark(task.markId);
@@ -751,8 +751,9 @@ function Content({
 /* -------------------------------------------------------- Unteraufgaben */
 
 function TaskChildren({ ws, task }: { ws: Workspace; task: Task }) {
-  const kids = ws.kids(task.id);
   const doc = ws.isDoc(task);
+  // Erledigt Archiviertes bleibt unter seinem Ort stehen (siehe `countedKids`).
+  const kids = doc ? ws.kids(task.id) : ws.countedKids(task.id);
   const add = useAddChild();
 
   return (
@@ -773,7 +774,7 @@ function TaskChildren({ ws, task }: { ws: Workspace; task: Task }) {
 }
 
 function MilestoneChildren({ ws, milestone }: { ws: Workspace; milestone: Milestone }) {
-  const roots = ws.msRoots(milestone);
+  const roots = ws.msCounted(milestone);
   const add = useAddChild();
 
   return (
@@ -814,17 +815,20 @@ function useAddChild(): (input: Record<string, unknown>, parentId: string) => Pr
 }
 
 function ChildList({ ws, tasks, doc }: { ws: Workspace; tasks: Task[]; doc: boolean }) {
-  const select = useStore((s) => s.select);
+  const { select, reveal } = useStore();
   return (
     <>
       {tasks.map((k) => {
         const done = allDone(ws, k);
         const mark = ws.mark(k.markId);
+        // Archiviertes liegt nicht im Arbeitsstand – es öffnet sich im Archiv.
+        const archived = isArchived(k);
         return (
           <button
             key={k.id}
             className={`child ${done && !doc ? 'done' : ''}`}
-            onClick={() => select(k.id)}
+            title={archived ? 'Archiviert – im Archiv öffnen' : undefined}
+            onClick={() => (archived ? reveal(k.id) : select(k.id))}
           >
             {doc ? (
               <span className="doc-ico">{DOC_ICON}</span>
@@ -842,7 +846,7 @@ function ChildList({ ws, tasks, doc }: { ws: Workspace; tasks: Task[]; doc: bool
             <span className="pts">
               {doc
                 ? ws.kids(k.id).length || ''
-                : ws.kids(k.id).length
+                : ws.countedKids(k.id).length
                   ? `${doneCount(ws, k)}/${total(ws, k)}`
                   : ''}
             </span>

@@ -127,6 +127,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     groups: groups.map(toGroup),
     milestones: milestones.map((m) => toMilestone(m, depsOfMs.get(m.id) ?? [])),
     tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
+    archivedTasks: loadArchivedInPlace(ctx),
     stubs,
     refStubs,
     archiveCounts,
@@ -135,13 +136,24 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
 }
 
 /**
- * Alle Aufgaben, auch archivierte und verdeckte – für den Burnup, der
- * erledigte archivierte Aufgaben weiter zählt. Ohne Labels und Abhängigkeiten.
+ * Einzeln archivierte Aufgaben, deren Ort – Elternaufgabe oder Milestone –
+ * noch aktiv ist, samt allem darunter. Sie zählen und stehen weiter unter
+ * ihrem Ort (siehe `Workspace.countedKids`). Ohne Labels und Abhängigkeiten.
  */
-export function loadAllTasks(ctx: DbCtx): Task[] {
-  return (ctx.sqlite.prepare('SELECT * FROM task ORDER BY sort_order').all() as TaskRow[]).map((t) =>
-    toTask(t, [], []),
-  );
+function loadArchivedInPlace(ctx: DbCtx): Task[] {
+  const rows = ctx.sqlite
+    .prepare(
+      `WITH RECURSIVE sub(id) AS (
+         SELECT id FROM task
+         WHERE archived_at IS NOT NULL AND hidden_by IS NULL
+           AND (parent_id IS NOT NULL OR milestone_id IS NOT NULL)
+         UNION ALL
+         SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id
+       )
+       SELECT t.* FROM task t JOIN sub ON sub.id = t.id ORDER BY t.sort_order`,
+    )
+    .all() as TaskRow[];
+  return rows.map((t) => toTask(t, [], []));
 }
 
 /** Ob ein Objekt zum aktiven Bestand gehört, den `loadBootstrap` ausliefert. */
