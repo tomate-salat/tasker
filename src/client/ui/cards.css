@@ -206,8 +206,14 @@
   min-height: 20px;
 }
 
-.tcard-count {
+.tcard-badges {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tcard-count {
   font: 600 12px/1 var(--body);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -223,16 +229,6 @@
 
 .tcard .cell:hover {
   background: color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-.tcard .mk-add {
-  color: var(--faint);
-  font-size: 11px;
-  opacity: 0;
-}
-
-.tcard:hover .mk-add {
-  opacity: 1;
 }
 
 .tcard .segbar {

@@ -578,25 +578,17 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
               <PrioIcon prio={task.prio} cell />
             </span>
           ) : null}
-          {!mark && (
-            <span
-              className="mk-add cell"
-              role="button"
-              tabIndex={-1}
-              title="Markierung setzen"
-              onClick={cell('mark')}
-            >
-              ＋
-            </span>
-          )}
-          <LockBadge ws={ws} task={task} />
-          <ChecklistBadge desc={task.desc} />
-          <DrawingBadge ownerId={task.id} />
-          {kids.length > 0 && (
-            <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
-              {doneCount(ws, task)}/{total(ws, task)}
-            </span>
-          )}
+          {/* Abzeichen und Zähler rücken nach rechts, Status und Priorität bleiben links. */}
+          <span className="tcard-badges">
+            <LockBadge ws={ws} task={task} />
+            <ChecklistBadge desc={task.desc} />
+            <DrawingBadge ownerId={task.id} />
+            {kids.length > 0 && (
+              <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
+                {doneCount(ws, task)}/{total(ws, task)}
+              </span>
+            )}
+          </span>
         </div>
         {(kids.length > 0 || cl.total > 0) && <SegBar segments={segments} />}
       </div>
