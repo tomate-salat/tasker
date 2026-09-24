@@ -340,21 +340,36 @@
   margin-left: auto;
 }
 
-/* Markierung unten rechts über dem Fuß – der Titel bekommt die volle Breite. */
-.tcard-mark {
+/* Markierung als Leiste über dem Titel – gestaltet wie der Fuß. */
+.tcard .tcard-markbar {
   position: relative;
   z-index: 1;
-  margin-top: auto;
-  align-self: flex-end;
-  padding: 0 8px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-bottom: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+  font: 600 12px/1.2 var(--body);
+  color: var(--muted);
 }
 
-.tcard-mark + .tcard-foot {
-  margin-top: 0;
+.tcard .tcard-markbar:hover {
+  background: color-mix(in srgb, var(--surface) 80%, var(--ink) 8%);
 }
 
-.tcard-mark .mk-emoji {
-  font-size: 17px;
+.tcard-markbar .mk-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tcard-markname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Titelbild dezent hinter dem Inspektor: oben bündig, auf Breite gebracht,

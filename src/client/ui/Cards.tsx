@@ -184,19 +184,14 @@ export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null 
 }
 
 /**
- * Die Einträge „Als Titelbild …“ im Kontextmenü der Galerie: für den offenen
- * Task und, als Vorgabe, für jedes Projekt, jede Kategorie und jede Markierung –
- * so lassen sich Bilder aus der Galerie auch für die Vorgaben verwenden.
+ * Die Einträge „Als Titelbild für …“ im Kontextmenü der Galerie: als Vorgabe
+ * für jedes Projekt, jede Kategorie und jede Markierung – so lassen sich Bilder
+ * aus der Galerie auch dafür verwenden. Für den Task selbst gibt es hier nichts,
+ * dafür zieht man das Bild auf Karte oder Inspektor (Wunsch des Nutzers).
  * Projekte und Kategorien nur die des gewählten Projekts, unter „Alle
  * Projekte“ alle, die Kategorien dann nach Projekt überschrieben.
  */
-export function coverMenu(
-  ws: Workspace,
-  task: Task | null,
-  projectId: string | null,
-  imageId: string | null,
-): MenuItem[] {
-  const own: CoverOwner | null = task && !ws.isDoc(task) ? { kind: 'task', item: task } : null;
+export function coverMenu(ws: Workspace, projectId: string | null, imageId: string | null): MenuItem[] {
   const scoped = ws.project(projectId);
   const projects = scoped ? [scoped] : ws.projects;
   const item = (o: CoverOwner, label = coverOwnerLabel(o)): MenuItem => ({
@@ -219,7 +214,6 @@ export function coverMenu(
     sub.length ? [{ label, disabled: !imageId, sub }] : [];
 
   return [
-    ...(own ? [item(own, `Als Titelbild von ${coverOwnerLabel(own)}`)] : []),
     ...group(
       'Als Titelbild für Projekt',
       projects.map((p) => item({ kind: 'project', item: p }, p.name)),
@@ -550,6 +544,21 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
     >
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
 
+      {/* Die Markierung steht als Leiste über dem Titel, mit Emoji und Namen –
+          als Gegenstück zum Fuß (Wunsch des Nutzers). */}
+      {mark && (
+        <div
+          className="tcard-markbar cell"
+          role="button"
+          tabIndex={-1}
+          title={`${mark.name} – klicken zum Ändern`}
+          onClick={cell('mark')}
+        >
+          <span className="mk-emoji">{mark.emoji}</span>
+          <span className="tcard-markname">{mark.name}</span>
+        </div>
+      )}
+
       <div className="tcard-head">
         {/* Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet. */}
         {editing === task.id && !kids.length ? (
@@ -560,21 +569,6 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           </span>
         )}
       </div>
-
-      {/* Die Markierung steht unten rechts, damit der Titel die volle Breite hat. */}
-      {mark && (
-        <div className="tcard-mark">
-          <span
-            className="mk-emoji cell"
-            role="button"
-            tabIndex={-1}
-            title={`${mark.name} – klicken zum Ändern`}
-            onClick={cell('mark')}
-          >
-            {mark.emoji}
-          </span>
-        </div>
-      )}
 
       <div className="tcard-foot">
         <div className="tcard-meta">

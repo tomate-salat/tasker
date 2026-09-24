@@ -48,11 +48,10 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready und Backlog als Karten erscheinen,
   angelehnt an Codecks – ein gemeinsamer Umschalter „Liste/Karten“ in der Reiterleiste, gemerkt pro
   Gerät. Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
-  Markierung (unten rechts, damit der Titel die volle Breite hat) und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
+  Markierung (als Leiste über dem Titel mit Emoji und Namen, gestaltet wie der Fuß) und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
   Task; Bilder in der Beschreibung zählen nicht): über das Feld „Titelbild“ rechts neben dem Status im Inspektor (ohne Vorschau –
   die zeigt die Karte; ohne Bild ein Ablagefeld für Ziehen aus Galerie oder vom Rechner, Strg+V und
-  Klick für den Dateidialog, mit Bild nur „Entfernen“), per „Als Titelbild von …“ im
-  Kontextmenü der Galerie, durch Ziehen auf die Karte oder mit Strg+V auf der ausgewählten Karte. Was vom Rechner kommt, landet in der
+  Klick für den Dateidialog, mit Bild nur „Entfernen“), durch Ziehen auf die Karte oder mit Strg+V auf der ausgewählten Karte. Was vom Rechner kommt, landet in der
   Galerie im Ordner „Cardimages“ des Projekts (wird bei Bedarf angelegt). Endgültig gelöschte Bilder
   leeren das Feld. Ist ein Titelbild gesetzt, liegt es dezent hinter dem Inspektor (oben bündig,
   auf Breite gebracht, bei 8 % Deckkraft, unten weich ausgeblendet). Unteraufgaben erben das Titelbild der nächsten Aufgabe darüber, die eins hat; ein eigenes überschreibt es.
@@ -454,9 +453,9 @@ ist eine Zeile, und die Auslieferung darf `immutable` setzen.
 - **Auswahl in der Galerie** (`imageSel` im Speicher): anklicken wählt eines, Strg nimmt dazu,
   Umschalt den Bereich. Bewusst nicht `selected` und nicht `multi` – der Inspektor soll weiter die
   offene Aufgabe zeigen, während man daneben Bilder für sie zusammenstellt; ein Bild wird nie im
-  Inspektor geöffnet. Die Sammelaktionen stehen im Rechtsklickmenü und in einer Leiste über dem
-  Raster: an die offene Aufgabe anhängen (ein `patch` für alle) und in den Papierkorb (ein
-  „Rückgängig“ für alle). Ein Filterwechsel hebt die Auswahl auf – was man nicht mehr sieht, soll
+  Inspektor geöffnet. Die Sammelaktionen stehen in einer Leiste über dem Raster: an die offene
+  Aufgabe anhängen (ein `patch` für alle) und in den Papierkorb (ein „Rückgängig“ für alle). Das
+  Rechtsklickmenü hat den Papierkorb, aber kein „Anhängen“ – das geht dort per Ziehen auf den Inspektor. Ein Filterwechsel hebt die Auswahl auf – was man nicht mehr sieht, soll
   man nicht aus Versehen löschen.
 - **Aus der Galerie ziehen:** ein Bild auf die Beschreibung im offenen Inspektor hängt es ans Ende
   des Textes; gehört es zu einer Auswahl, wandert die ganze Auswahl mit. Das baut darauf, dass die
