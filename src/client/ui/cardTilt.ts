@@ -4,7 +4,7 @@ import { useDrag } from './dnd.js';
  * Karten: beim Ziehen kippt die Karte leicht in die Bewegungsrichtung, wie bei
  * Codecks (Wunsch des Nutzers) – nach links gezogen weicht die linke Kante
  * zurück, nach oben die obere, diagonal beides. Bleibt die Maus stehen,
- * richtet sie sich wieder auf.
+ * richtet sie sich wieder auf. Die Bilder der Galerie kippen genauso.
  *
  * Das Ziehbild des Browsers ist ein starres Abbild und lässt sich nicht
  * bewegen. Deshalb wird es durch ein leeres ersetzt, und eine Kopie der Karte

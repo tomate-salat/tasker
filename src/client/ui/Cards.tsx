@@ -30,6 +30,7 @@ import './cards.css';
  *
  * Alles hängt an `cardsOn`; fliegt die Ansicht wieder raus, gehen
  * diese Datei, `cards.css` und die paar Aufrufe mit „Karten“ im Kommentar.
+ * `cardTilt.ts` bleibt – die Galerie kippt ihre Bilder damit ebenso.
  */
 
 /** Unter diesem Schlüssel merkt sich `collapsed`, ob der Baum im Inspektor zu ist. */

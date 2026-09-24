@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ImageEntry, ImageFolder, ImageUse } from '../api.js';
 import { imageUrl } from '../api.js';
 import { folderPath, scopeProjectIds, useStore } from '../store.js';
+import { startTilt } from './cardTilt.js';
 import { dragSource, dropTarget, useZone } from './dnd.js';
-import { appendImages, hasFiles, refreshGallery, useUpload } from './imageDrop.js';
+import { hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
 import { useMenu, type MenuItem } from './Menu.js';
 import { coverMenu } from './Cards.js';
@@ -56,7 +57,7 @@ const onlyIn = (b: ImageEntry, where: 'archived' | 'trashed'): boolean => {
 export function Gallery() {
   const state = useStore();
   const { images, imagesLoaded, loadImages, scope, trashImage, restoreImage, select, reveal } = state;
-  const { ws, selected, imageSel, setImageSel, toggleImageSel, clearImageSel, trashImages } = state;
+  const { ws, imageSel, setImageSel, toggleImageSel, clearImageSel, trashImages } = state;
   const { folders, folderAt, openFolder, addFolder, renameFolder, deleteFolder, sortIntoFolder } = state;
   const [filter, setFilter] = useState<Filter>('alle');
   const [months, setMonths] = useState(12);
@@ -153,16 +154,6 @@ export function Gallery() {
   const spur = folderPath(folderAt, folders);
 
   /**
-   * Was im Inspektor offen steht, bleibt beim Reiterwechsel stehen – genau
-   * darauf baut „anhängen“: Aufgabe auswählen, hierher wechseln, Bilder
-   * zusammenklicken. Bilder selbst kommen nie in den Inspektor.
-   */
-  const openTask = ws && selected ? ws.task(selected) : null;
-  const openMs = ws && selected && !openTask ? ws.milestone(selected) : null;
-  const open = openTask ?? openMs;
-  const openKind = openTask ? ('task' as const) : ('milestone' as const);
-
-  /**
    * Eine Verwendung anspringen. Die Vorgaben für Titelbilder haben keine Zeile
    * in der Liste – dafür öffnet sich der Dialog, in dem sie gesetzt werden.
    */
@@ -195,9 +186,9 @@ export function Gallery() {
   };
 
   /**
-   * Die Sammelaktionen im Kontextmenü. „Anhängen“ steht nur in der Leiste – im
+   * Die Sammelaktionen im Kontextmenü. „Anhängen“ gibt es hier nicht – im
    * Menü machte es das Menü unruhig, und der offene Inspektor nimmt Bilder
-   * ohnehin per Ziehen (Wunsch des Nutzers).
+   * per Ziehen (Wunsch des Nutzers).
    */
   const bulkMenu = (ids: string[]): MenuItem[] => {
     const list = ids.map((id) => images.find((b) => b.id === id)).filter((b) => !!b);
@@ -289,14 +280,13 @@ export function Gallery() {
     { label: 'Auswahl aufheben', disabled: !imageSel.size, onSelect: clearImageSel },
   ];
 
-  /** Rechtsklick auf eine Kachel außerhalb der Auswahl meint nur diese Kachel. */
+  /**
+   * Rechtsklick auf eine Kachel außerhalb der Auswahl meint nur diese Kachel –
+   * er öffnet ihr Menü, wählt sie aber nicht aus (wie bei den Zeilen der Liste).
+   */
   const onContext = (e: React.MouseEvent, id: string): void => {
     e.preventDefault();
     const ids = imageSel.has(id) ? [...imageSel] : [id];
-    if (!imageSel.has(id)) {
-      setImageSel([id]);
-      setAnchor(id);
-    }
     menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ids));
   };
 
@@ -392,10 +382,10 @@ export function Gallery() {
       {/* Gescrollt wird nur unterhalb der Leiste – so verdeckt sie nichts. */}
       <div
         className="gal-scroll"
-        // Daneben geklickt heißt: nichts mehr gemeint – die Leisten gehören aber
-        // zur Auswahl und heben sie nicht auf, sonst wäre ihr eigener Knopf ihr Ende.
+        // Daneben geklickt heißt: nichts mehr gemeint – die Leiste zum Aufräumen
+        // hebt die Auswahl aber nicht auf.
         onClick={(e) => {
-          if (!(e.target as HTMLElement).closest('.gal-item, .gal-pick, .gal-sweep')) clearImageSel();
+          if (!(e.target as HTMLElement).closest('.gal-item, .gal-sweep')) clearImageSel();
         }}
         // Rechtsklick daneben: das Menü der Fläche, nicht das einer Kachel.
         onContextMenu={(e) => {
@@ -404,28 +394,6 @@ export function Gallery() {
           menu.openAtPoint(e.clientX, e.clientY, emptyMenu());
         }}
       >
-      {imageSel.size > 0 && (
-        <div className="gal-pick">
-          <span>{count(imageSel.size, 'Bild', 'Bilder')} ausgewählt</span>
-          <button
-            className="btn tiny ghost"
-            disabled={!open}
-            title={open ? `An „${open.title || 'Ohne Titel'}“ anhängen` : 'Dafür muss ein Task offen sein'}
-            onClick={() => {
-              if (open) void appendImages(openKind, open, [...imageSel].map((id) => images.find((b) => b.id === id)).filter((b) => !!b));
-            }}
-          >
-            {open ? `An „${open.title || 'Ohne Titel'}“ anhängen` : 'Anhängen'}
-          </button>
-          <button className="btn tiny ghost" onClick={() => void trashImages([...imageSel])}>
-            In den Papierkorb
-          </button>
-          <button className="linkish" onClick={clearImageSel}>
-            Auswahl aufheben
-          </button>
-        </div>
-      )}
-
       {ungenutzt.length > 0 && filter === 'ungenutzt' && (
         <div className="gal-sweep">
           <span>{count(ungenutzt.length, 'Bild wird', 'Bilder werden')} nirgends mehr erwähnt.</span>
@@ -479,6 +447,11 @@ export function Gallery() {
               onClick={(e) => pick(e, b.id)}
               onContextMenu={(e) => onContext(e, b.id)}
               {...dragSource('image', b.id)}
+              // Bilder kippen beim Ziehen wie die Karten (`cardTilt.ts`).
+              onDragStart={(e) => {
+                dragSource('image', b.id).onDragStart(e);
+                startTilt(e);
+              }}
             >
               <img src={imageUrl(b.id, 'klein')} alt={b.name} loading="lazy" draggable={false} />
               <figcaption>
