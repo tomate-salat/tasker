@@ -574,11 +574,12 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
       <div className="tcard-foot">
         <div className="tcard-meta">
           {!doc && <StatusDot task={task} implicit={implicit} />}
-          {!doc && task.prio ? (
+          {/* Die Priorität steht immer da, auch ohne – wie in der Liste. */}
+          {!doc && (
             <span className="cell" role="button" tabIndex={-1} onClick={cell('prio')}>
               <PrioIcon prio={task.prio} cell />
             </span>
-          ) : null}
+          )}
           {/* Abzeichen und Zähler rücken nach rechts, Status und Priorität bleiben links. */}
           <span className="tcard-badges">
             <LockBadge ws={ws} task={task} />
