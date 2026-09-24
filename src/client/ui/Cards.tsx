@@ -624,7 +624,9 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           {/* Abzeichen und Zähler rücken nach rechts, Status und Priorität bleiben links. */}
           <span className="tcard-badges">
             <LockBadge ws={ws} task={task} />
-            <ChecklistBadge desc={task.desc} />
+            {/* Mit Unteraufgaben zählt die Checkliste im Zähler mit (Wunsch des Nutzers) –
+                zwei Zähler nebeneinander sprengen die Karte. */}
+            {(doc || !counted) && <ChecklistBadge desc={task.desc} />}
             <DrawingBadge ownerId={task.id} />
             {doc
               ? kids.length > 0 && (
@@ -633,8 +635,15 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
                   </span>
                 )
               : counted > 0 && (
-                  <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
-                    {doneCount(ws, task)}/{total(ws, task)}
+                  <span
+                    className="tcard-count"
+                    title={
+                      cl.total
+                        ? `${doneCount(ws, task)} von ${total(ws, task)} Aufgaben und ${cl.done} von ${cl.total} Checklisten-Punkten erledigt`
+                        : `${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`
+                    }
+                  >
+                    {doneCount(ws, task) + cl.done}/{total(ws, task) + cl.total}
                   </span>
                 )}
           </span>
