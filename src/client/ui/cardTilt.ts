@@ -15,16 +15,26 @@ import { useDrag } from './dnd.js';
 const BLANK = new Image();
 BLANK.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-/** Höchste Neigung in Grad. */
-const MAX = 25;
-/** Grad Neigung je Pixel Bewegung pro Bild. */
-const GAIN = 0.16;
-/** Wie schnell die Neigung ihrem Ziel folgt (0–1). */
-const EASE = 0.32;
-/** Glättung der Geschwindigkeit – `dragover` kommt nicht in jedem Bild. */
-const SMOOTH = 0.35;
+/*
+ * Die drei Stellschrauben. Die Neigung folgt der Geschwindigkeit des Zeigers
+ * auf einer Kurve, die schon bei kleinen Bewegungen deutlich anspricht und
+ * zum Maximum hin abflacht – schneller ziehen kippt also nie weiter als MAX_TILT.
+ */
 
-const clamp = (v: number): number => Math.max(-MAX, Math.min(MAX, v));
+/** Stärkste Neigung in Grad. Größer = die Karte kippt weiter. */
+const MAX_TILT = 22;
+/**
+ * Tempo in Pixel pro Sekunde, bei dem die Karte schon drei Viertel von
+ * MAX_TILT erreicht. Kleiner = empfindlicher (100 ist sehr, 400 wenig empfindlich).
+ */
+const FULL_SPEED = 180;
+/** Wie träge die Karte folgt und sich wieder aufrichtet, in ms. Kleiner = zackiger. */
+const RESPONSE_MS = 90;
+
+/** Ohne neue Position so lange gilt der Zeiger als stehend. */
+const STILL_MS = 60;
+
+const tilt = (speed: number): number => MAX_TILT * Math.tanh(speed / FULL_SPEED);
 
 let stop: (() => void) | null = null;
 
@@ -51,29 +61,45 @@ export function startTilt(e: React.DragEvent<HTMLElement>): void {
   const oy = e.clientY - box.top;
   let x = e.clientX;
   let y = e.clientY;
-  let lx = x;
-  let ly = y;
+  /** Tempo in Pixel pro Sekunde, geglättet. */
   let vx = 0;
   let vy = 0;
   let rx = 0;
   let ry = 0;
   let frame = 0;
+  let lastEvent = performance.now();
+  let lastMove = lastEvent;
+  let lastFrame = lastEvent;
 
-  // Während des Ziehens gibt es keine Mausereignisse, nur `dragover`.
+  // Während des Ziehens gibt es keine Mausereignisse, nur `dragover` – und das
+  // in unregelmäßigen Abständen. Darum zählt das Tempo über die echte Zeit.
   const track = (ev: DragEvent): void => {
     if (!ev.clientX && !ev.clientY) return;
+    const now = performance.now();
+    const dt = Math.max(8, now - lastEvent);
+    lastEvent = now;
+    const dx = ev.clientX - x;
+    const dy = ev.clientY - y;
+    if (!dx && !dy) return;
+    lastMove = now;
+    vx += ((dx / dt) * 1000 - vx) * 0.5;
+    vy += ((dy / dt) * 1000 - vy) * 0.5;
     x = ev.clientX;
     y = ev.clientY;
   };
 
   const step = (): void => {
-    vx += (x - lx - vx) * SMOOTH;
-    vy += (y - ly - vy) * SMOOTH;
-    lx = x;
-    ly = y;
+    const now = performance.now();
+    const k = 1 - Math.exp(-(now - lastFrame) / RESPONSE_MS);
+    lastFrame = now;
+    // Steht der Zeiger, läuft das Tempo aus – die Karte richtet sich auf.
+    if (now - lastMove > STILL_MS) {
+      vx -= vx * k;
+      vy -= vy * k;
+    }
     // rotateY < 0 lässt die linke Kante zurückweichen, rotateX > 0 die obere.
-    ry += (clamp(vx * GAIN) - ry) * EASE;
-    rx += (clamp(-vy * GAIN) - rx) * EASE;
+    ry += (tilt(vx) - ry) * k;
+    rx += (tilt(-vy) - rx) * k;
     ghost.style.transform =
       `translate(${x - ox}px, ${y - oy}px) perspective(700px) ` +
       `rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
