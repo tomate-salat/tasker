@@ -225,8 +225,8 @@ useDrag.subscribe((s, prev) => {
 });
 
 /** Die Zone, die gerade über diesem Ziel angezeigt wird. */
-export const useZone = (target: Target): Zone | null => {
-  const key = keyOf(target);
+export const useZone = (target: Target | null): Zone | null => {
+  const key = target ? keyOf(target) : null;
   return useDrag((s) => (s.over?.key === key ? s.over.zone : null));
 };
 

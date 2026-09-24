@@ -12,7 +12,7 @@ import { ImageRejected, imagesIn, prepareImage } from './imageFile.js';
 import { addChild } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
-import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
+import { dragSource, dropTarget, type Target, useDrag, useDragging, useZone } from './dnd.js';
 import { CHEVRON_DOWN, CHEVRON_RIGHT, PrioIcon, SegBar } from './icons.js';
 import type { Menu, MenuItem } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
@@ -92,19 +92,51 @@ export function chunkCards(rows: OutlineRow[]): (OutlineRow | Task[])[] {
   return out;
 }
 
+/** Der Behälter über einem Kartenraster: Milestone oder Gruppe. */
+export type CardArea = Extract<Target, { type: 'milestone' } | { type: 'group' }>;
+
+/** Die Kopfzeile direkt über einem Raster als Ablageziel – sonst keins. */
+export function cardArea(prev: OutlineRow | Task[] | undefined): CardArea | null {
+  if (!prev || Array.isArray(prev)) return null;
+  if (prev.type === 'milestone') return { type: 'milestone', milestone: prev.milestone };
+  if (prev.type === 'group') return { type: 'group', row: prev };
+  return null;
+}
+
+/**
+ * Das Raster unter einem Milestone oder einer Gruppe (Wunsch des Nutzers):
+ * die freie Fläche zwischen und neben den Karten nimmt Abgelegtes auf wie
+ * die Kopfzeile und hat deren Kontextmenü (über `data-area` in der Liste).
+ * Links und rechts einer Karte gilt weiter „davor/danach“ – die Karten
+ * fangen das Ziehen selbst ab.
+ */
 export function CardGrid({
   ws,
   tasks,
   view,
   menu,
+  area,
 }: {
   ws: Workspace;
   tasks: Task[];
   view: OutlineView;
   menu: Menu;
+  area: CardArea | null;
 }) {
+  const zone = useZone(area);
+  const id = area ? (area.type === 'milestone' ? area.milestone.id : area.row.id) : undefined;
+  // Nur Aufgaben – Milestones und Gruppen ordnen sich weiter an den Kopfzeilen um.
+  const drop = area ? dropTarget(area) : null;
+  const tasksOnly = (f: (e: React.DragEvent) => void) => (e: React.DragEvent) => {
+    if (useDrag.getState().drag?.kind === 'task') f(e);
+  };
   return (
-    <div className="card-grid" data-view={view}>
+    <div
+      className={`card-grid ${zone ? `dz-${zone}` : ''}`}
+      data-view={view}
+      data-area={id}
+      {...(drop ? { onDragOver: tasksOnly(drop.onDragOver), onDrop: tasksOnly(drop.onDrop) } : {})}
+    >
       {tasks.map((t) => (
         <TaskCard key={t.id} ws={ws} task={t} menu={menu} />
       ))}

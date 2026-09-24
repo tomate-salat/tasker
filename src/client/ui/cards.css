@@ -45,6 +45,12 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Die freie Fläche des Rasters nimmt Abgelegtes auf wie seine Kopfzeile. */
+.card-grid.dz-into {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
+}
+
 .tcard-cell {
   position: relative;
   display: flex;

@@ -11,7 +11,7 @@ import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
-import { CardGrid, cardRows, cardsOn, chunkCards } from './Cards.js';
+import { cardArea, CardGrid, cardRows, cardsOn, chunkCards } from './Cards.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
 
@@ -52,7 +52,9 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
         className={`list ${state.multi.size ? 'has-multi' : ''} ${cards ? 'cards' : ''}`}
         onContextMenu={(e) => {
           const el = e.target as HTMLElement;
-          const id = el.closest('[data-row]')?.getAttribute('data-row');
+          // Die freie Fläche eines Kartenrasters gilt als ihre Kopfzeile (`data-area`).
+          const hit = el.closest('[data-row], [data-area]');
+          const id = hit?.getAttribute('data-row') ?? hit?.getAttribute('data-area');
           if (!id || el.closest('input, textarea')) return;
           e.preventDefault();
 
@@ -69,9 +71,18 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
           menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
         }}
       >
-        {(cards ? chunkCards(cards.shown) : rows).map((row) => {
+        {(cards ? chunkCards(cards.shown) : rows).map((row, i, list) => {
           if (Array.isArray(row)) {
-            return <CardGrid key={`cards:${row[0]?.id}`} ws={ws} tasks={row} view={view} menu={menu} />;
+            return (
+              <CardGrid
+                key={`cards:${row[0]?.id}`}
+                ws={ws}
+                tasks={row}
+                view={view}
+                menu={menu}
+                area={cardArea(list[i - 1])}
+              />
+            );
           }
           if (row.type === 'task') {
             return (
