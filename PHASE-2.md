@@ -61,8 +61,9 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Markierung und Kategorie zählen auch geerbt (`effectiveCover`). Die Vorgaben (`coverImageId` an
   Projekt, Kategorie und Markierung, Migration `0011_titelbild_vorgaben`) setzt man in der
   Kartenansicht in den Dialogen „Kategorien“ (oben auch das Projekt, im Projektmenü „Kategorien &
-  Titelbild …“) und „Markierungen“ – Klick, Datei daraufziehen oder Strg+V – oder über „Als
-  Titelbild-Vorgabe für“ im Kontextmenü der Galerie. Bilder einer Markierung landen im zuletzt
+  Titelbild …“) und „Markierungen“ – Klick, Datei daraufziehen oder Strg+V – oder aus der Galerie über deren
+  Kontextmenü („Als Titelbild für Projekt/Kategorie/Markierung“, je mit allen zur Auswahl – bei
+  einem gewählten Projekt nur dessen Kategorien). Bilder einer Markierung landen im zuletzt
   offenen Projekt. Die Galerie zählt die Vorgaben als Verwendung. Den Baum darunter zeigt
   der Inspektor an seinem Ende, klebend am unteren Rand und als Ganzes einklappbar (standardmäßig
   offen), immer ab der Wurzel – auch wenn eine Unteraufgabe ausgewählt ist –, mit Auswahl, Ziehen und

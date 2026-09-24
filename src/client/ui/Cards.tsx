@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { checklist } from '@shared/checklist.js';
-import { coverFromLabel, effectiveCategory, effectiveCover, effectiveMark } from '@shared/inherit.js';
+import { coverFromLabel, effectiveCover } from '@shared/inherit.js';
 import { isDone, type Category, type Mark, type Project, type Task } from '@shared/model.js';
-import type { OutlineRow, OutlineView } from '@shared/outline.js';
+import { categoriesOf, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, imageUrl } from '../api.js';
@@ -185,8 +185,10 @@ export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null 
 
 /**
  * Die Einträge „Als Titelbild …“ im Kontextmenü der Galerie: für den offenen
- * Task und, als Vorgabe, für seine Kategorie, Markierung und sein Projekt –
- * ohne offenen Task für das gewählte Projekt.
+ * Task und, als Vorgabe, für jedes Projekt, jede Kategorie und jede Markierung –
+ * so lassen sich Bilder aus der Galerie auch für die Vorgaben verwenden.
+ * Projekte und Kategorien nur die des gewählten Projekts, unter „Alle
+ * Projekte“ alle, die Kategorien dann nach Projekt überschrieben.
  */
 export function coverMenu(
   ws: Workspace,
@@ -195,14 +197,9 @@ export function coverMenu(
   imageId: string | null,
 ): MenuItem[] {
   const own: CoverOwner | null = task && !ws.isDoc(task) ? { kind: 'task', item: task } : null;
-  const owners: CoverOwner[] = [];
-  const category = task && effectiveCategory(ws, task)?.category;
-  const mark = task && effectiveMark(ws, task);
-  const project = ws.project(task?.projectId ?? projectId);
-  if (category) owners.push({ kind: 'category', item: category });
-  if (mark) owners.push({ kind: 'mark', item: mark });
-  if (project) owners.push({ kind: 'project', item: project });
-  const item = (o: CoverOwner, label: string): MenuItem => ({
+  const scoped = ws.project(projectId);
+  const projects = scoped ? [scoped] : ws.projects;
+  const item = (o: CoverOwner, label = coverOwnerLabel(o)): MenuItem => ({
     label,
     disabled: !imageId,
     check: !!imageId && o.item.coverImageId === imageId,
@@ -210,12 +207,28 @@ export function coverMenu(
       if (imageId) void setCover(o, imageId);
     },
   });
+  const categories = projects.flatMap((p): MenuItem[] => {
+    const list = categoriesOf(ws, p.id);
+    if (!list.length) return [];
+    return [
+      ...(projects.length > 1 ? [{ head: p.name }] : []),
+      ...list.map((c) => item({ kind: 'category', item: c }, c.name)),
+    ];
+  });
+  const group = (label: string, sub: MenuItem[]): MenuItem[] =>
+    sub.length ? [{ label, disabled: !imageId, sub }] : [];
 
   return [
     ...(own ? [item(own, `Als Titelbild von ${coverOwnerLabel(own)}`)] : []),
-    ...(owners.length
-      ? [{ label: 'Als Titelbild-Vorgabe für', sub: owners.map((o) => item(o, coverOwnerLabel(o))) } as MenuItem]
-      : []),
+    ...group(
+      'Als Titelbild für Projekt',
+      projects.map((p) => item({ kind: 'project', item: p }, p.name)),
+    ),
+    ...group('Als Titelbild für Kategorie', categories),
+    ...group(
+      'Als Titelbild für Markierung',
+      ws.marks.map((k) => item({ kind: 'mark', item: k }, `${k.emoji} ${k.name}`)),
+    ),
   ];
 }
 
