@@ -17,6 +17,7 @@ import { CHEVRON_DOWN, CHEVRON_RIGHT, PrioIcon, SegBar } from './icons.js';
 import type { Menu, MenuItem } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { ChecklistBadge, DrawingBadge, LockBadge, StatusDot, TaskRow, TitleEdit } from './rows.js';
+import { startTilt } from './cardTilt.js';
 import './cards.css';
 
 /**
@@ -512,6 +513,8 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const cl = checklist(task.desc);
   // Ist eine Unteraufgabe dieser Karte ausgewählt, bleibt die Karte markiert.
   const holds = selected !== task.id && hierarchyRoot(ws, selected)?.id === task.id;
+  // Karten kippen beim Ziehen in die Bewegungsrichtung (`cardTilt.ts`).
+  const drag = dragSource('task', task.id, !editing);
   const implicit =
     !isDone(task) &&
     task.status === 'open' &&
@@ -574,7 +577,11 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           select(task.id);
         }
       }}
-      {...dragSource('task', task.id, !editing)}
+      {...drag}
+      onDragStart={(e) => {
+        drag.onDragStart(e);
+        startTilt(e);
+      }}
     >
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
 

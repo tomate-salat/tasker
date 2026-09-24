@@ -104,6 +104,18 @@
   opacity: 0.4;
 }
 
+/* Die Kopie, die beim Ziehen dem Zeiger folgt und kippt (`cardTilt.ts`). */
+.tcard.tcard-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  will-change: transform;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+}
+
 .tcard-cell.dz-child .tcard,
 .tcard-cell.dz-into .tcard {
   box-shadow: 0 0 0 3px var(--accent);
