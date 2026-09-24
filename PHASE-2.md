@@ -50,7 +50,6 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Ansicht und wird pro Gerät gemerkt (`tasker.layouts`). Vorgabe: Plan und Ready als Karten,
   Backlog und Doku als Liste. Doku-Karten zeigen wie ihr Inspektor weder Status noch Priorität noch
   Fortschritt, statt des Zählers die Zahl der Unterseiten; das Feld „Titelbild“ steht dort für sich.
-  Die Titelbild-Vorgaben in Dialogen und Galerie gibt es, sobald eine Ansicht Karten zeigt.
   Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
   Markierung (als Leiste über dem Titel mit Emoji und Namen, gestaltet wie der Fuß) und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
   Task; Bilder in der Beschreibung zählen nicht): über das Feld „Titelbild“ rechts neben dem Status im Inspektor (ohne Vorschau –
@@ -62,17 +61,20 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Darüber gibt es Vorgaben, die ganze Kette lautet Projekt → Markierung → Kategorie → Task →
   Unteraufgabe → …: das spezifischste gesetzte Bild gilt, das Projekt ist die letzte Vorgabe;
   Markierung und Kategorie zählen auch geerbt (`effectiveCover`). Die Vorgaben (`coverImageId` an
-  Projekt, Kategorie und Markierung, Migration `0011_titelbild_vorgaben`) setzt man in der
-  Kartenansicht in den Dialogen „Kategorien“ (oben auch das Projekt, im Projektmenü „Kategorien &
+  Projekt, Kategorie und Markierung, Migration `0011_titelbild_vorgaben`) setzt man in den
+  Dialogen „Kategorien“ (oben auch das Projekt, im Projektmenü „Kategorien &
   Titelbild …“) und „Markierungen“ – Klick, Datei daraufziehen oder Strg+V – oder aus der Galerie über deren
   Kontextmenü („Als Titelbild für Projekt/Kategorie/Markierung“, je mit allen zur Auswahl – bei
   einem gewählten Projekt nur dessen Kategorien). Bilder einer Markierung landen im zuletzt
-  offenen Projekt. Die Galerie zählt die Vorgaben als Verwendung. Den Baum darunter zeigt
-  der Inspektor an seinem Ende, klebend am unteren Rand und als Ganzes einklappbar (standardmäßig
+  offenen Projekt. Die Galerie zählt die Vorgaben als Verwendung.
+  **Ein Inspektor für Liste und Karten:** Titelbild im Hintergrund, Feld „Titelbild“ und der Baum
+  gelten in jeder Ansicht – auch wo die Liste keine Titelbilder zeigt. Den Baum zeigt
+  der Inspektor an seinem Ende, sobald die Wurzel Unteraufgaben hat (sonst wie bisher die Liste der
+  Unteraufgaben), klebend am unteren Rand und als Ganzes einklappbar (standardmäßig
   offen), immer ab der Wurzel – auch wenn eine Unteraufgabe ausgewählt ist –, mit Auswahl, Ziehen und
   Kontextmenü wie in der Liste. Die Wurzel selbst ist dort nicht einklappbar. Nicht im Prototyp, Wunsch des Nutzers; ob sie
   bleibt, ist offen. Deshalb steckt fast alles in `ui/Cards.tsx` und `ui/cards.css`, die übrigen
-  Stellen sind als „Karten“ kommentiert; die Liste bleibt unverändert.
+  Stellen sind als „Karten“ kommentiert; die Liste selbst bleibt unverändert.
 
 ---
 

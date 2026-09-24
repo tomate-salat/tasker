@@ -387,7 +387,9 @@
   top: -16px; /* Chrome zieht das Polster des Inspektors ab – wie beim Baum unten */
   z-index: -1;
   height: 0;
-  margin: -16px -24px 0;
+  /* Oben ans Polster heran; die 16px unten gleichen das wieder aus – sonst
+     zöge die Hülle ohne Höhe allen Inhalt darunter mit nach oben. */
+  margin: -16px -24px 16px;
   pointer-events: none;
 }
 

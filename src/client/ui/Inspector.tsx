@@ -17,7 +17,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
-import { cardsOn, CoverRow, Hierarchy, hierarchyRoot, InspectorCover } from './Cards.js';
+import { CoverRow, Hierarchy, hierarchyRoot, InspectorCover } from './Cards.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dropTarget, useDrag, useZone } from './dnd.js';
 import { DrawingEmbed, useDrawings } from './Drawings.js';
@@ -61,7 +61,9 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
   const milestone = ws.milestone(id);
   const select = useStore((s) => s.select);
   const menu = useMenu();
-  const hier = useStore((s) => cardsOn(s)) && !!hierarchyRoot(ws, id);
+  // Ein Inspektor für Liste und Karten: hat die Wurzel Unteraufgaben, steht ihr
+  // ganzer Baum am Ende, sonst die Unteraufgaben wie gewohnt.
+  const hier = !!hierarchyRoot(ws, id);
 
   // Der Inhalt wird als Ganzes bearbeitet – beim Wechsel des Objekts zurück.
   const [editing, setEditing] = useState(false);
@@ -73,7 +75,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
 
   return (
     <aside className="detail">
-      {/* Karten: das Titelbild liegt dezent im Hintergrund. */}
+      {/* Das Titelbild liegt dezent im Hintergrund – in jeder Ansicht. */}
       <InspectorCover ws={ws} task={task} />
       <div className="d-top">
         <Crumbs ws={ws} task={task} milestone={milestone} />
@@ -114,7 +116,7 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
       {/* Doku-Seiten haben wie im Prototyp keine Abhängigkeiten. */}
       {!(task && ws.isDoc(task)) && <Deps ws={ws} kind={kind} item={item} />}
 
-      {/* Karten: der ganze Baum der Karte am Ende, auch bei einer Unteraufgabe. */}
+      {/* Der ganze Baum ab der Wurzel am Ende, auch bei einer Unteraufgabe. */}
       {hier && <Hierarchy ws={ws} id={id} menu={menu} />}
 
       {menu.node}
@@ -278,7 +280,7 @@ function TaskHead({
   return (
     <>
       {!doc && (
-        // Karten: rechts neben dem Status steht das Titelbild (nur in der Kartenansicht).
+        // Rechts neben dem Status steht das Titelbild.
         <div className="status-line">
           <MetaRow k="status" label="Status">
             <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
@@ -287,7 +289,7 @@ function TaskHead({
         </div>
       )}
 
-      {/* Karten: eine Doku-Seite hat keine Statuszeile – das Titelbild steht für sich. */}
+      {/* Eine Doku-Seite hat keine Statuszeile – das Titelbild steht für sich. */}
       {doc && <CoverRow ws={ws} task={task} />}
 
       {!doc && (cl.total > 0 || kids.length > 0) && (
