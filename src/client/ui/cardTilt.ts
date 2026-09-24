@@ -16,11 +16,11 @@ const BLANK = new Image();
 BLANK.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 /** Höchste Neigung in Grad. */
-const MAX = 14;
+const MAX = 25;
 /** Grad Neigung je Pixel Bewegung pro Bild. */
-const GAIN = 0.8;
+const GAIN = 0.16;
 /** Wie schnell die Neigung ihrem Ziel folgt (0–1). */
-const EASE = 0.16;
+const EASE = 0.32;
 /** Glättung der Geschwindigkeit – `dragover` kommt nicht in jedem Bild. */
 const SMOOTH = 0.35;
 
