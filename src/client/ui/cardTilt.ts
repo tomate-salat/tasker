@@ -38,6 +38,21 @@ const tilt = (speed: number): number => MAX_TILT * Math.tanh(speed / FULL_SPEED)
 
 let stop: (() => void) | null = null;
 
+/** Die Kopie des laufenden Ziehens – und ob sie das Ende überdauern soll. */
+let current: { ghost: HTMLElement; keep: boolean; release: () => void } | null = null;
+
+/**
+ * Beim Ablegen: die Kopie bleibt nach dem Ende des Ziehens liegen, wo sie
+ * losgelassen wurde, und richtet sich dort auf – bis `release` sie wegnimmt.
+ * So kann die echte Karte genau dort übernehmen (`dropFlip.ts`), statt dass
+ * sie bis zur Antwort des Servers an ihrem alten Platz aufblitzt.
+ */
+export function holdGhost(): { el: HTMLElement; release: () => void } | null {
+  if (!current) return null;
+  current.keep = true;
+  return { el: current.ghost, release: current.release };
+}
+
 /** Aus `onDragStart` einer Karte aufrufen, nach dem Start in `dnd.ts`. */
 export function startTilt(e: React.DragEvent<HTMLElement>): void {
   stop?.();
@@ -106,12 +121,21 @@ export function startTilt(e: React.DragEvent<HTMLElement>): void {
     frame = requestAnimationFrame(step);
   };
 
-  const end = (): void => {
+  const release = (): void => {
     cancelAnimationFrame(frame);
-    document.removeEventListener('dragover', track, true);
     ghost.remove();
+  };
+  const self = { ghost, keep: false, release };
+  current = self;
+
+  const end = (): void => {
+    document.removeEventListener('dragover', track, true);
     off();
     stop = null;
+    if (current === self) current = null;
+    // Gehalten läuft die Schleife weiter: ohne neue Position läuft das Tempo
+    // aus, und die liegen gebliebene Kopie richtet sich auf.
+    if (!self.keep) release();
   };
   // Endet das Ziehen – abgelegt, abgebrochen oder die Karte ist aus dem DOM –,
   // setzt `dnd.ts` den Zustand zurück; dann geht auch die Kopie.
