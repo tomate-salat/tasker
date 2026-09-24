@@ -172,6 +172,12 @@
 
 .tcard.has-cover .tcard-title {
   color: #fff;
+  /* Schwarze Kontur, damit der Titel auf jedem Bild lesbar bleibt. Die Kontur
+     liegt auf der Glyphenkante, `paint-order` malt sie unter die Füllung – so
+     bleibt nur ihre äußere Hälfte sichtbar, die Buchstaben werden nicht dünner.
+     Am Satz ändert das nichts: Schriftgröße und Umbruch bleiben gleich. */
+  -webkit-text-stroke: 3px #000;
+  paint-order: stroke fill;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
