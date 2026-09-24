@@ -4,7 +4,7 @@ import type { Settings } from '@shared/model.js';
 import { categoriesOf, categoryColorIndex } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account } from '../api.js';
-import { useStore } from '../store.js';
+import { useStore, usesCards } from '../store.js';
 import { CoverSlot } from './Cards.js';
 import { categoryHue } from './colors.js';
 import { THEME_LABEL } from './icons.js';
@@ -74,8 +74,8 @@ export function CategoriesDialog({
   onClose: () => void;
 }) {
   const { patch, remove, say, load } = useStore();
-  // Karten: die Vorgaben für Titelbilder gibt es nur mit der Kartenansicht.
-  const covers = useStore((s) => s.layout === 'cards');
+  // Karten: die Vorgaben für Titelbilder gibt es nur, wenn eine Ansicht Karten zeigt.
+  const covers = useStore(usesCards);
   const project = ws.project(projectId);
   const categories = categoriesOf(ws, projectId);
   const [name, setName] = useState('');
@@ -166,8 +166,8 @@ const EMOJI_PICKS = ['🐞', '🔧', '✨', '📐', '🎨', '🎧', '🚀', '�
 
 export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => void }) {
   const { patch, remove, say, load } = useStore();
-  // Karten: die Vorgaben für Titelbilder gibt es nur mit der Kartenansicht.
-  const covers = useStore((s) => s.layout === 'cards');
+  // Karten: die Vorgaben für Titelbilder gibt es nur, wenn eine Ansicht Karten zeigt.
+  const covers = useStore(usesCards);
   const [emoji, setEmoji] = useState('');
   const [name, setName] = useState('');
 

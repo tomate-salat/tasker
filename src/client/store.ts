@@ -41,8 +41,22 @@ export const VIEWS = [
 ] as const;
 export type View = (typeof VIEWS)[number];
 
-/** Darstellung von Plan, Ready und Backlog. */
+/** Darstellung von Plan, Ready, Backlog und Doku. */
 export type Layout = 'list' | 'cards';
+
+/** Die Ansichten, die als Liste oder als Karten erscheinen können. */
+export const LAYOUT_VIEWS = ['plan', 'ready', 'backlog', 'docs'] as const;
+export type LayoutView = (typeof LAYOUT_VIEWS)[number];
+
+/** Vorgabe je Ansicht (Wunsch des Nutzers). */
+const LAYOUT_DEFAULT: Record<LayoutView, Layout> = {
+  plan: 'cards',
+  ready: 'cards',
+  backlog: 'list',
+  docs: 'list',
+};
+
+export const isLayoutView = (v: View): v is LayoutView => (LAYOUT_VIEWS as readonly View[]).includes(v);
 
 export const VIEW_LABEL: Record<View, string> = {
   plan: 'Plan',
@@ -93,9 +107,9 @@ type State = {
   filter: OutlineFilter;
   /** Seitenleiste eingeklappt – pro Gerät. */
   sideCollapsed: boolean;
-  /** Plan, Ready und Backlog als Liste oder als Karten – pro Gerät. */
-  layout: Layout;
-  setLayout: (layout: Layout) => void;
+  /** Liste oder Karten, je Ansicht gewählt und pro Gerät gemerkt. */
+  layouts: Record<LayoutView, Layout>;
+  setLayout: (view: LayoutView, layout: Layout) => void;
   /** Auf schmalen Bildschirmen liegt die Seitenleiste als Overlay über allem. */
   sideOpen: boolean;
   view: View;
@@ -303,7 +317,7 @@ type State = {
 const COLLAPSED_KEY = 'tasker.collapsed';
 const SCOPE_KEY = 'tasker.scope';
 const SIDE_KEY = 'tasker.side';
-const LAYOUT_KEY = 'tasker.layout';
+const LAYOUT_KEY = 'tasker.layouts';
 const ARCH_OPEN_KEY = 'tasker.archOpen';
 
 const readLocal = <T>(key: string, fallback: T): T => {
@@ -323,6 +337,21 @@ const writeLocal = (key: string, value: unknown): void => {
   }
 };
 
+/** Die gemerkten Darstellungen – was fehlt oder nicht passt, nimmt die Vorgabe. */
+function readLayouts(): Record<LayoutView, Layout> {
+  const saved = readLocal<Partial<Record<string, unknown>>>(LAYOUT_KEY, {});
+  const out = { ...LAYOUT_DEFAULT };
+  for (const v of LAYOUT_VIEWS) {
+    const l = saved?.[v];
+    if (l === 'list' || l === 'cards') out[v] = l;
+  }
+  return out;
+}
+
+/** Ob irgendeine Ansicht Karten zeigt – dann gibt es auch die Titelbild-Vorgaben. */
+export const usesCards = (s: { layouts: Record<LayoutView, Layout> }): boolean =>
+  LAYOUT_VIEWS.some((v) => s.layouts[v] === 'cards');
+
 export const useStore = create<State>((set, get) => ({
   boot: null,
   ws: null,
@@ -335,10 +364,11 @@ export const useStore = create<State>((set, get) => ({
   lastProject: null,
   filter: { tag: null, categoryId: null, markId: null },
   sideCollapsed: readLocal<boolean>(SIDE_KEY, false),
-  layout: readLocal<Layout>(LAYOUT_KEY, 'list') === 'cards' ? 'cards' : 'list',
-  setLayout: (layout) => {
-    writeLocal(LAYOUT_KEY, layout);
-    set({ layout });
+  layouts: readLayouts(),
+  setLayout: (view, layout) => {
+    const layouts = { ...get().layouts, [view]: layout };
+    writeLocal(LAYOUT_KEY, layouts);
+    set({ layouts });
   },
   sideOpen: false,
   view: 'plan',

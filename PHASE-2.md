@@ -45,9 +45,13 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Dokumente** sind technisch normale Tasks in einer eigenen Ansicht; ihr Inspektor ist bewusst anders.
 - **Papierkorb** mit Ablauffrist statt sofortigem Löschen.
 - **Zeichnungen** gehören zu einem Task und werden über `![[zeichnung:Name]]` in die Beschreibung eingebettet.
-- **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready und Backlog als Karten erscheinen,
-  angelehnt an Codecks – ein gemeinsamer Umschalter „Liste/Karten“ in der Reiterleiste, gemerkt pro
-  Gerät. Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
+- **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready, Backlog und Doku als Karten
+  erscheinen, angelehnt an Codecks – der Umschalter „Liste/Karten“ in der Reiterleiste gilt je
+  Ansicht und wird pro Gerät gemerkt (`tasker.layouts`). Vorgabe: Plan und Ready als Karten,
+  Backlog und Doku als Liste. Doku-Karten zeigen wie ihr Inspektor weder Status noch Priorität noch
+  Fortschritt, statt des Zählers die Zahl der Unterseiten; das Feld „Titelbild“ steht dort für sich.
+  Die Titelbild-Vorgaben in Dialogen und Galerie gibt es, sobald eine Ansicht Karten zeigt.
+  Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
   Markierung (als Leiste über dem Titel mit Emoji und Namen, gestaltet wie der Fuß) und Fortschrittssegmenten. Das Titelbild wird ausdrücklich gesetzt (`coverImageId` am
   Task; Bilder in der Beschreibung zählen nicht): über das Feld „Titelbild“ rechts neben dem Status im Inspektor (ohne Vorschau –
   die zeigt die Karte; ohne Bild ein Ablagefeld für Ziehen aus Galerie oder vom Rechner, Strg+V und
