@@ -287,6 +287,9 @@ function TaskHead({
         </div>
       )}
 
+      {/* Karten: eine Doku-Seite hat keine Statuszeile – das Titelbild steht für sich. */}
+      {doc && <CoverRow ws={ws} task={task} />}
+
       {!doc && (cl.total > 0 || kids.length > 0) && (
         <MetaRow k="prog" label="Fortschritt">
           <SegBar segments={statusSegments(ws, task)} />

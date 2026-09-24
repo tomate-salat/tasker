@@ -6,7 +6,7 @@ import { categoriesOf, type OutlineRow, type OutlineView } from '@shared/outline
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, imageUrl } from '../api.js';
-import { useStore, type View } from '../store.js';
+import { isLayoutView, useStore, type Layout, type LayoutView, type View } from '../store.js';
 import { hasFiles, refreshGallery } from './imageDrop.js';
 import { ImageRejected, imagesIn, prepareImage } from './imageFile.js';
 import { addChild } from './actions.js';
@@ -21,26 +21,27 @@ import './cards.css';
 
 /**
  * Die Kartenansicht – ein Versuch, angelehnt an Codecks, auf Wunsch des
- * Nutzers neben der Liste. Plan, Ready und Backlog zeigen dann nur die
- * Aufgaben ohne Elternteil, als Karten nebeneinander. Den Baum darunter zeigt
- * der Inspektor (`Hierarchy`), und zwar immer von der Wurzel an – auch wenn
+ * Nutzers neben der Liste. Plan, Ready, Backlog und Doku wählen das je für
+ * sich (`layouts` im Speicher) und zeigen dann nur die Aufgaben bzw. Seiten
+ * ohne Elternteil, als Karten nebeneinander. Den Baum darunter zeigt der
+ * Inspektor (`Hierarchy`), und zwar immer von der Wurzel an – auch wenn
  * gerade eine Unteraufgabe ausgewählt ist.
  *
- * Alles hängt an `layout === 'cards'`; fliegt die Ansicht wieder raus, gehen
+ * Alles hängt an `cardsOn`; fliegt die Ansicht wieder raus, gehen
  * diese Datei, `cards.css` und die paar Aufrufe mit „Karten“ im Kommentar.
  */
 
 /** Unter diesem Schlüssel merkt sich `collapsed`, ob der Baum im Inspektor zu ist. */
 const HIER_KEY = 'inspector:hierarchy';
 
-/** Ob die Karten gerade gelten – nur in Plan, Ready und Backlog. */
-export const cardsOn = (s: { layout: string; view: View }): boolean =>
-  s.layout === 'cards' && (s.view === 'plan' || s.view === 'ready' || s.view === 'backlog');
+/** Ob die Karten gerade gelten – je Ansicht gewählt, in Plan, Ready, Backlog und Doku. */
+export const cardsOn = (s: { layouts: Record<LayoutView, Layout>; view: View }): boolean =>
+  isLayoutView(s.view) && s.layouts[s.view] === 'cards';
 
-/** Die oberste Aufgabe über `id` – deren Baum zeigt der Inspektor. */
+/** Die oberste Aufgabe (oder Doku-Seite) über `id` – deren Baum zeigt der Inspektor. */
 export function hierarchyRoot(ws: Workspace, id: string | null): Task | null {
   const task = ws.task(id);
-  if (!task || ws.isDoc(task)) return null;
+  if (!task) return null;
   const root = ws.root(task);
   return ws.kids(root.id).length ? root : null;
 }
@@ -472,6 +473,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const files = useFileDrop({ kind: 'task', item: task });
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
+  const doc = ws.isDoc(task);
   const mark = ws.mark(task.markId);
   const cover = coverOf(ws, task);
   const segments = statusSegments(ws, task);
@@ -570,10 +572,11 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         )}
       </div>
 
+      {/* Eine Doku-Seite hat wie im Inspektor weder Status noch Priorität noch Fortschritt. */}
       <div className="tcard-foot">
         <div className="tcard-meta">
-          <StatusDot task={task} implicit={implicit} />
-          {task.prio ? (
+          {!doc && <StatusDot task={task} implicit={implicit} />}
+          {!doc && task.prio ? (
             <span className="cell" role="button" tabIndex={-1} onClick={cell('prio')}>
               <PrioIcon prio={task.prio} cell />
             </span>
@@ -583,14 +586,19 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
             <LockBadge ws={ws} task={task} />
             <ChecklistBadge desc={task.desc} />
             <DrawingBadge ownerId={task.id} />
-            {kids.length > 0 && (
-              <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
-                {doneCount(ws, task)}/{total(ws, task)}
-              </span>
-            )}
+            {kids.length > 0 &&
+              (doc ? (
+                <span className="tcard-count" title={`${kids.length} ${kids.length === 1 ? 'Unterseite' : 'Unterseiten'}`}>
+                  {kids.length}
+                </span>
+              ) : (
+                <span className="tcard-count" title={`${doneCount(ws, task)} von ${total(ws, task)} Aufgaben erledigt`}>
+                  {doneCount(ws, task)}/{total(ws, task)}
+                </span>
+              ))}
           </span>
         </div>
-        {(kids.length > 0 || cl.total > 0) && <SegBar segments={segments} />}
+        {!doc && (kids.length > 0 || cl.total > 0) && <SegBar segments={segments} />}
       </div>
     </div>
     </div>
@@ -609,6 +617,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   const rows = treeRows(ws, root, state.collapsed);
   const current = ws.task(state.selected);
   const open = !state.collapsed[HIER_KEY];
+  const doc = ws.isDoc(root);
 
   return (
     <section className={`d-section hier-sec ${open ? '' : 'shut'}`}>
@@ -620,13 +629,11 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
           title={open ? 'Hierarchie zuklappen' : 'Hierarchie aufklappen'}
         >
           {open ? CHEVRON_DOWN : CHEVRON_RIGHT}
-          <h3>
-            Hierarchie · {doneCount(ws, root)}/{total(ws, root)}
-          </h3>
+          <h3>{doc ? 'Hierarchie' : `Hierarchie · ${doneCount(ws, root)}/${total(ws, root)}`}</h3>
         </button>
         {open && current && !state.multi.size && (
           <button className="linkish" onClick={() => void addChild(current)}>
-            + Unteraufgabe
+            {doc ? '+ Unterseite' : '+ Unteraufgabe'}
           </button>
         )}
       </div>
@@ -657,6 +664,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
                 ws={ws}
                 task={r.task}
                 depth={r.depth}
+                doc={doc}
                 menu={menu}
                 fixed={r.id === root.id}
               />
@@ -671,14 +679,15 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
 /** Umschalter Liste/Karten in der Reiterleiste. */
 export function LayoutSwitch() {
   const state = useStore();
-  const { view, layout, setLayout } = state;
-  if (view !== 'plan' && view !== 'ready' && view !== 'backlog') return null;
+  const { view, layouts, setLayout } = state;
+  if (!isLayoutView(view)) return null;
+  const layout = layouts[view];
   return (
     <span className="layout-switch" role="group" aria-label="Darstellung">
-      <button className={layout === 'list' ? 'on' : ''} onClick={() => setLayout('list')} title="Als Liste">
+      <button className={layout === 'list' ? 'on' : ''} onClick={() => setLayout(view, 'list')} title="Als Liste">
         Liste
       </button>
-      <button className={layout === 'cards' ? 'on' : ''} onClick={() => setLayout('cards')} title="Als Karten">
+      <button className={layout === 'cards' ? 'on' : ''} onClick={() => setLayout(view, 'cards')} title="Als Karten">
         Karten
       </button>
     </span>

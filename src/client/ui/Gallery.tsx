@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ImageEntry, ImageFolder, ImageUse } from '../api.js';
 import { imageUrl } from '../api.js';
-import { folderPath, scopeProjectIds, useStore } from '../store.js';
+import { folderPath, scopeProjectIds, useStore, usesCards } from '../store.js';
 import { dragSource, dropTarget, useZone } from './dnd.js';
 import { appendImages, hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
@@ -205,7 +205,7 @@ export function Gallery() {
       ...(list.length > 1 ? [{ head: count(list.length, 'Bild', 'Bilder') + ' ausgewählt' } as MenuItem] : []),
       // Karten: nur in der Kartenansicht und für genau ein Bild – als Vorgabe
       // für Projekt, Kategorie und Markierung.
-      ...(state.layout === 'cards' && ws
+      ...(usesCards(state) && ws
         ? coverMenu(ws, scope === 'all' ? null : scope, list.length === 1 ? (list[0]?.id ?? null) : null)
         : []),
       { label: 'In Ordner verschieben', sub: folderTargets((to) => void sortIntoFolder(ids, to)) },

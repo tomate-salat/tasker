@@ -20,7 +20,7 @@ import {
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore } from '../store.js';
+import { useStore, usesCards } from '../store.js';
 import {
   addChild,
   addIn,
@@ -283,7 +283,7 @@ export function projectMenu(ws: Workspace, p: Project): MenuItem[] {
     { label: 'Umbenennen', kbd: 'Doppelklick', onSelect: () => store.setEditProject(p.id) },
     {
       // Karten: im selben Dialog steht das Titelbild des Projekts.
-      label: store.layout === 'cards' ? 'Kategorien & Titelbild …' : 'Kategorien verwalten …',
+      label: usesCards(store) ? 'Kategorien & Titelbild …' : 'Kategorien verwalten …',
       onSelect: () => store.openCategories(p.id),
     },
     {
