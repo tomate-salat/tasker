@@ -556,6 +556,11 @@ function FolderTile({
       onContextMenu={onMenu}
       {...dragSource('folder', folder.id)}
       {...dropTarget(target)}
+      // Ordner kippen beim Ziehen wie Bilder und Karten (`cardTilt.ts`).
+      onDragStart={(e) => {
+        dragSource('folder', folder.id).onDragStart(e);
+        startTilt(e);
+      }}
     >
       <div className="gal-folder-face" aria-hidden="true">
         📁

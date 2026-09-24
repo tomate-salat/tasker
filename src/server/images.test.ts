@@ -399,9 +399,10 @@ describe('Ordner der Galerie', () => {
     assert.ok(getImage(ctx, b.id)?.deletedAt);
     assert.equal(loadTrash(ctx).filter((e) => e.imageId).length, 2);
 
-    // Und von dort einzeln zurück.
+    // Und von dort einzeln zurück – ganz nach oben, denn den Ordner gibt es nicht mehr.
     untrashImage(ctx, a.id);
     assert.equal(getImage(ctx, a.id)?.deletedAt, null);
+    assert.equal(getImage(ctx, a.id)?.folderId, null);
   });
 
   it('ein Ordner kann nicht in sich selbst wandern', () => {

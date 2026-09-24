@@ -448,9 +448,18 @@ export function trashImage(ctx: DbCtx, id: string, trashId: string): ImageMeta |
   })() as ImageMeta | null;
 }
 
-/** Aus dem Papierkorb zurück: nur die Markierung fällt weg. */
+/**
+ * Aus dem Papierkorb zurück: die Markierung fällt weg. Gibt es den Ordner des
+ * Bildes nicht mehr, rückt es ganz nach oben – sonst wäre es nirgends zu sehen.
+ */
 export function untrashImage(ctx: DbCtx, id: string): boolean {
-  const res = ctx.sqlite.prepare('UPDATE image SET deleted_at = NULL WHERE id = ?').run(id);
+  const res = ctx.sqlite
+    .prepare(
+      `UPDATE image SET deleted_at = NULL,
+         folder_id = CASE WHEN folder_id IN (SELECT id FROM image_folder) THEN folder_id END
+       WHERE id = ?`,
+    )
+    .run(id);
   return res.changes > 0;
 }
 
