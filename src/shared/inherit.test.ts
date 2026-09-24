@@ -35,7 +35,7 @@ describe('Kategorien vererben nach unten', () => {
   });
 });
 
-describe('Titelbilder: Projekt → Markierung → Kategorie → Task → Unteraufgabe', () => {
+describe('Titelbilder: Projekt → Kategorie → Markierung → Task → Unteraufgabe', () => {
   const build = (covers: { p?: string; k?: string; c?: string; t1?: string; t2?: string }) => {
     const b = new Builder()
       .project('p1')
@@ -66,12 +66,12 @@ describe('Titelbilder: Projekt → Markierung → Kategorie → Task → Unterau
     assert.deepEqual(cover(ws, 't4'), ['bp', 'project']);
   });
 
-  it('die Markierung sticht das Projekt, auch geerbt', () => {
-    assert.deepEqual(cover(build({ p: 'bp', k: 'bk' }), 't3'), ['bk', 'mark']);
+  it('die Kategorie sticht das Projekt, auch geerbt', () => {
+    assert.deepEqual(cover(build({ p: 'bp', c: 'bc' }), 't3'), ['bc', 'category']);
   });
 
-  it('die Kategorie sticht die Markierung', () => {
-    assert.deepEqual(cover(build({ p: 'bp', k: 'bk', c: 'bc' }), 't3'), ['bc', 'category']);
+  it('die Markierung sticht die Kategorie', () => {
+    assert.deepEqual(cover(build({ p: 'bp', k: 'bk', c: 'bc' }), 't3'), ['bk', 'mark']);
   });
 
   it('ein Task sticht jede Vorgabe, der nächste Vorfahr gewinnt', () => {

@@ -44,10 +44,10 @@ export type CoverFrom =
 
 /**
  * Das Titelbild einer Karte (Kartenansicht, Versuch) über die Kette
- * Projekt → Markierung → Kategorie → Task → Unteraufgabe → …: es gilt das
+ * Projekt → Kategorie → Markierung → Task → Unteraufgabe → …: es gilt das
  * spezifischste gesetzte Bild, das Projekt ist die letzte Vorgabe. Zuerst der
- * Task und seine Vorfahren (der nächste gewinnt), dann seine Kategorie, dann
- * seine Markierung – beide wie die Kategorie auch geerbt –, zuletzt das Projekt.
+ * Task und seine Vorfahren (der nächste gewinnt), dann seine Markierung, dann
+ * seine Kategorie – beide wie die Kategorie auch geerbt –, zuletzt das Projekt.
  *
  * Abgeleitet, nie gespeichert – wie `effectiveCategory`.
  */
@@ -62,11 +62,11 @@ export function effectiveCover(ws: Workspace, t: Task): { imageId: string; from:
   const task = chain.find((x) => x.coverImageId);
   if (task?.coverImageId) return { imageId: task.coverImageId, from: { kind: 'task', task } };
 
-  const category = effectiveCategory(ws, t)?.category;
-  if (category?.coverImageId) return { imageId: category.coverImageId, from: { kind: 'category', category } };
-
   const mark = effectiveMark(ws, t);
   if (mark?.coverImageId) return { imageId: mark.coverImageId, from: { kind: 'mark', mark } };
+
+  const category = effectiveCategory(ws, t)?.category;
+  if (category?.coverImageId) return { imageId: category.coverImageId, from: { kind: 'category', category } };
 
   const project = ws.project(t.projectId);
   if (project?.coverImageId) return { imageId: project.coverImageId, from: { kind: 'project', project } };

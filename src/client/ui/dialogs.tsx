@@ -188,7 +188,7 @@ export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => voi
     >
       <p className="hint">
         Das Bild rechts ist die Vorgabe für Titelbilder: es gilt für Karten mit dieser Markierung, sticht
-        das Projekt und wird von Kategorie und Task überschrieben.
+        Projekt und Kategorie und wird vom Task überschrieben.
       </p>
       <h3>Vorhanden</h3>
       {ws.marks.length ? (

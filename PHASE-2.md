@@ -58,7 +58,7 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Galerie im Ordner „Cardimages“ des Projekts (wird bei Bedarf angelegt). Endgültig gelöschte Bilder
   leeren das Feld. Ist ein Titelbild gesetzt, liegt es dezent hinter dem Inspektor (oben bündig,
   auf Breite gebracht, bei 8 % Deckkraft, unten weich ausgeblendet). Unteraufgaben erben das Titelbild der nächsten Aufgabe darüber, die eins hat; ein eigenes überschreibt es.
-  Darüber gibt es Vorgaben, die ganze Kette lautet Projekt → Markierung → Kategorie → Task →
+  Darüber gibt es Vorgaben, die ganze Kette lautet Projekt → Kategorie → Markierung → Task →
   Unteraufgabe → …: das spezifischste gesetzte Bild gilt, das Projekt ist die letzte Vorgabe;
   Markierung und Kategorie zählen auch geerbt (`effectiveCover`). Die Vorgaben (`coverImageId` an
   Projekt, Kategorie und Markierung, Migration `0011_titelbild_vorgaben`) setzt man in den
