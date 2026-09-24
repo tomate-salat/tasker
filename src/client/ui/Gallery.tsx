@@ -207,7 +207,7 @@ export function Gallery() {
         },
       },
       // Karten: nur in der Kartenansicht und für genau ein Bild – für den offenen
-      // Task und als Vorgabe für Kategorie, Markierung und Projekt.
+      // Task und als Vorgabe für Projekt, Kategorie und Markierung.
       ...(state.layout === 'cards' && ws
         ? coverMenu(ws, openTask, scope === 'all' ? null : scope, list.length === 1 ? (list[0]?.id ?? null) : null)
         : []),
