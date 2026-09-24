@@ -27,6 +27,7 @@ export function TaskRow({
   doc = false,
   menu,
   fixed = false,
+  compact = false,
 }: {
   ws: Workspace;
   task: Task;
@@ -36,6 +37,8 @@ export function TaskRow({
   menu?: Menu;
   /** Karten: die Wurzel im Baum des Inspektors lässt sich nicht zuklappen. */
   fixed?: boolean;
+  /** Baum im Inspektor: ohne Kategorie und Labels, damit der Titel Platz hat. */
+  compact?: boolean;
 }) {
   const { selected, select, collapsed, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } =
     useStore();
@@ -138,8 +141,12 @@ export function TaskRow({
       <DrawingBadge ownerId={task.id} />
       {!doc && <LockBadge ws={ws} task={task} />}
 
-      <CategoryCell ws={ws} task={task} onClick={cell('cat')} />
-      <TagCell ws={ws} task={task} onClick={cell('tags')} />
+      {!compact && (
+        <>
+          <CategoryCell ws={ws} task={task} onClick={cell('cat')} />
+          <TagCell ws={ws} task={task} onClick={cell('tags')} />
+        </>
+      )}
 
       <span className="meta">
         {doc ? (

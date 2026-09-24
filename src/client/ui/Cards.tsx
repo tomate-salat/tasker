@@ -717,6 +717,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
                 doc={doc}
                 menu={menu}
                 fixed={r.id === root.id}
+                compact
               />
             ),
         )}
