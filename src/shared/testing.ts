@@ -16,18 +16,18 @@ export class Builder {
 
   project(id: string, name = id): this {
     this.data.projects.push({ id,
-      version: 1, name, color: '#2A6B5A', order: this.data.projects.length });
+      version: 1, name, color: '#2A6B5A', order: this.data.projects.length, coverImageId: null });
     return this;
   }
 
   category(id: string, projectId: string, name = id): this {
     this.data.categories.push({ id,
-      version: 1, projectId, name, order: this.data.categories.length });
+      version: 1, projectId, name, order: this.data.categories.length, coverImageId: null });
     return this;
   }
 
   mark(id: string, emoji = '⭐', name = id): this {
-    this.data.marks.push({ id, version: 1, emoji, name, order: this.data.marks.length });
+    this.data.marks.push({ id, version: 1, emoji, name, order: this.data.marks.length, coverImageId: null });
     return this;
   }
 
@@ -102,6 +102,7 @@ export const projectOf = (p: Partial<Project>): Project => ({
   name: 'p',
   color: '#000',
   order: 0,
+  coverImageId: null,
   ...p,
 });
 

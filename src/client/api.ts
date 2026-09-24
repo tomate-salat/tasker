@@ -142,7 +142,12 @@ export type ImageMeta = {
 };
 
 /** Wo ein Bild steckt, getrennt nach dem Zustand des Umgebenden. */
-export type ImageUse = { kind: 'task' | 'milestone'; id: string; title: string };
+export type ImageUse = {
+  /** Projekt, Kategorie und Markierung: dort ist es die Vorgabe für Titelbilder. */
+  kind: 'task' | 'milestone' | 'project' | 'category' | 'mark';
+  id: string;
+  title: string;
+};
 export type ImageUsage = { live: ImageUse[]; archived: ImageUse[]; trashed: ImageUse[] };
 
 /** Ein Bild in der Galerie: Angaben plus Verwendungen, nie die Bytes. */

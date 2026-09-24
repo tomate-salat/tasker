@@ -1718,9 +1718,15 @@ function groupValues<R, V>(
 
 /* ------------------------------------------------------ Zeilen ins Modell */
 
-type ProjectRow = { id: string; version: number; name: string; color: string; sort_order: number };
-type CategoryRow = { id: string; version: number; project_id: string; name: string; sort_order: number };
-type MarkRow = { id: string; version: number; emoji: string; name: string; sort_order: number };
+type ProjectRow = {
+  id: string; version: number; name: string; color: string; sort_order: number; cover_image_id: string | null;
+};
+type CategoryRow = {
+  id: string; version: number; project_id: string; name: string; sort_order: number; cover_image_id: string | null;
+};
+type MarkRow = {
+  id: string; version: number; emoji: string; name: string; sort_order: number; cover_image_id: string | null;
+};
 type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number };
 type MilestoneRow = {
   id: string; ref: number; version: number; project_id: string; title: string; desc: string; planned: number; status: string;
@@ -1736,14 +1742,17 @@ type TaskRow = {
 
 const toProject = (r: ProjectRow): Project => ({
   id: r.id, version: r.version, name: r.name, color: r.color, order: r.sort_order,
+  coverImageId: r.cover_image_id ?? null,
 });
 
 const toCategory = (r: CategoryRow): Category => ({
   id: r.id, version: r.version, projectId: r.project_id, name: r.name, order: r.sort_order,
+  coverImageId: r.cover_image_id ?? null,
 });
 
 const toMark = (r: MarkRow): Mark => ({
   id: r.id, version: r.version, emoji: r.emoji, name: r.name, order: r.sort_order,
+  coverImageId: r.cover_image_id ?? null,
 });
 
 const toGroup = (r: GroupRow): Group => ({

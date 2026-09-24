@@ -369,7 +369,7 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
   if (target.type === 'desc') return dropImage(drag, target);
   if (drag.kind === 'image' && (target.type === 'cover' || target.type === 'task')) {
     const id = drag.ids[0];
-    return id ? setCover(target.task, id) : undefined;
+    return id ? setCover({ kind: 'task', item: target.task }, id) : undefined;
   }
   if (target.type === 'folder') {
     const store = useStore.getState();

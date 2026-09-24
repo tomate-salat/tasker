@@ -55,8 +55,15 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
   Kontextmenü der Galerie, durch Ziehen auf die Karte oder mit Strg+V auf der ausgewählten Karte. Was vom Rechner kommt, landet in der
   Galerie im Ordner „Cardimages“ des Projekts (wird bei Bedarf angelegt). Endgültig gelöschte Bilder
   leeren das Feld. Ist ein Titelbild gesetzt, liegt es dezent hinter dem Inspektor (oben bündig,
-  auf Breite gebracht, bei 8 % Deckkraft, unten weich ausgeblendet). Unteraufgaben erben das Titelbild der nächsten Aufgabe darüber, die eins hat; ein eigenes überschreibt es. Offen, erst wenn die Karten bleiben: Vorgabe-Hintergründe mit der Kette
-  Projekt → Kategorie → Task. Den Baum darunter zeigt
+  auf Breite gebracht, bei 8 % Deckkraft, unten weich ausgeblendet). Unteraufgaben erben das Titelbild der nächsten Aufgabe darüber, die eins hat; ein eigenes überschreibt es.
+  Darüber gibt es Vorgaben, die ganze Kette lautet Projekt → Markierung → Kategorie → Task →
+  Unteraufgabe → …: das spezifischste gesetzte Bild gilt, das Projekt ist die letzte Vorgabe;
+  Markierung und Kategorie zählen auch geerbt (`effectiveCover`). Die Vorgaben (`coverImageId` an
+  Projekt, Kategorie und Markierung, Migration `0011_titelbild_vorgaben`) setzt man in der
+  Kartenansicht in den Dialogen „Kategorien“ (oben auch das Projekt, im Projektmenü „Kategorien &
+  Titelbild …“) und „Markierungen“ – Klick, Datei daraufziehen oder Strg+V – oder über „Als
+  Titelbild-Vorgabe für“ im Kontextmenü der Galerie. Bilder einer Markierung landen im zuletzt
+  offenen Projekt. Die Galerie zählt die Vorgaben als Verwendung. Den Baum darunter zeigt
   der Inspektor an seinem Ende, klebend am unteren Rand und als Ganzes einklappbar (standardmäßig
   offen), immer ab der Wurzel – auch wenn eine Unteraufgabe ausgewählt ist –, mit Auswahl, Ziehen und
   Kontextmenü wie in der Liste. Die Wurzel selbst ist dort nicht einklappbar. Nicht im Prototyp, Wunsch des Nutzers; ob sie

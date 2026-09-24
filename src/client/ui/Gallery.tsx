@@ -6,7 +6,7 @@ import { dragSource, dropTarget, useZone } from './dnd.js';
 import { appendImages, hasFiles, refreshGallery, useUpload } from './imageDrop.js';
 import { humanSize } from './imageFile.js';
 import { useMenu, type MenuItem } from './Menu.js';
-import { setCover } from './Cards.js';
+import { coverMenu } from './Cards.js';
 
 /**
  * Die Galerie: ein Bestand wie das Archiv, keine Liste von Aufgaben. Sie zeigt
@@ -162,6 +162,20 @@ export function Gallery() {
   const open = openTask ?? openMs;
   const openKind = openTask ? ('task' as const) : ('milestone' as const);
 
+  /**
+   * Eine Verwendung anspringen. Die Vorgaben für Titelbilder haben keine Zeile
+   * in der Liste – dafür öffnet sich der Dialog, in dem sie gesetzt werden.
+   */
+  const goUse = (u: ImageUse): void => {
+    if (u.kind === 'project') state.openCategories(u.id);
+    else if (u.kind === 'category') state.openCategories(ws?.category(u.id)?.projectId);
+    else if (u.kind === 'mark') state.setDialog('marks');
+    else {
+      select(u.id);
+      reveal(u.id);
+    }
+  };
+
   /** Anklicken: einzeln, mit Strg dazu, mit Umschalt der Bereich dazwischen. */
   const pick = (e: React.MouseEvent, id: string): void => {
     if (e.ctrlKey || e.metaKey) {
@@ -192,17 +206,10 @@ export function Gallery() {
           if (open) void appendImages(openKind, open, list);
         },
       },
-      // Karten: nur in der Kartenansicht, nur für einen Task und genau ein Bild.
-      ...(state.layout === 'cards' && openTask && !ws?.isDoc(openTask)
-        ? [
-            {
-              label: `Als Titelbild von „${openTask.title || 'Ohne Titel'}“`,
-              disabled: list.length !== 1,
-              onSelect: () => {
-                if (list[0]) void setCover(openTask, list[0].id);
-              },
-            } as MenuItem,
-          ]
+      // Karten: nur in der Kartenansicht und für genau ein Bild – für den offenen
+      // Task und als Vorgabe für Kategorie, Markierung und Projekt.
+      ...(state.layout === 'cards' && ws
+        ? coverMenu(ws, openTask, scope === 'all' ? null : scope, list.length === 1 ? (list[0]?.id ?? null) : null)
         : []),
       { label: 'In Ordner verschieben', sub: folderTargets((to) => void sortIntoFolder(ids, to)) },
       { sep: true },
@@ -480,7 +487,7 @@ export function Gallery() {
                   {b.width}×{b.height} · {humanSize(b.size)}
                 </span>
                 {/* Die Verweise darin springen weg – ein Klick darauf ist keine Auswahl. */}
-                <Usage entry={b} onGo={(id) => { select(id); reveal(id); }} />
+                <Usage entry={b} onGo={goUse} />
                 <button
                   className="linkish gal-del"
                   title="In den Papierkorb legen"
@@ -588,8 +595,15 @@ function FolderTile({
   );
 }
 
+/** Die Vorgaben für Titelbilder, so wie sie in der Verwendung heißen. */
+const USE_KIND: Partial<Record<ImageUse['kind'], string>> = {
+  project: 'Projekt',
+  category: 'Kategorie',
+  mark: 'Markierung',
+};
+
 /** Wo das Bild steckt – anklickbar, der Klick springt dorthin. */
-function Usage({ entry, onGo }: { entry: ImageEntry; onGo: (id: string) => void }) {
+function Usage({ entry, onGo }: { entry: ImageEntry; onGo: (use: ImageUse) => void }) {
   const u = entry.usage;
   const alle = uses(entry);
   if (!alle.length) return <span className="gal-use none">Ohne Verwendung</span>;
@@ -602,11 +616,12 @@ function Usage({ entry, onGo }: { entry: ImageEntry; onGo: (id: string) => void 
           className="linkish"
           onClick={(ev) => {
             ev.stopPropagation();
-            onGo(e.id);
+            onGo(e);
           }}
-          title="Dorthin springen"
+          title={USE_KIND[e.kind] ? 'Vorgabe für Titelbilder – dort verwalten' : 'Dorthin springen'}
         >
           {e.kind === 'milestone' ? '◆ ' : ''}
+          {USE_KIND[e.kind] ? `${USE_KIND[e.kind]}: ` : ''}
           {e.title || 'Ohne Titel'}
         </button>
       ))}

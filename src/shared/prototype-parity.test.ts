@@ -57,11 +57,11 @@ const dump = JSON.parse(
 /** Übersetzt den Prototyp-State ins neue Datenmodell. */
 function toData(d: Dump['data']): Data {
   return {
-    projects: d.projects.map((p, i) => ({ id: p.id, version: 1, name: p.name, color: p.color, order: i })),
+    projects: d.projects.map((p, i) => ({ id: p.id, version: 1, name: p.name, color: p.color, order: i, coverImageId: null })),
     categories: d.projects.flatMap((p) =>
-      p.categories.map((c, i) => ({ id: c.id, version: 1, projectId: p.id, name: c.name, order: i })),
+      p.categories.map((c, i) => ({ id: c.id, version: 1, projectId: p.id, name: c.name, order: i, coverImageId: null })),
     ),
-    marks: d.marks.map((k, i) => ({ ...k, version: 1, order: i })),
+    marks: d.marks.map((k, i) => ({ ...k, version: 1, order: i, coverImageId: null })),
     groups: d.groups.map((g) => ({ id: g.id, version: 1, projectId: g.project, title: g.title, order: g.order })),
     milestones: d.milestones.map((m, i) => ({
       id: m['id'] as string,

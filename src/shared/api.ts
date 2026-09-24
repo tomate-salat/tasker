@@ -50,9 +50,14 @@ export const createSchemas = {
 } satisfies Record<Kind, z.ZodType>;
 
 export const patchSchemas = {
-  project: z.object({ name: title, color: z.string().max(32), order: z.number() }).partial(),
-  category: z.object({ name: title, order: z.number() }).partial(),
-  mark: z.object({ emoji: z.string().min(1).max(8), name: title, order: z.number() }).partial(),
+  // `coverImageId`: Vorgabe für das Titelbild der Karten – ID eines Galeriebildes.
+  project: z
+    .object({ name: title, color: z.string().max(32), order: z.number(), coverImageId: id.nullable() })
+    .partial(),
+  category: z.object({ name: title, order: z.number(), coverImageId: id.nullable() }).partial(),
+  mark: z
+    .object({ emoji: z.string().min(1).max(8), name: title, order: z.number(), coverImageId: id.nullable() })
+    .partial(),
   group: z.object({ title, order: z.number() }).partial(),
   milestone: z
     .object({

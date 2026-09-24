@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { effectiveCategory, effectiveTags, projectTags } from './inherit.js';
+import { effectiveCategory, effectiveCover, effectiveTags, projectTags } from './inherit.js';
 import { Builder } from './testing.js';
 
 describe('Kategorien vererben nach unten', () => {
@@ -32,6 +32,52 @@ describe('Kategorien vererben nach unten', () => {
 
   it('ohne Kategorie im ganzen Ast gibt es keine', () => {
     assert.equal(effectiveCategory(ws, ws.task('t4')!), null);
+  });
+});
+
+describe('Titelbilder: Projekt → Markierung → Kategorie → Task → Unteraufgabe', () => {
+  const build = (covers: { p?: string; k?: string; c?: string; t1?: string; t2?: string }) => {
+    const b = new Builder()
+      .project('p1')
+      .mark('k1')
+      .category('c1', 'p1')
+      .task('t1', 'p1', { markId: 'k1', categoryId: 'c1', coverImageId: covers.t1 ?? null })
+      .task('t2', 'p1', { parentId: 't1', coverImageId: covers.t2 ?? null })
+      .task('t3', 'p1', { parentId: 't2' })
+      .task('t4', 'p1');
+    const raw = b.raw();
+    raw.projects[0]!.coverImageId = covers.p ?? null;
+    raw.marks[0]!.coverImageId = covers.k ?? null;
+    raw.categories[0]!.coverImageId = covers.c ?? null;
+    return b.build();
+  };
+  const cover = (ws: ReturnType<typeof build>, id: string) => {
+    const e = effectiveCover(ws, ws.task(id)!);
+    return e && [e.imageId, e.from.kind];
+  };
+
+  it('ohne irgendein Bild gibt es keins', () => {
+    assert.equal(cover(build({}), 't3'), null);
+  });
+
+  it('das Projekt ist die letzte Vorgabe – auch für Aufgaben ohne Markierung und Kategorie', () => {
+    const ws = build({ p: 'bp' });
+    assert.deepEqual(cover(ws, 't3'), ['bp', 'project']);
+    assert.deepEqual(cover(ws, 't4'), ['bp', 'project']);
+  });
+
+  it('die Markierung sticht das Projekt, auch geerbt', () => {
+    assert.deepEqual(cover(build({ p: 'bp', k: 'bk' }), 't3'), ['bk', 'mark']);
+  });
+
+  it('die Kategorie sticht die Markierung', () => {
+    assert.deepEqual(cover(build({ p: 'bp', k: 'bk', c: 'bc' }), 't3'), ['bc', 'category']);
+  });
+
+  it('ein Task sticht jede Vorgabe, der nächste Vorfahr gewinnt', () => {
+    assert.deepEqual(cover(build({ p: 'bp', k: 'bk', c: 'bc', t1: 'b1' }), 't3'), ['b1', 'task']);
+    assert.deepEqual(cover(build({ c: 'bc', t1: 'b1', t2: 'b2' }), 't3'), ['b2', 'task']);
+    assert.deepEqual(cover(build({ c: 'bc', t1: 'b1', t2: 'b2' }), 't1'), ['b1', 'task']);
   });
 });
 

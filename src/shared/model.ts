@@ -19,6 +19,8 @@ export type Project = {
   name: string;
   color: string;
   order: number;
+  /** Vorgabe für das Titelbild der Karten – siehe `coverOf` in der Kartenansicht. */
+  coverImageId: string | null;
 };
 
 export type Category = {
@@ -28,6 +30,8 @@ export type Category = {
   projectId: string;
   name: string;
   order: number;
+  /** Vorgabe für das Titelbild der Karten – siehe `coverOf` in der Kartenansicht. */
+  coverImageId: string | null;
 };
 
 export type Mark = {
@@ -37,6 +41,8 @@ export type Mark = {
   emoji: string;
   name: string;
   order: number;
+  /** Vorgabe für das Titelbild der Karten – siehe `coverOf` in der Kartenansicht. */
+  coverImageId: string | null;
 };
 
 export type Group = {

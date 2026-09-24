@@ -44,6 +44,12 @@ export const projects = sqliteTable('project', {
   name: text('name').notNull(),
   color: text('color').notNull().default('#2A6B5A'),
   order: integer('sort_order').notNull().default(0),
+  /**
+   * Vorgabe für das Titelbild der Karten (Kartenansicht, Versuch) – greift, wenn
+   * weiter unten in der Kette Projekt → Markierung → Kategorie → Task nichts
+   * gesetzt ist. Ohne Fremdschlüssel wie am Task.
+   */
+  coverImageId: text('cover_image_id'),
   ...tracked,
 });
 
@@ -57,6 +63,8 @@ export const categories = sqliteTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     order: integer('sort_order').notNull().default(0),
+    /** Vorgabe für das Titelbild der Karten – siehe `projects.coverImageId`. */
+    coverImageId: text('cover_image_id'),
     ...tracked,
   },
   (t) => [index('category_project_idx').on(t.projectId)],
@@ -68,6 +76,8 @@ export const marks = sqliteTable('mark', {
   emoji: text('emoji').notNull(),
   name: text('name').notNull(),
   order: integer('sort_order').notNull().default(0),
+  /** Vorgabe für das Titelbild der Karten – siehe `projects.coverImageId`. */
+  coverImageId: text('cover_image_id'),
   ...tracked,
 });
 
