@@ -194,22 +194,19 @@ export function Gallery() {
     setAnchor(id);
   };
 
-  /** Die Sammelaktionen – dieselben im Kontextmenü wie in der Leiste. */
+  /**
+   * Die Sammelaktionen im Kontextmenü. „Anhängen“ steht nur in der Leiste – im
+   * Menü machte es das Menü unruhig, und der offene Inspektor nimmt Bilder
+   * ohnehin per Ziehen (Wunsch des Nutzers).
+   */
   const bulkMenu = (ids: string[]): MenuItem[] => {
     const list = ids.map((id) => images.find((b) => b.id === id)).filter((b) => !!b);
     return [
       ...(list.length > 1 ? [{ head: count(list.length, 'Bild', 'Bilder') + ' ausgewählt' } as MenuItem] : []),
-      {
-        label: open ? `An „${open.title || 'Ohne Titel'}“ anhängen` : 'Anhängen (keine Aufgabe offen)',
-        disabled: !open,
-        onSelect: () => {
-          if (open) void appendImages(openKind, open, list);
-        },
-      },
-      // Karten: nur in der Kartenansicht und für genau ein Bild – für den offenen
-      // Task und als Vorgabe für Projekt, Kategorie und Markierung.
+      // Karten: nur in der Kartenansicht und für genau ein Bild – als Vorgabe
+      // für Projekt, Kategorie und Markierung.
       ...(state.layout === 'cards' && ws
-        ? coverMenu(ws, openTask, scope === 'all' ? null : scope, list.length === 1 ? (list[0]?.id ?? null) : null)
+        ? coverMenu(ws, scope === 'all' ? null : scope, list.length === 1 ? (list[0]?.id ?? null) : null)
         : []),
       { label: 'In Ordner verschieben', sub: folderTargets((to) => void sortIntoFolder(ids, to)) },
       { sep: true },
