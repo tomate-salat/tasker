@@ -338,6 +338,20 @@ describe('Reihenfolge beim Verschieben', () => {
     assert.deepEqual(order(m.id), ['B', 'C', 'A']);
   });
 
+  it('zählt den Platz nur unter den aktiven Geschwistern, wie die Liste', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    for (const title of ['X', 'A', 'B', 'C']) mkTask({ projectId: p.id, title, milestoneId: m.id });
+    const x = loadBootstrap(ctx).tasks.find((t) => t.title === 'X')!;
+    archive(ctx, 'task', x.id);
+    const c = loadBootstrap(ctx).tasks.find((t) => t.title === 'C')!;
+
+    // Die Liste zeigt A, B, C – „vor B“ ist dort Platz 1.
+    move(ctx, c.id, c.version, { milestoneId: m.id, index: 1 });
+
+    assert.deepEqual(order(m.id), ['X', 'A', 'C', 'B']);
+  });
+
   /**
    * Lose Aufgaben hängen an keinem Milestone und keiner Gruppe, stehen aber in
    * verschiedenen Behältern: „Unsortiert“ im Backlog (nicht ready) und in

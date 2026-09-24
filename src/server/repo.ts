@@ -51,7 +51,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     'SELECT * FROM milestone WHERE archived_at IS NULL ORDER BY sort_order',
   );
   const tasks = all<TaskRow>(
-    `SELECT t.* FROM task t WHERE ${ACTIVE_TASK} ORDER BY t.sort_order`,
+    `SELECT t.* FROM task t WHERE ${ACTIVE_TASK} ORDER BY t.sort_order, t.id`,
   );
 
   // Labels und Abhängigkeiten nur für das, was wir auch ausliefern.
@@ -629,11 +629,37 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
  * bleiben damit ganzzahlig – kein Bruchrechnen, das irgendwann zu fein wird.
  */
 function reorder(ctx: DbCtx, where: Container, movedId: string, index: number): void {
-  const siblings = containerIds(ctx, where).filter((x) => x !== movedId);
-  siblings.splice(Math.min(index, siblings.length), 0, movedId);
-
+  const siblings = placeAt(ctx, containerIds(ctx, where), [movedId], index);
   const set = ctx.sqlite.prepare('UPDATE task SET sort_order = ? WHERE id = ?');
   siblings.forEach((sid, i) => set.run(i, sid));
+}
+
+/**
+ * Setzt `moved` an den Platz `index` im Behälter `all`. Der Platz zählt wie im
+ * Client nur unter den aktiven Geschwistern – Archiviertes liegt zwar im selben
+ * Behälter, steht aber nicht in der Liste. Zählte es mit, landete eine Aufgabe
+ * neben archivierten Geschwistern an einer anderen Stelle als abgelegt.
+ */
+function placeAt(ctx: DbCtx, all: string[], moved: string[], index: number): string[] {
+  const rest = all.filter((id) => !moved.includes(id));
+  const archived = new Set(
+    rest.length
+      ? (
+          ctx.sqlite
+            .prepare(
+              `SELECT id FROM task WHERE archived_at IS NOT NULL
+                 AND id IN (${rest.map(() => '?').join(',')})`,
+            )
+            .all(...rest) as { id: string }[]
+        ).map((r) => r.id)
+      : [],
+  );
+  const active = rest.filter((id) => !archived.has(id));
+  // Vor die aktive Aufgabe, die jetzt an diesem Platz steht – oder ans Ende.
+  const before = active[index];
+  const at = before === undefined ? rest.length : rest.indexOf(before);
+  rest.splice(at, 0, ...moved);
+  return rest;
 }
 
 /** Der Behälter, in dem Wurzelaufgaben nebeneinander liegen. */
@@ -999,8 +1025,7 @@ function placeTogether(ctx: DbCtx, ids: string[], index: number): void {
   if (!first) return;
   const all = containerIds(ctx, containerOf(first));
   const moved = ids.filter((id) => all.includes(id));
-  const rest = all.filter((id) => !moved.includes(id));
-  rest.splice(Math.min(index, rest.length), 0, ...moved);
+  const rest = placeAt(ctx, all, moved, index);
 
   const set = ctx.sqlite.prepare('UPDATE task SET sort_order = ? WHERE id = ?');
   rest.forEach((sid, i) => set.run(i, sid));

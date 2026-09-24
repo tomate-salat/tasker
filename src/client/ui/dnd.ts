@@ -285,6 +285,14 @@ export function dropTarget(target: Target) {
     onDragOver: (e: React.DragEvent) => {
       const { drag, over } = useDrag.getState();
       if (!drag) return;
+      // Über sich selbst oder dem eigenen Teilbaum: hier abgelegt bleibt alles,
+      // wie es ist. Ohne das fiele das Ablegen zum Behälter darunter durch
+      // (Milestone, Gruppe) und die Aufgabe rutschte dort ans Ende.
+      if (target.type === 'task' && drag.kind === 'task' && drag.blocked.has(target.task.id)) {
+        e.stopPropagation();
+        if (over) useDrag.setState({ over: null });
+        return;
+      }
       const zone = zoneFor(drag, target, e);
       if (!zone) return;
       if (target.type === 'tab') hoverTab(target.view, e.currentTarget as HTMLElement);
