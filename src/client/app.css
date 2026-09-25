@@ -3738,3 +3738,53 @@ body:has(.bulk) .toast {
     display: none;
   }
 }
+
+/* ---------------------------------------------------- Profil: MCP-Tokens */
+
+.tk-fresh {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.tk-code {
+  display: block;
+  margin: 6px 0 8px;
+  font-size: 12px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.tk-actions {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+
+.tk-list {
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tk-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tk-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--faint);
+}

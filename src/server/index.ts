@@ -7,6 +7,9 @@ import { z } from 'zod';
 import { DATABASE_PATH, HOST, PORT, PRODUCTION, warnIfNotPersistent } from './env.js';
 import { appDb, recordBoot } from './db.js';
 import { dataRoutes } from './routes.js';
+import { appEvents } from './events.js';
+import { handleMcp } from './mcp.js';
+import { createToken, listTokens, revokeToken, tokenValid } from './tokens.js';
 import { runMigrations } from './migrate.js';
 import {
   SESSION_COOKIE,
@@ -66,6 +69,21 @@ app.post('/api/login', async (c) => {
   return c.json({ account: getAccount() });
 });
 
+/* ------------------------------------------------------------------- MCP */
+
+/**
+ * Für Claude Code und andere MCP-Clients. Statt der Sitzung gilt hier ein
+ * Zugangs-Token aus dem Profil, als `Authorization: Bearer tsk_…`.
+ */
+app.all('/mcp', async (c) => {
+  if (!tokenValid(appDb, c.req.header('authorization'))) {
+    return c.json({ error: 'Ungültiges oder fehlendes Token.' }, 401, {
+      'WWW-Authenticate': 'Bearer realm="tasker"',
+    });
+  }
+  return handleMcp(appDb, appEvents, c.req.raw);
+});
+
 /* ------------------------------------------------- Ab hier nur angemeldet */
 
 app.use('/api/*', async (c, next) => {
@@ -109,6 +127,20 @@ app.post('/api/password', async (c) => {
   }
   return c.json({ ok: true });
 });
+
+const tokenBody = z.object({ name: z.string().min(1).max(80) });
+
+app.get('/api/tokens', (c) => c.json({ tokens: listTokens(appDb) }));
+
+app.post('/api/tokens', async (c) => {
+  const parsed = tokenBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'Name fehlt.' }, 400);
+  return c.json(createToken(appDb, parsed.data.name), 201);
+});
+
+app.delete('/api/tokens/:id', (c) =>
+  revokeToken(appDb, c.req.param('id')) ? c.json({ ok: true }) : c.json({ error: 'Nicht gefunden.' }, 404),
+);
 
 // Betriebsdaten – hinter der Anmeldung, weil sie den Datenbankpfad verraten.
 app.get('/api/status', (c) =>

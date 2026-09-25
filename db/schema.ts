@@ -392,6 +392,21 @@ export const sessions = sqliteTable(
   (t) => [index('session_expires_idx').on(t.expiresAt)],
 );
 
+/**
+ * Zugangs-Tokens für den MCP-Endpunkt. Wie bei den Sitzungen steht nur der
+ * Hash in der Tabelle; das Token selbst sieht der Nutzer genau einmal.
+ */
+export const apiTokens = sqliteTable('api_token', {
+  id: text('id').primaryKey(),
+  /** SHA-256 des Tokens. */
+  hash: text('hash').notNull().unique(),
+  name: text('name').notNull(),
+  /** Die ersten Zeichen, damit man Tokens in der Liste auseinanderhalten kann. */
+  hint: text('hint').notNull(),
+  createdAt: text('created_at').notNull().default(now),
+  lastUsedAt: text('last_used_at'),
+});
+
 /* ----------------------------------------------------------------- Relationen */
 
 export const projectRelations = relations(projects, ({ many }) => ({
@@ -434,6 +449,7 @@ export type Drawing = typeof drawings.$inferSelect;
 export type MilestoneLogEntry = typeof milestoneLog.$inferSelect;
 export type TrashEntry = typeof trash.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+export type ApiToken = typeof apiTokens.$inferSelect;
 
 export type TaskStatus = (typeof TASK_STATUS)[number];
 export type MilestoneStatus = (typeof MILESTONE_STATUS)[number];

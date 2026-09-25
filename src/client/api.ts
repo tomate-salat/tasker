@@ -22,6 +22,9 @@ export const CLIENT_ID = Math.random().toString(36).slice(2, 10);
 
 export type Account = { email: string; name: string; avatar: string };
 
+/** Ein Zugangs-Token für den MCP-Endpunkt – ohne das Token selbst. */
+export type ApiToken = { id: string; name: string; hint: string; createdAt: string; lastUsedAt: string | null };
+
 export type Scene = { elements: unknown[]; files?: Record<string, unknown> };
 
 export type DrawingMeta = {
@@ -201,6 +204,12 @@ export const api = {
 
   changePassword: (current: string, next: string) =>
     post<{ ok: true }>('/api/password', { current, next }),
+
+  tokens: () => request<{ tokens: ApiToken[] }>('/api/tokens'),
+
+  createToken: (name: string) => post<ApiToken & { token: string }>('/api/tokens', { name }),
+
+  revokeToken: (id: string) => request<{ ok: true }>(`/api/tokens/${id}`, { method: 'DELETE' }),
 
   status: () => request<{ database: string; boots: number; firstBootAt: string }>('/api/status'),
 

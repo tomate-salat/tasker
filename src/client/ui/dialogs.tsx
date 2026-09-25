@@ -3,7 +3,7 @@ import type { CodecksRefsResult, CodecksSummary } from '@shared/api.js';
 import type { Settings } from '@shared/model.js';
 import { categoriesOf, categoryColorIndex } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
-import { api, type Account } from '../api.js';
+import { api, type Account, type ApiToken } from '../api.js';
 import { useStore } from '../store.js';
 import { CoverSlot } from './Cards.js';
 import { categoryHue } from './colors.js';
@@ -371,6 +371,9 @@ export function ProfileDialog({
       <h3>Passwort</h3>
       <PasswordForm />
 
+      <h3>Zugang für KI-Werkzeuge (MCP)</h3>
+      <McpTokens />
+
       <h3>Import aus Codecks</h3>
       <CodecksImport onDone={onClose} />
 
@@ -510,6 +513,121 @@ function PasswordForm() {
         Passwort ändern
       </button>
     </form>
+  );
+}
+
+/**
+ * Zugangs-Tokens für den MCP-Endpunkt. Ein neues Token steht genau einmal da –
+ * der Server kennt danach nur noch seinen Hash.
+ */
+function McpTokens() {
+  const say = useStore((s) => s.say);
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [name, setName] = useState('');
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void api
+      .tokens()
+      .then((r) => setTokens(r.tokens))
+      .catch(() => setTokens([]));
+  }, []);
+
+  const url = `${location.origin}/mcp`;
+  const command = fresh
+    ? `claude mcp add --transport http tasker ${url} --header "Authorization: Bearer ${fresh}"`
+    : '';
+
+  async function create(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const t = await api.createToken(name.trim());
+      setTokens((list) => [t, ...(list ?? [])]);
+      setFresh(t.token);
+      setName('');
+    } catch (err) {
+      say(err instanceof Error ? err.message : 'Token konnte nicht angelegt werden');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(t: ApiToken): Promise<void> {
+    if (!confirm(`Token „${t.name}“ zurückziehen? Werkzeuge, die es benutzen, verlieren den Zugang.`)) return;
+    try {
+      await api.revokeToken(t.id);
+      setTokens((list) => (list ?? []).filter((x) => x.id !== t.id));
+      say('Token zurückgezogen');
+    } catch (err) {
+      say(err instanceof Error ? err.message : 'Token konnte nicht zurückgezogen werden');
+    }
+  }
+
+  const copy = (value: string): void => {
+    void navigator.clipboard.writeText(value).then(() => say('Kopiert'));
+  };
+
+  const day = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : 'nie');
+
+  return (
+    <>
+      <form className="pf-grid" onSubmit={(e) => void create(e)}>
+        <label className="field">
+          <span>Name des Tokens</span>
+          <input
+            value={name}
+            placeholder="z. B. Claude Code Laptop"
+            maxLength={80}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <button className="btn" disabled={busy || !name.trim()}>
+          Token erzeugen
+        </button>
+      </form>
+
+      {fresh && (
+        <div className="tk-fresh">
+          <p className="pf-hint">
+            Das Token wird nur jetzt angezeigt. Befehl für Claude Code:
+          </p>
+          <code className="tk-code">{command}</code>
+          <p className="tk-actions">
+            <button className="btn tiny" onClick={() => copy(command)}>
+              Befehl kopieren
+            </button>
+            <button className="btn tiny ghost" onClick={() => copy(fresh)}>
+              Nur Token kopieren
+            </button>
+            <button className="btn tiny ghost" onClick={() => setFresh(null)}>
+              Ausblenden
+            </button>
+          </p>
+        </div>
+      )}
+
+      {tokens && tokens.length > 0 && (
+        <ul className="tk-list">
+          {tokens.map((t) => (
+            <li key={t.id}>
+              <span className="tk-name">{t.name}</span>
+              <span className="tk-meta">
+                {t.hint}… · angelegt {day(t.createdAt)} · zuletzt benutzt {day(t.lastUsedAt)}
+              </span>
+              <button className="btn tiny ghost" onClick={() => void revoke(t)}>
+                Zurückziehen
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="pf-hint">
+        Mit einem Token dürfen Claude Code und andere MCP-Clients Aufgaben lesen, anlegen und
+        ändern – aber nichts löschen. Adresse: {url}
+      </p>
+    </>
   );
 }
 
