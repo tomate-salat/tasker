@@ -47,26 +47,39 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
   // Gespeichert wird nur, wenn sich an den Elementen wirklich etwas ändert.
   const savedSignature = useRef(signature(drawing.scene.elements));
 
-  const save = async (changes: { name?: string; scene?: Scene }): Promise<void> => {
-    setSaving(true);
-    try {
-      const updated = await api.saveDrawing(drawing.id, version.current, changes);
-      version.current = updated.version;
-      pending.current = null;
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        say('Zeichnung wurde woanders geändert – bitte neu öffnen.');
-      } else {
-        say(e instanceof Error ? e.message : 'Speichern fehlgeschlagen');
+  // Gespeichert wird immer nur einmal zur Zeit: Zwei Anfragen mit derselben
+  // Version würden sich sonst gegenseitig mit 409 abweisen, und die jüngere
+  // Änderung ginge verloren.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+
+  const save = (changes: { name?: string; scene?: Scene }): Promise<void> => {
+    const run = queue.current.then(async () => {
+      setSaving(true);
+      try {
+        const updated = await api.saveDrawing(drawing.id, version.current, changes);
+        version.current = updated.version;
+        // Nur vergessen, was wirklich gespeichert ist – wer während der Anfrage
+        // weitergezeichnet hat, hat einen neueren Stand hinterlassen.
+        if (pending.current === changes.scene) pending.current = null;
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409) {
+          say('Zeichnung wurde woanders geändert – bitte neu öffnen.');
+        } else {
+          say(e instanceof Error ? e.message : 'Speichern fehlgeschlagen');
+        }
+      } finally {
+        setSaving(false);
       }
-    } finally {
-      setSaving(false);
-    }
+    });
+    queue.current = run;
+    return run;
   };
 
   const flush = async (): Promise<void> => {
     if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
     if (pending.current) await save({ scene: pending.current });
+    else await queue.current;
   };
 
   // Beim Schließen darf nichts verloren gehen, auch nicht der letzte Strich.
@@ -125,7 +138,7 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
               savedSignature.current = sig;
               pending.current = { elements: [...elements], files: files as Record<string, unknown> };
               if (timer.current) clearTimeout(timer.current);
-              timer.current = setTimeout(() => void save({ scene: pending.current ?? undefined }), SAVE_AFTER_MS);
+              timer.current = setTimeout(() => void flush(), SAVE_AFTER_MS);
             }}
           />
         </Suspense>

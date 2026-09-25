@@ -29,8 +29,12 @@ export function useDrawings(owner: DrawingOwner, desc: string): DrawingsApi {
   const [open, setOpen] = useState<Drawing | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Ein anderer Besitzer schließt den Editor. Eine neue Version dagegen nicht:
+  // die entsteht schon durch das Speichern im offenen Editor, und jedes
+  // Nachladen (anderer Tab, MCP) würde ihn sonst mitten im Zeichnen schließen.
+  useEffect(() => setOpen(null), [kind, id]);
+
   useEffect(() => {
-    setOpen(null);
     if (!stamp) {
       setList([]);
       return;

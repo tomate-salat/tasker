@@ -22,6 +22,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null;
+      if (target?.closest?.('.draw-modal')) return;
       const typing = isTyping(target);
       /**
        * Wie im Prototyp (`inList`) gehören die Listentasten nur der Liste: Liegt
@@ -245,6 +246,9 @@ export function useGlobalKeys(): void {
     const onKey = (e: KeyboardEvent): void => {
       const store = useStore.getState();
       const target = e.target as HTMLElement | null;
+      // Im Zeichen-Editor gehören alle Tasten Excalidraw: Esc schlösse sonst den
+      // Inspektor samt Editor, Strg+Z nähme eine Änderung an den Tasks zurück.
+      if (target?.closest?.('.draw-modal')) return;
       const typing = isTyping(target);
 
       if (e.key === 'Escape') {
