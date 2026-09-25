@@ -1,7 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { patchSchemas } from '../shared/api.js';
 import type { ChangeEvent } from '../shared/events.js';
 import { TASK_STATUS, type Milestone, type Task } from '../shared/model.js';
 import { logScopes } from './burnup.js';
@@ -39,6 +38,16 @@ const PRIO_HELP = '0 = keine, 1 = hoch, 2 = mittel, 3 = niedrig';
 /** Eine Aufgabe oder ein Milestone per ID ("t…"/"m…") oder Nummer ("$142" oder "142"). */
 const key = z.string().min(1).max(64);
 
+/**
+ * Manche Clients (etwa der JetBrains-Assistent) schicken jedes Feld mit, auch
+ * die nicht gebrauchten – als "" oder null. Beides heißt deshalb überall
+ * „nicht angegeben“; wer etwas ausdrücklich entfernen will, schreibt `NONE`.
+ */
+const opt = <T extends z.ZodType>(s: T) =>
+  z.preprocess((v) => (v === '' || v === null ? undefined : v), s.optional());
+const NONE = 'none';
+const unlessNone = (v: string | undefined): string | null | undefined => (v === NONE ? null : v);
+
 function find<T extends { id: string; ref: number }>(list: T[], k: string): T | undefined {
   const n = k.match(/^\$?(\d+)$/)?.[1];
   return n ? list.find((x) => x.ref === Number(n)) : list.find((x) => x.id === k);
@@ -54,6 +63,15 @@ function milestoneOf(boot: Bootstrap, k: string): Milestone {
   const m = find(boot.milestones, k);
   if (!m) throw new Error(`Milestone ${k} gibt es nicht (oder er ist archiviert).`);
   return m;
+}
+
+/** Ein Projekt per ID oder Name – Modelle kennen oft nur den Namen. */
+function projectOf(boot: Bootstrap, k: string): string {
+  const p =
+    boot.projects.find((x) => x.id === k) ??
+    boot.projects.find((x) => x.name.trim().toLowerCase() === k.trim().toLowerCase());
+  if (!p) throw new Error(`Projekt ${k} gibt es nicht. Vorhanden: ${boot.projects.map((x) => x.name).join(', ')}.`);
+  return p.id;
 }
 
 /** Wo eine Aufgabe steht, in Worten – so wie die Reiter der App. */
@@ -181,26 +199,27 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         'Aktive (nicht archivierte) Aufgaben, gefiltert. Ohne Filter alle offenen Aufgaben. ' +
         'Liefert nur eine Kurzfassung – die Beschreibung gibt es mit `get_task`.',
       inputSchema: {
-        projectId: z.string().optional().describe('Nur dieses Projekt.'),
-        milestone: key.optional().describe('Nur dieser Milestone (ID oder $Nummer).'),
-        parent: key.optional().describe('Nur die direkten Unteraufgaben dieser Aufgabe.'),
-        status: z.array(z.enum(TASK_STATUS)).optional().describe(`Nur diese Status. ${STATUS_HELP}`),
-        includeDone: z.boolean().optional().describe('Auch erledigte zeigen (Vorgabe: nein).'),
-        includeDocs: z.boolean().optional().describe('Auch Dokumentationsseiten zeigen (Vorgabe: nein).'),
-        query: z.string().max(200).optional().describe('Suchtext in Titel und Beschreibung.'),
-        limit: z.number().int().min(1).max(500).optional().describe('Höchstens so viele (Vorgabe: 100).'),
+        projectId: opt(z.string()).describe('Nur dieses Projekt (ID oder Name).'),
+        milestone: opt(key).describe('Nur dieser Milestone (ID oder $Nummer).'),
+        parent: opt(key).describe('Nur die direkten Unteraufgaben dieser Aufgabe.'),
+        status: opt(z.array(z.enum(TASK_STATUS))).describe(`Nur diese Status. ${STATUS_HELP}`),
+        includeDone: opt(z.boolean()).describe('Auch erledigte zeigen (Vorgabe: nein).'),
+        includeDocs: opt(z.boolean()).describe('Auch Dokumentationsseiten zeigen (Vorgabe: nein).'),
+        query: opt(z.string().max(200)).describe('Suchtext in Titel und Beschreibung.'),
+        limit: opt(z.number().int().min(1).max(500)).describe('Höchstens so viele (Vorgabe: 100).'),
       },
       annotations: { readOnlyHint: true },
     },
     (a) =>
       safely(() => {
         const boot = loadBootstrap(ctx);
+        const projectId = a.projectId ? projectOf(boot, a.projectId) : null;
         const ms = a.milestone ? milestoneOf(boot, a.milestone) : null;
         const parent = a.parent ? taskOf(boot, a.parent) : null;
         const q = a.query?.toLowerCase();
         const hits = boot.tasks.filter(
           (t) =>
-            (!a.projectId || t.projectId === a.projectId) &&
+            (!projectId || t.projectId === projectId) &&
             (!ms || t.milestoneId === ms.id) &&
             (!parent || t.parentId === parent.id) &&
             (a.status ? a.status.includes(t.status) : a.includeDone || t.status !== 'done') &&
@@ -234,22 +253,23 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
       description:
         'Legt eine Aufgabe an. Ohne Ort landet sie im Backlog des Projekts. Mit `parent` wird sie ' +
         'Unteraufgabe, mit `milestone` kommt sie in den Milestone. Das Projekt ergibt sich aus ' +
-        'Elternaufgabe oder Milestone, sonst muss `projectId` gesetzt sein.',
+        'Elternaufgabe oder Milestone, sonst muss `projectId` gesetzt sein. Nicht gebrauchte Felder ' +
+        'einfach weglassen.',
       inputSchema: {
         title: z.string().min(1).max(500),
-        desc: z.string().max(200_000).optional().describe('Beschreibung in Markdown.'),
-        projectId: z.string().optional(),
-        parent: key.optional().describe('Elternaufgabe (ID oder $Nummer).'),
-        milestone: key.optional().describe('Milestone (ID oder $Nummer).'),
-        groupId: z.string().optional().describe('Gruppe im Backlog.'),
-        ready: z.boolean().optional().describe('Gleich in „Ready“ statt ins Backlog (nur ohne Ort).'),
-        doc: z.boolean().optional().describe('Als Dokumentationsseite statt als Aufgabe.'),
-        status: z.enum(TASK_STATUS).optional().describe(STATUS_HELP),
-        prio: z.number().int().min(0).max(3).optional().describe(PRIO_HELP),
-        categoryId: z.string().optional(),
-        markId: z.string().optional(),
-        tags: z.array(z.string().min(1).max(60)).optional(),
-        deps: z.array(key).optional().describe('Aufgaben, auf die diese wartet (ID oder $Nummer).'),
+        desc: opt(z.string().max(200_000)).describe('Beschreibung in Markdown.'),
+        projectId: opt(z.string()).describe('Projekt (ID oder Name).'),
+        parent: opt(key).describe('Elternaufgabe (ID oder $Nummer). Weglassen für eine lose Aufgabe.'),
+        milestone: opt(key).describe('Milestone (ID oder $Nummer). Weglassen für das Backlog.'),
+        groupId: opt(z.string()).describe('Gruppe im Backlog.'),
+        ready: opt(z.boolean()).describe('Gleich in „Ready“ statt ins Backlog (nur ohne Ort).'),
+        doc: opt(z.boolean()).describe('Als Dokumentationsseite statt als Aufgabe.'),
+        status: opt(z.enum(TASK_STATUS)).describe(STATUS_HELP),
+        prio: opt(z.number().int().min(0).max(3)).describe(PRIO_HELP),
+        categoryId: opt(z.string()),
+        markId: opt(z.string()),
+        tags: opt(z.array(z.string().min(1).max(60))),
+        deps: opt(z.array(key)).describe('Aufgaben, auf die diese wartet (ID oder $Nummer).'),
       },
     },
     (a) =>
@@ -259,9 +279,9 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         const ms = !parent && a.milestone ? milestoneOf(boot, a.milestone) : null;
         const group = !parent && !ms && a.groupId ? boot.groups.find((g) => g.id === a.groupId) : null;
         if (a.groupId && !parent && !ms && !group) throw new Error(`Gruppe ${a.groupId} gibt es nicht.`);
-        const projectId = parent?.projectId ?? ms?.projectId ?? group?.projectId ?? a.projectId;
+        const projectId =
+          parent?.projectId ?? ms?.projectId ?? group?.projectId ?? (a.projectId && projectOf(boot, a.projectId));
         if (!projectId) throw new Error('projectId fehlt (oder parent/milestone angeben).');
-        if (!boot.projects.some((p) => p.id === projectId)) throw new Error(`Projekt ${projectId} gibt es nicht.`);
 
         const input: Record<string, unknown> = {
           projectId,
@@ -282,29 +302,32 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
       }),
   );
 
-  // Was sich per `patch` ändern lässt; Reihenfolge und Titelbild bleiben der App.
-  const { order: _order, coverImageId: _cover, ...taskFields } = patchSchemas.task.shape;
-
   server.registerTool(
     'update_task',
     {
       title: 'Aufgabe ändern',
       description:
-        'Ändert eine Aufgabe. Nur die angegebenen Felder werden angefasst. `tags` und `deps` ' +
-        'ersetzen die bisherige Liste. Ort ändern: `parent`, `milestone` oder `groupId` setzen – ' +
-        'mit leerem Text ("") löst sich die Aufgabe davon und landet im Backlog.',
+        'Ändert eine Aufgabe. Nur die angegebenen Felder werden angefasst; leere Felder bleiben, ' +
+        'wie sie sind. `tags` und `deps` ersetzen die bisherige Liste. Ort ändern: `parent`, ' +
+        `\`milestone\` oder \`groupId\` setzen – mit "${NONE}" löst sich die Aufgabe davon und ` +
+        `landet im Backlog. "${NONE}" entfernt auch Kategorie und Markierung.`,
       inputSchema: {
         task: key.describe('ID oder $Nummer der Aufgabe.'),
-        ...taskFields,
-        status: taskFields.status.describe(STATUS_HELP),
-        prio: z.number().int().min(0).max(3).optional().describe(PRIO_HELP),
-        deps: z.array(key).optional().describe('Aufgaben, auf die diese wartet (ID oder $Nummer).'),
-        parent: z.string().max(64).optional().describe('Neue Elternaufgabe, "" = keine.'),
-        milestone: z.string().max(64).optional().describe('Neuer Milestone, "" = keiner.'),
-        groupId: z.string().max(64).optional().describe('Neue Gruppe, "" = keine.'),
-        projectId: z.string().optional().describe('In anderes Projekt (nur für lose Aufgaben nötig).'),
-        ready: z.boolean().optional().describe('Nur lose Aufgaben: „Ready“ statt Backlog.'),
-        version: z.number().int().positive().optional().describe('Erwartete Version; ohne gilt die aktuelle.'),
+        title: opt(z.string().min(1).max(500)),
+        desc: opt(z.string().max(200_000)).describe('Beschreibung in Markdown.'),
+        status: opt(z.enum(TASK_STATUS)).describe(STATUS_HELP),
+        prio: opt(z.number().int().min(0).max(3)).describe(PRIO_HELP),
+        doc: opt(z.boolean()).describe('Dokumentationsseite statt Aufgabe.'),
+        categoryId: opt(z.string().max(64)).describe(`Kategorie, "${NONE}" = keine.`),
+        markId: opt(z.string().max(64)).describe(`Markierung, "${NONE}" = keine.`),
+        tags: opt(z.array(z.string().min(1).max(60))),
+        deps: opt(z.array(key)).describe('Aufgaben, auf die diese wartet (ID oder $Nummer).'),
+        parent: opt(z.string().max(64)).describe(`Neue Elternaufgabe, "${NONE}" = keine.`),
+        milestone: opt(z.string().max(64)).describe(`Neuer Milestone, "${NONE}" = keiner.`),
+        groupId: opt(z.string().max(64)).describe(`Neue Gruppe, "${NONE}" = keine.`),
+        projectId: opt(z.string()).describe('In anderes Projekt, ID oder Name (nur für lose Aufgaben nötig).'),
+        ready: opt(z.boolean()).describe('Nur lose Aufgaben: „Ready“ statt Backlog.'),
+        version: opt(z.number().int().positive()).describe('Erwartete Version; ohne gilt die aktuelle.'),
       },
     },
     (a) =>
@@ -312,21 +335,22 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         let boot = loadBootstrap(ctx);
         const t = taskOf(boot, a.task);
         let version = a.version ?? t.version;
-        const { task: _t, version: _v, parent, milestone, groupId, projectId, ready, deps, ...fields } = a;
+        const { task: _t, version: _v, parent, milestone, groupId, projectId, ready, deps, ...rest } = a;
+        const fields = { ...rest, categoryId: unlessNone(rest.categoryId), markId: unlessNone(rest.markId) };
 
         // Erst der Ort: `move` nimmt den ganzen Teilbaum mit.
         const relocate = parent !== undefined || milestone !== undefined || groupId !== undefined;
         if (relocate || projectId !== undefined || ready !== undefined) {
           const target = relocate
             ? {
-                parentId: parent ? taskOf(boot, parent).id : null,
-                milestoneId: milestone ? milestoneOf(boot, milestone).id : null,
-                groupId: groupId || null,
+                parentId: parent && parent !== NONE ? taskOf(boot, parent).id : null,
+                milestoneId: milestone && milestone !== NONE ? milestoneOf(boot, milestone).id : null,
+                groupId: unlessNone(groupId) ?? null,
               }
             : { parentId: t.parentId, milestoneId: t.milestoneId, groupId: t.groupId };
           const moved = move(ctx, t.id, version, {
             ...target,
-            ...(projectId !== undefined ? { projectId } : {}),
+            ...(projectId !== undefined ? { projectId: projectOf(boot, projectId) } : {}),
             ...(ready !== undefined ? { ready } : {}),
           }) as Task;
           changed({ type: 'reload', reason: 'Über MCP verschoben' });

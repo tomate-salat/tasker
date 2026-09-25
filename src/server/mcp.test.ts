@@ -107,8 +107,29 @@ describe('Werkzeuge', () => {
     assert.equal(moved.data.milestoneId, ms.id);
     assert.equal(moved.data.parentId, null);
 
-    const loose = await call('update_task', { task: kid.data.id, milestone: '', ready: true });
+    const loose = await call('update_task', { task: kid.data.id, milestone: 'none', ready: true });
     assert.equal(loose.data.place, 'Ready');
+  });
+
+  it('nimmt mitgeschickte leere Felder hin, wie der JetBrains-Assistent sie schickt', async () => {
+    const blank = { parent: '', milestone: '', groupId: '', categoryId: '', markId: '', desc: '' };
+    const made = await call('create_task', { projectId, title: 'ActorData refactoren', ...blank });
+    assert.equal(made.error, false, made.text);
+    assert.equal(made.data.place, 'Backlog');
+
+    const nulls = { parent: null, milestone: null, groupId: null, status: null, prio: null, tags: null };
+    const doc = await call('create_task', { projectId: 'spiel', title: 'Notizen', doc: true, ...nulls });
+    assert.equal(doc.error, false, doc.text);
+    assert.equal(doc.data.place, 'Dokumentation', 'Projekt auch über den Namen');
+
+    // Beim Ändern darf ein leeres Feld die Aufgabe nicht aus ihrem Ort lösen.
+    const ms = create(ctx, 'milestone', { projectId, title: 'Alpha' }) as { id: string };
+    await call('update_task', { task: made.data.id, milestone: ms.id });
+    const kept = await call('update_task', { task: made.data.id, status: 'progress', title: '', ...blank });
+    assert.equal(kept.error, false, kept.text);
+    assert.equal(kept.data.milestoneId, ms.id);
+    assert.equal(kept.data.title, 'ActorData refactoren');
+    assert.equal(kept.data.status, 'progress');
   });
 
   it('meldet Fehler als Ergebnis statt abzustürzen', async () => {
