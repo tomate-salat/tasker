@@ -84,7 +84,7 @@ describe('Werkzeuge', () => {
 
     const got = await call('get_task', { task: made.data.ref });
     assert.equal(got.data.title, 'Sprung');
-    assert.deepEqual(got.data.tags, ['physik']);
+    assert.deepEqual([...got.data.tags].sort(), ['ai-created', 'physik']);
 
     const done = await call('update_task', { task: made.data.id, status: 'done', desc: 'fertig' });
     assert.equal(done.data.status, 'done');
@@ -130,6 +130,28 @@ describe('Werkzeuge', () => {
     assert.equal(kept.data.milestoneId, ms.id);
     assert.equal(kept.data.title, 'ActorData refactoren');
     assert.equal(kept.data.status, 'progress');
+  });
+
+  it('kennzeichnet Angelegtes mit ai-created und Geändertes mit ai-updated', async () => {
+    const made = await call('create_task', { projectId, title: 'KI' });
+    assert.deepEqual(made.data.tags, ['ai-created']);
+
+    // Nichts zu ändern: kein Label.
+    const nothing = await call('update_task', { task: made.data.id });
+    assert.deepEqual(nothing.data.tags, ['ai-created']);
+
+    const upd = await call('update_task', { task: made.data.id, status: 'progress' });
+    assert.deepEqual([...upd.data.tags].sort(), ['ai-created', 'ai-updated']);
+
+    // `tags` ersetzt die Liste, die KI-Labels bleiben.
+    const replaced = await call('update_task', { task: made.data.id, tags: ['neu'] });
+    assert.deepEqual([...replaced.data.tags].sort(), ['ai-created', 'ai-updated', 'neu']);
+
+    // Auch ein in der App angelegter Task bekommt beim Ändern (hier: Verschieben) nur ai-updated.
+    const own = create(ctx, 'task', { projectId, title: 'von Hand', tags: ['eigen'] }) as Task;
+    const moved = await call('update_task', { task: own.id, ready: true });
+    assert.equal(moved.data.place, 'Ready');
+    assert.deepEqual([...moved.data.tags].sort(), ['ai-updated', 'eigen']);
   });
 
   it('meldet Fehler als Ergebnis statt abzustürzen', async () => {

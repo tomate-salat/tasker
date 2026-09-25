@@ -46,6 +46,11 @@ const key = z.string().min(1).max(64);
 const opt = <T extends z.ZodType>(s: T) =>
   z.preprocess((v) => (v === '' || v === null ? undefined : v), s.optional());
 const NONE = 'none';
+
+/** Labels, an denen man sieht, was über MCP angelegt oder geändert wurde. */
+const AI_CREATED = 'ai-created';
+const AI_UPDATED = 'ai-updated';
+const withLabel = (tags: string[], label: string): string[] => [...new Set([...tags, label])];
 const unlessNone = (v: string | undefined): string | null | undefined => (v === NONE ? null : v);
 
 function find<T extends { id: string; ref: number }>(list: T[], k: string): T | undefined {
@@ -290,9 +295,10 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
           milestoneId: ms?.id ?? null,
           groupId: group?.id ?? null,
         };
-        for (const f of ['desc', 'ready', 'doc', 'status', 'prio', 'categoryId', 'markId', 'tags'] as const) {
+        for (const f of ['desc', 'ready', 'doc', 'status', 'prio', 'categoryId', 'markId'] as const) {
           if (a[f] !== undefined) input[f] = a[f];
         }
+        input['tags'] = withLabel(a.tags ?? [], AI_CREATED);
         if (a.deps) input['deps'] = a.deps.map((d) => taskOf(boot, d).id);
 
         const created = create(ctx, 'task', input) as Task;
@@ -308,7 +314,8 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
       title: 'Aufgabe ändern',
       description:
         'Ändert eine Aufgabe. Nur die angegebenen Felder werden angefasst; leere Felder bleiben, ' +
-        'wie sie sind. `tags` und `deps` ersetzen die bisherige Liste. Ort ändern: `parent`, ' +
+        `wie sie sind. \`tags\` und \`deps\` ersetzen die bisherige Liste (die Labels ` +
+        `"${AI_CREATED}" und "${AI_UPDATED}" bleiben). Ort ändern: \`parent\`, ` +
         `\`milestone\` oder \`groupId\` setzen – mit "${NONE}" löst sich die Aufgabe davon und ` +
         `landet im Backlog. "${NONE}" entfernt auch Kategorie und Markierung.`,
       inputSchema: {
@@ -340,7 +347,8 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
 
         // Erst der Ort: `move` nimmt den ganzen Teilbaum mit.
         const relocate = parent !== undefined || milestone !== undefined || groupId !== undefined;
-        if (relocate || projectId !== undefined || ready !== undefined) {
+        const moving = relocate || projectId !== undefined || ready !== undefined;
+        if (moving) {
           const target = relocate
             ? {
                 parentId: parent && parent !== NONE ? taskOf(boot, parent).id : null,
@@ -361,6 +369,14 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         const changes: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) if (v !== undefined) changes[k] = v;
         if (deps) changes['deps'] = deps.map((d) => taskOf(boot, d).id);
+
+        // Wer über MCP etwas geändert hat, hinterlässt ein Label. Die KI-Labels
+        // bleiben auch dann, wenn `tags` die Liste ersetzt.
+        if (moving || Object.keys(changes).length) {
+          const kept = t.tags.filter((x) => x === AI_CREATED || x === AI_UPDATED);
+          const tags = withLabel([...((changes['tags'] as string[] | undefined) ?? t.tags), ...kept], AI_UPDATED);
+          if (changes['tags'] || !t.tags.includes(AI_UPDATED)) changes['tags'] = tags;
+        }
 
         if (Object.keys(changes).length) {
           const updated = patch(ctx, 'task', t.id, version, changes);
