@@ -18,6 +18,7 @@ import type {
   TrashRow as TrashRowData,
   Undoable,
 } from '../shared/api.js';
+import { parentStatusAfter } from '../shared/parentStatus.js';
 import { refsIn, type RefStub } from '../shared/refs.js';
 import type { DbCtx } from './db.js';
 import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
@@ -482,10 +483,39 @@ export function patch(
     if (kind === 'task' && typeof fields['status'] === 'string') {
       const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(doneAt, id);
+      if (fields['status'] !== current['status']) syncParentStatus(ctx, id);
     }
 
     return read(ctx, kind, id);
   })();
+}
+
+/**
+ * Zieht den Status der Eltern-Aufgaben nach, nachdem sich der von `childId`
+ * geändert hat – die Regel steht in `parentStatusAfter`. Ändert sich ein
+ * Elternteil, gilt dasselbe für dessen Elternteil.
+ */
+function syncParentStatus(ctx: DbCtx, childId: string): void {
+  let child = readRow(ctx, 'task', childId);
+  while (child?.['parent_id']) {
+    const parent = readRow(ctx, 'task', child['parent_id'] as string);
+    if (!parent || Number(parent['doc'])) return;
+    const kids = ctx.sqlite
+      .prepare('SELECT status FROM task WHERE parent_id = ? AND archived_at IS NULL')
+      .all(parent['id']) as { status: Status }[];
+    const next = parentStatusAfter(
+      parent['status'] as Status,
+      child['status'] as Status,
+      kids.map((k) => k.status),
+    );
+    if (!next) return;
+    // Ohne neue Version: sonst scheiterten Mehrfachauswahl und Rückgängig, die
+    // Eltern- und Unteraufgabe im selben Zug mit ihren alten Versionen ändern.
+    ctx.sqlite
+      .prepare('UPDATE task SET status = ?, done_at = ?, updated_at = ? WHERE id = ?')
+      .run(next, next === 'done' ? (parent['done_at'] ?? nowIso()) : null, nowIso(), parent['id']);
+    child = readRow(ctx, 'task', parent['id'] as string);
+  }
 }
 
 /* ------------------------------------------------- Archivieren & Verschieben */

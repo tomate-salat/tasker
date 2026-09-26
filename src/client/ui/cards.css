@@ -242,6 +242,27 @@
   border-radius: 0 0 10px 10px;
 }
 
+/* Der Fuß trägt die Farbe des Status (Wunsch des Nutzers); „Offen“ bleibt grau. */
+.tcard-foot.st-progress {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.tcard-foot.st-done {
+  background: color-mix(in srgb, var(--ok) 22%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+}
+
+.tcard-foot.st-blocked {
+  background: color-mix(in srgb, var(--p1) 18%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--p1) 40%, var(--line));
+}
+
+.tcard-foot.st-unclear {
+  background: color-mix(in srgb, var(--unclear) 20%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--unclear) 45%, var(--line));
+}
+
 .tcard-meta {
   display: flex;
   align-items: center;

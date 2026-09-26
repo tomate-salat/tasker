@@ -383,7 +383,8 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         if (Object.keys(changes).length) {
           const updated = patch(ctx, 'task', t.id, version, changes);
           changed(
-            inBootstrap(ctx, 'task', t.id)
+            // Der Status einer Unteraufgabe kann den der Eltern-Aufgaben mitziehen.
+            inBootstrap(ctx, 'task', t.id) && !('status' in changes && (updated as Task).parentId)
               ? { type: 'upsert', kind: 'task', object: updated }
               : { type: 'reload', reason: 'Über MCP geändert' },
           );

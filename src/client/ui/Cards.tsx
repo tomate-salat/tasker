@@ -652,7 +652,7 @@ export function CardFace({
       </div>
 
       {/* Eine Doku-Seite hat wie im Inspektor weder Status noch Priorität noch Fortschritt. */}
-      <div className="tcard-foot">
+      <div className={`tcard-foot${doc ? '' : ` st-${task.status}`}`}>
         <div className="tcard-meta">
           {!doc && <StatusDot task={task} implicit={implicit} />}
           {/* Die Priorität steht immer da, auch ohne – wie in der Liste. */}

@@ -24,6 +24,7 @@ import {
   type Kind,
 } from '../shared/api.js';
 import { CLIENT_HEADER, type ChangeEvent } from '../shared/events.js';
+import type { Task } from '../shared/model.js';
 import { loadLogs, logScopes } from './burnup.js';
 import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
@@ -460,10 +461,13 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       () => patch(ctx, kind, c.req.param('id'), body.data.version, changes.data as Record<string, unknown>),
       {
         // Archiviertes gehört nicht in den aktiven Bestand der anderen Tabs – sie laden nur neu.
+        // Der Status einer Unteraufgabe kann den der Eltern-Aufgaben mitziehen.
         event: (object) =>
-          inBootstrap(ctx, kind, c.req.param('id'))
-            ? { type: 'upsert', kind, object }
-            : { type: 'reload', reason: 'Im Archiv geändert' },
+          !inBootstrap(ctx, kind, c.req.param('id'))
+            ? { type: 'reload', reason: 'Im Archiv geändert' }
+            : kind === 'task' && 'status' in changes.data && (object as Task).parentId
+              ? { type: 'reload', reason: 'Status geändert' }
+              : { type: 'upsert', kind, object },
       },
     );
   });

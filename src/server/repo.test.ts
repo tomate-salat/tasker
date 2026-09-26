@@ -1093,3 +1093,42 @@ describe('Markierungen je Projekt', () => {
     assert.equal(one(t.id).markId, k.id);
   });
 });
+
+describe('Status der Eltern-Aufgabe', () => {
+  const statusOf = (id: string) => loadBootstrap(ctx).tasks.find((t) => t.id === id)?.status;
+  const set = (id: string, status: string) => {
+    const t = loadBootstrap(ctx).tasks.find((x) => x.id === id) as Task;
+    patch(ctx, 'task', id, t.version, { status });
+  };
+
+  it('zieht über mehrere Ebenen mit, aber erledigt nie von selbst', () => {
+    const p = mkProject();
+    const top = mkTask({ projectId: p.id, title: 'Oben' });
+    const mid = mkTask({ projectId: p.id, title: 'Mitte', parentId: top.id });
+    const leaf = mkTask({ projectId: p.id, title: 'Blatt', parentId: mid.id });
+
+    set(leaf.id, 'progress');
+    assert.equal(statusOf(mid.id), 'progress');
+    assert.equal(statusOf(top.id), 'progress');
+
+    set(leaf.id, 'done');
+    assert.equal(statusOf(mid.id), 'progress');
+
+    set(mid.id, 'done');
+    set(leaf.id, 'progress');
+    assert.equal(statusOf(mid.id), 'progress');
+
+    set(leaf.id, 'open');
+    assert.equal(statusOf(mid.id), 'open');
+    assert.equal(statusOf(top.id), 'open');
+  });
+
+  it('Mehrfachauswahl mit Eltern- und Unteraufgabe scheitert nicht an Versionen', () => {
+    const p = mkProject();
+    const a = mkTask({ projectId: p.id, title: 'A' });
+    const k = mkTask({ projectId: p.id, title: 'K', parentId: a.id });
+    const at = (t: Task) => ({ id: t.id, version: t.version });
+    bulk(ctx, [at(k), at(a)], { type: 'patch', changes: { status: 'done' } });
+    assert.equal(statusOf(a.id), 'done');
+  });
+});
