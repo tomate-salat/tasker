@@ -112,7 +112,7 @@ export function useCaretMenu<T>(area: React.RefObject<HTMLTextAreaElement | null
  * kann, direkt.
  */
 export function replaceText(
-  el: HTMLTextAreaElement,
+  el: HTMLTextAreaElement | HTMLInputElement,
   from: number,
   to: number,
   text: string,
