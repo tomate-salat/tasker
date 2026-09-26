@@ -543,6 +543,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         <ItemList
           ws={ws}
           projectId={projectId}
+          focusId={focusId}
           items={items}
           onBoard={onBoard}
           onShow={showNode}
@@ -759,6 +760,7 @@ const norm = (s: string): string => s.toLocaleLowerCase('de');
 function ItemList({
   ws,
   projectId,
+  focusId,
   items,
   onBoard,
   onShow,
@@ -767,6 +769,8 @@ function ItemList({
 }: {
   ws: Workspace;
   projectId: string;
+  /** Wovon aus das Board offen ist – steht immer ganz oben, auch beim Suchen. */
+  focusId: string;
   items: Map<string, Item>;
   onBoard: Set<string>;
   onShow: (id: string) => void;
@@ -775,7 +779,11 @@ function ItemList({
   onMenu: (e: React.MouseEvent, id: string) => void;
 }) {
   const [query, setQuery] = useState('');
-  const sections = useMemo(() => listRows(ws, projectId), [ws, projectId]);
+  const sections = useMemo(() => {
+    const focus = items.get(focusId);
+    const pinned = focus ? [{ head: 'Geöffnet', rows: [{ item: focus, depth: 0 }], pinned: true }] : [];
+    return [...pinned, ...listRows(ws, projectId)];
+  }, [ws, projectId, items, focusId]);
 
   // Beim Suchen bleiben die Treffer mit ihren Eltern stehen, damit der Baum lesbar bleibt.
   const keep = useMemo(() => {
@@ -805,7 +813,7 @@ function ItemList({
       />
       <div className="graph-rows">
         {sections.map((s) => {
-          const rows = keep ? s.rows.filter((r) => keep.has(r.item.id)) : s.rows;
+          const rows = keep && !('pinned' in s) ? s.rows.filter((r) => keep.has(r.item.id)) : s.rows;
           if (!rows.length) return null;
           return (
             <div key={s.head}>
