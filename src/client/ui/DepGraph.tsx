@@ -16,6 +16,7 @@
 import '@xyflow/react/dist/style.css';
 import {
   Background,
+  ConnectionLineType,
   Controls,
   Handle,
   MarkerType,
@@ -526,6 +527,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
               deleteKeyCode={['Delete', 'Backspace']}
               colorMode={dark() ? 'dark' : 'light'}
               connectionRadius={40}
+              connectionLineType={ConnectionLineType.SmoothStep}
               fitView
               fitViewOptions={{ maxZoom: 1.2 }}
               minZoom={0.2}
