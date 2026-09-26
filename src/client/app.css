@@ -3957,3 +3957,28 @@ body:has(.bulk) .toast {
     display: none;
   }
 }
+
+/* Der Inspektor im Board: rechts als dritte Spalte, nicht schwebend. */
+.graph-body.with-detail {
+  grid-template-columns: 320px minmax(0, 1fr) min(480px, 38vw);
+}
+
+.graph-body .detail {
+  position: static;
+  width: auto;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.graph-board .react-flow__selection {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid var(--accent);
+}
+
+@media (max-width: 900px) {
+  .graph-body .detail {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+  }
+}

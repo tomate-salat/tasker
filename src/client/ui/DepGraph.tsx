@@ -44,6 +44,9 @@ import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { useStore } from '../store.js';
 import { DEFAULT_MARK, STATUS_LABEL } from './icons.js';
+import { Inspector } from './Inspector.js';
+import { useMenu, type MenuItem } from './Menu.js';
+import { milestoneMenu, taskMenu } from './rowMenu.js';
 
 type Item = Task | Milestone;
 type ItemNode = Node<{ item: Item; sub: string; done: boolean; focus: boolean }, 'item'>;
@@ -89,7 +92,8 @@ function refusal(ws: Workspace, source: Item, target: Item): string | null {
 }
 
 function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; focusId: string }) {
-  const { openGraph, patch, say, undo } = useStore();
+  const { openGraph, patch, say, undo, select, selected } = useStore();
+  const menu = useMenu();
   const flow = useReactFlow();
   const focus = ws.task(focusId) ?? ws.milestone(focusId);
 
@@ -225,6 +229,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         const done = isMs(src) ? milestoneDone(ws, src) : isDone(src);
         return {
           id,
+          type: 'smoothstep',
           source: l.source,
           target: l.target,
           selected: selected.has(id),
@@ -301,21 +306,55 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         if (t) await patch(kindOf(t), t.id, { deps: t.deps.filter((d) => !sources.has(d)) });
       }
 
-      const free = gone.filter((n) => !scope.has(n.id));
       setAdded((prev) => {
         const next = new Set(prev);
         // Ein gelöschter Pfeil soll nichts unter der Hand verschwinden lassen.
         for (const e of cut) next.add(e.source).add(e.target);
-        for (const n of free) next.delete(n.id);
         return next;
       });
-      if (free.length < gone.length) {
-        say('Hängt über Abhängigkeiten mit dem Ausschnitt zusammen – erst die Pfeile entfernen.');
-      }
+      takeOff(gone.map((n) => n.id));
       return false;
     },
-    [items, patch, say, scope],
+    [items, patch, scope],
   );
+
+  /** Vom Board nehmen – nur, was nicht über Abhängigkeiten zum Ausschnitt gehört. */
+  function takeOff(ids: string[]): void {
+    const free = ids.filter((id) => !scope.has(id));
+    if (free.length) {
+      setAdded((prev) => {
+        const next = new Set(prev);
+        for (const id of free) next.delete(id);
+        return next;
+      });
+    }
+    if (free.length < ids.length) {
+      say('Hängt über Abhängigkeiten mit dem Ausschnitt zusammen – erst die Pfeile entfernen.');
+    }
+  }
+
+  const removeLink = (source: string, target: string): void => {
+    const t = items.get(target);
+    if (!t) return;
+    setAdded((prev) => new Set(prev).add(source).add(target));
+    void patch(kindOf(t), t.id, { deps: t.deps.filter((d) => d !== source) });
+  };
+
+  /* ----------------------------------------------------------- Inspektor */
+
+  // Doppelklick blendet rechts den Inspektor ein. Er zeigt, was ausgewählt ist –
+  // so folgt er auch den Links darin – und geht mit seinem ✕ wieder zu.
+  const [detail, setDetail] = useState(false);
+  const showDetail = useCallback(
+    (id: string) => {
+      select(id);
+      setDetail(true);
+    },
+    [select],
+  );
+  useEffect(() => {
+    if (!selected) setDetail(false);
+  }, [selected]);
 
   /* ------------------------------------------------------ Aus der Liste */
 
@@ -350,6 +389,38 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     window.setTimeout(() => void flow.fitView({ duration: 300 }), 50);
   };
 
+  /* ------------------------------------------------------ Kontextmenüs */
+
+  const nodeMenu = (id: string): MenuItem[] => {
+    const item = items.get(id);
+    if (!item) return [];
+    return [
+      { label: 'Details anzeigen', kbd: 'Doppelklick', onSelect: () => showDetail(id) },
+      {
+        label: 'Vom Board nehmen',
+        disabled: scope.has(id),
+        onSelect: () => takeOff([id]),
+      },
+      { sep: true },
+      ...boardItems(isMs(item) ? milestoneMenu(ws, item) : taskMenu(ws, item)),
+    ];
+  };
+
+  const edgeMenu = (source: string, target: string): MenuItem[] => {
+    const s = items.get(source);
+    const t = items.get(target);
+    if (!s || !t) return [];
+    return [
+      { head: `„${t.title || 'Ohne Titel'}“ benötigt „${s.title || 'Ohne Titel'}“` },
+      { label: 'Abhängigkeit entfernen', danger: true, onSelect: () => removeLink(source, target) },
+    ];
+  };
+
+  const paneMenu = (): MenuItem[] => [
+    { label: 'Neu anordnen', disabled: !boardIds.length, onSelect: relayout },
+    { label: 'Alles einpassen', onSelect: () => void flow.fitView({ duration: 300 }) },
+  ];
+
   /* ---------------------------------------------------------- Tastatur */
 
   const root = useRef<HTMLDivElement>(null);
@@ -364,7 +435,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
       const typing = !!target?.closest?.('input, textarea');
       if (e.key === 'Escape') {
         if (typing) target!.blur();
-        else openGraph(null);
+        else if (!document.querySelector('.ctx')) openGraph(null);
         return;
       }
       // Die Abhängigkeiten sind gewöhnliche Änderungen – Strg+Z nimmt sie zurück.
@@ -392,7 +463,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         </strong>
         <span className="graph-help muted">
           Aus der Liste aufs Board ziehen · vom rechten Punkt zum nächsten Eintrag ziehen = „benötigt“ ·
-          Entf löscht den gewählten Pfeil
+          Entf löscht den gewählten Pfeil · Doppelklick zeigt Details
         </span>
         <button className="btn" onClick={relayout} disabled={!boardIds.length}>
           Neu anordnen
@@ -401,7 +472,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
           Schließen
         </button>
       </div>
-      <div className="graph-body">
+      <div className={`graph-body ${detail && selected ? 'with-detail' : ''}`}>
         <ItemList ws={ws} projectId={projectId} items={items} onBoard={onBoard} onShow={showNode} />
         <div
           className="graph-board"
@@ -424,6 +495,23 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
               onConnect={onConnect}
               isValidConnection={isValidConnection}
               onBeforeDelete={onBeforeDelete}
+              onNodeDoubleClick={(_, n) => showDetail(n.id)}
+              onNodeContextMenu={(e, n) => {
+                e.preventDefault();
+                menu.openAtPoint(e.clientX, e.clientY, nodeMenu(n.id));
+              }}
+              onEdgeContextMenu={(e, edge) => {
+                e.preventDefault();
+                menu.openAtPoint(e.clientX, e.clientY, edgeMenu(edge.source, edge.target));
+              }}
+              onPaneContextMenu={(e) => {
+                e.preventDefault();
+                menu.openAtPoint(e.clientX, e.clientY, paneMenu());
+              }}
+              zoomOnDoubleClick={false}
+              // Linke Taste zieht ein Auswahlrechteck auf, die mittlere verschiebt.
+              selectionOnDrag
+              panOnDrag={[1]}
               deleteKeyCode={['Delete', 'Backspace']}
               colorMode={dark() ? 'dark' : 'light'}
               connectionRadius={40}
@@ -443,9 +531,43 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
             </p>
           )}
         </div>
+        {detail && selected && <Inspector ws={ws} id={selected} />}
       </div>
+      {menu.node}
     </div>
   );
+}
+
+/**
+ * Das Zeilenmenü aus der Liste, soweit es auf dem Board etwas bedeutet: was eine
+ * Zeile in der Liste anlegt, umbenennt, verschiebt oder aufklappt, fehlt – das
+ * geschähe unsichtbar hinter dem Board. Tastenkürzel fehlen auch, denn hier
+ * gelten andere (Entf nimmt vom Board).
+ */
+const LIST_ONLY = new Set([
+  'Details öffnen',
+  'Umbenennen',
+  'Neuer Task darunter',
+  'Neue Unteraufgabe',
+  'Neuer Task darin',
+  'Nach oben',
+  'Nach unten',
+  'Aufklappen',
+  'Zuklappen',
+]);
+
+function boardItems(list: MenuItem[]): MenuItem[] {
+  const out: MenuItem[] = [];
+  for (const x of list) {
+    if ('sep' in x) {
+      if (out.length && !('sep' in out[out.length - 1]!)) out.push(x);
+      continue;
+    }
+    if ('label' in x && LIST_ONLY.has(x.label)) continue;
+    out.push('kbd' in x ? { ...x, kbd: undefined } : x);
+  }
+  while (out.length && 'sep' in out[out.length - 1]!) out.pop();
+  return out;
 }
 
 /** Wo ein Eintrag hängt – als zweite Zeile im Knoten. */
