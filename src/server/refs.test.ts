@@ -24,6 +24,16 @@ const open = (migrations = 'db/migrations'): DbCtx => {
   return ctx;
 };
 
+/**
+ * Ein Projekt auf einem alten Stand: `create` legt heute Markierungen mit an,
+ * die es dort noch nicht je Projekt gibt.
+ */
+function oldProject(ctx: DbCtx): { id: string } {
+  const id = `p${n++}`;
+  ctx.sqlite.prepare('INSERT INTO project (id, name) VALUES (?, ?)').run(id, 'Spiel');
+  return { id };
+}
+
 /** Die Migrationen bis einschließlich `last` – für den Stand vor den Verweis-Nummern. */
 function migrationsUpTo(last: number): string {
   const target = join(dir, `migrations-${last}`);
@@ -69,7 +79,7 @@ describe('Verweis-Nummern', () => {
 
   it('die Migration nummeriert Bestehendes nach dem Anlegen und ändert sonst nichts', () => {
     const ctx = open(migrationsUpTo(4));
-    const p = create(ctx, 'project', { name: 'Spiel' }) as { id: string };
+    const p = oldProject(ctx);
     const stamp = (table: string, id: string, at: string) =>
       ctx.sqlite.prepare(`UPDATE ${table} SET created_at = ? WHERE id = ?`).run(at, id);
     const m = create(ctx, 'milestone', { projectId: p.id, title: 'M' }) as { id: string };
@@ -102,8 +112,10 @@ describe('Verweis-Nummern', () => {
 describe('Migration „ready“', () => {
   it('was in einer smarten Gruppe stand, steht danach in „Ready“ – sonst bleibt alles im Backlog', () => {
     const ctx = open(migrationsUpTo(6));
-    const p = create(ctx, 'project', { name: 'Spiel' }) as { id: string };
-    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const p = oldProject(ctx);
+    // Vor Migration 0014 gelten Markierungen für alle Projekte.
+    const k = { id: 'k1' };
+    ctx.sqlite.prepare("INSERT INTO mark (id, emoji, name) VALUES ('k1', '🐛', 'Bug')").run();
     const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
     const task = (o: Record<string, unknown>) => (create(ctx, 'task', { projectId: p.id, ...o }) as Task).id;
     const smart = task({ title: 'smart', markId: k.id });

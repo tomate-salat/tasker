@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { checklist } from '@shared/checklist.js';
 import { coverFromLabel, effectiveCover } from '@shared/inherit.js';
 import { isDone, type Category, type Mark, type Project, type Task } from '@shared/model.js';
-import { categoriesOf, type OutlineRow, type OutlineView } from '@shared/outline.js';
+import { categoriesOf, marksOf, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, imageUrl } from '../api.js';
@@ -183,21 +183,15 @@ export function coverOwnerLabel(o: CoverOwner): string {
   }
 }
 
-/**
- * Das Projekt, in dessen Galerie ein hochgeladenes Titelbild landet. Die
- * Markierung gilt projektübergreifend – ihr Bild kommt ins zuletzt offene Projekt.
- */
+/** Das Projekt, in dessen Galerie ein hochgeladenes Titelbild landet. */
 function coverProject(o: CoverOwner): string | null {
   switch (o.kind) {
     case 'task':
     case 'category':
+    case 'mark':
       return o.item.projectId;
     case 'project':
       return o.item.id;
-    case 'mark': {
-      const s = useStore.getState();
-      return s.lastProject ?? s.ws?.projects[0]?.id ?? null;
-    }
   }
 }
 
@@ -223,8 +217,8 @@ export function InspectorCover({ ws, task }: { ws: Workspace; task: Task | null 
  * für jedes Projekt, jede Kategorie und jede Markierung – so lassen sich Bilder
  * aus der Galerie auch dafür verwenden. Für den Task selbst gibt es hier nichts,
  * dafür zieht man das Bild auf Karte oder Inspektor (Wunsch des Nutzers).
- * Projekte und Kategorien nur die des gewählten Projekts, unter „Alle
- * Projekte“ alle, die Kategorien dann nach Projekt überschrieben.
+ * Projekte, Kategorien und Markierungen nur die des gewählten Projekts, unter
+ * „Alle Projekte“ alle, Kategorien und Markierungen dann nach Projekt überschrieben.
  */
 export function coverMenu(ws: Workspace, projectId: string | null, imageId: string | null): MenuItem[] {
   const scoped = ws.project(projectId);
@@ -245,6 +239,14 @@ export function coverMenu(ws: Workspace, projectId: string | null, imageId: stri
       ...list.map((c) => item({ kind: 'category', item: c }, c.name)),
     ];
   });
+  const marks = projects.flatMap((p): MenuItem[] => {
+    const list = marksOf(ws, p.id);
+    if (!list.length) return [];
+    return [
+      ...(projects.length > 1 ? [{ head: p.name }] : []),
+      ...list.map((k) => item({ kind: 'mark', item: k }, `${k.emoji} ${k.name}`)),
+    ];
+  });
   const group = (label: string, sub: MenuItem[]): MenuItem[] =>
     sub.length ? [{ label, disabled: !imageId, sub }] : [];
 
@@ -254,10 +256,7 @@ export function coverMenu(ws: Workspace, projectId: string | null, imageId: stri
       projects.map((p) => item({ kind: 'project', item: p }, p.name)),
     ),
     ...group('Als Titelbild für Kategorie', categories),
-    ...group(
-      'Als Titelbild für Markierung',
-      ws.marks.map((k) => item({ kind: 'mark', item: k }, `${k.emoji} ${k.name}`)),
-    ),
+    ...group('Als Titelbild für Markierung', marks),
   ];
 }
 

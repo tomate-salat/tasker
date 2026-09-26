@@ -38,6 +38,8 @@ export type Mark = {
   id: string;
   /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
   version: number;
+  /** Wie Kategorien gehören Markierungen zu einem Projekt. */
+  projectId: string;
   emoji: string;
   name: string;
   order: number;

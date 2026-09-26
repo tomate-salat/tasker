@@ -160,7 +160,7 @@ export function Gallery() {
   const goUse = (u: ImageUse): void => {
     if (u.kind === 'project') state.openCategories(u.id);
     else if (u.kind === 'category') state.openCategories(ws?.category(u.id)?.projectId);
-    else if (u.kind === 'mark') state.setDialog('marks');
+    else if (u.kind === 'mark') state.openMarks(ws?.mark(u.id)?.projectId);
     else {
       select(u.id);
       reveal(u.id);

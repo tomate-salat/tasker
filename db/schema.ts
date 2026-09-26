@@ -70,16 +70,26 @@ export const categories = sqliteTable(
   (t) => [index('category_project_idx').on(t.projectId)],
 );
 
-/** Markierungen (Emoji + Name) gelten projektübergreifend. */
-export const marks = sqliteTable('mark', {
-  id: text('id').primaryKey(),
-  emoji: text('emoji').notNull(),
-  name: text('name').notNull(),
-  order: integer('sort_order').notNull().default(0),
-  /** Vorgabe für das Titelbild der Karten – siehe `projects.coverImageId`. */
-  coverImageId: text('cover_image_id'),
-  ...tracked,
-});
+/**
+ * Markierungen (Emoji + Name) gehören wie die Kategorien zu einem Projekt –
+ * jedes Projekt ist selbst für seine zuständig (Wunsch des Nutzers). Ein neues
+ * Projekt bekommt Bug und Refactoring vorgegeben.
+ */
+export const marks = sqliteTable(
+  'mark',
+  {
+    id: text('id').primaryKey(),
+    /** In der Datenbank ohne NOT NULL – siehe Migration 0014; gesetzt ist es immer. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    name: text('name').notNull(),
+    order: integer('sort_order').notNull().default(0),
+    /** Vorgabe für das Titelbild der Karten – siehe `projects.coverImageId`. */
+    coverImageId: text('cover_image_id'),
+    ...tracked,
+  },
+  (t) => [index('mark_project_idx').on(t.projectId)],
+);
 
 /* ---------------------------------------------------------------- Milestones */
 

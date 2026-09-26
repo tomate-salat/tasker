@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CodecksRefsResult, CodecksSummary } from '@shared/api.js';
 import type { Settings } from '@shared/model.js';
-import { categoriesOf, categoryColorIndex } from '@shared/outline.js';
+import { categoriesOf, categoryColorIndex, marksOf } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account, type ApiToken } from '../api.js';
 import { useStore } from '../store.js';
@@ -162,8 +162,18 @@ export function CategoriesDialog({
 
 const EMOJI_PICKS = ['🐞', '🔧', '✨', '📐', '🎨', '🎧', '🚀', '📌', '🧪', '📝', '🔒', '⚡'];
 
-export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => void }) {
+export function MarksDialog({
+  ws,
+  projectId,
+  onClose,
+}: {
+  ws: Workspace;
+  projectId: string;
+  onClose: () => void;
+}) {
   const { patch, remove, say, load } = useStore();
+  const project = ws.project(projectId);
+  const marks = marksOf(ws, projectId);
   const [emoji, setEmoji] = useState('');
   const [name, setName] = useState('');
 
@@ -172,7 +182,7 @@ export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => voi
       say('Emoji und Name angeben');
       return;
     }
-    await api.create('mark', { emoji: emoji.trim(), name: name.trim() }).catch((e: unknown) => {
+    await api.create('mark', { projectId, emoji: emoji.trim(), name: name.trim() }).catch((e: unknown) => {
       say(e instanceof Error ? e.message : 'Anlegen fehlgeschlagen');
     });
     setEmoji('');
@@ -183,7 +193,7 @@ export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => voi
   return (
     <Modal
       title="Markierungen"
-      sub="Das Emoji steht vor dem Titel. Jeder Task kann eine Markierung haben, sie gelten für alle Projekte."
+      sub={`Für das Projekt „${project?.name ?? ''}“. Das Emoji steht vor dem Titel, jeder Task kann eine Markierung haben.`}
       onClose={onClose}
     >
       <p className="hint">
@@ -191,9 +201,9 @@ export function MarksDialog({ ws, onClose }: { ws: Workspace; onClose: () => voi
         Projekt und Kategorie und wird vom Task überschrieben.
       </p>
       <h3>Vorhanden</h3>
-      {ws.marks.length ? (
+      {marks.length ? (
         <div className="mk-list">
-          {ws.marks.map((k) => (
+          {marks.map((k) => (
             <div className="mk-row" key={k.id}>
               <NameInput
                 className="mk-in-emoji"

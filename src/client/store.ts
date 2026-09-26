@@ -257,6 +257,8 @@ type State = {
   /** Für welches Projekt der Kategorien-Dialog gilt; ohne Angabe das aktuelle. */
   catProject: string | null;
   openCategories: (projectId?: string) => void;
+  /** Wie `openCategories`: die Markierungen gehören zu einem Projekt. */
+  openMarks: (projectId?: string) => void;
   /** Ohne Angabe ein eingeplanter Milestone im aktuellen Projekt. Gibt die ID zurück. */
   addMilestone: (
     title: string,
@@ -849,6 +851,7 @@ export const useStore = create<State>((set, get) => ({
 
   catProject: null,
   openCategories: (projectId) => set({ catProject: projectId ?? null, dialog: 'categories' }),
+  openMarks: (projectId) => set({ catProject: projectId ?? null, dialog: 'marks' }),
 
   addMilestone: async (title, o) => {
     const projectId = o?.projectId ?? currentProjectId(get());

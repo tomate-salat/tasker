@@ -1,5 +1,6 @@
 import type { Category, Mark, Milestone, Prio, Project, Status, Task } from './model.js';
 import { isArchived } from './model.js';
+import { marksOf } from './outline.js';
 import type { Workspace } from './workspace.js';
 
 /**
@@ -98,11 +99,11 @@ export function parseQuickAdd(ws: Workspace, text: string, currentProjectId: str
 
   let mark: Mark | null = null;
   if (markQuery) {
-    mark = findMark(ws, markQuery);
+    mark = findMark(ws, markQuery, projectId);
     if (!mark) missing.push({ field: 'Markierung', query: markQuery });
   } else {
     // Ein Titel, der mit dem Emoji einer Markierung beginnt, bekommt sie automatisch.
-    const hit = ws.marks.find((m) => emoji(m.emoji) && emoji(title).startsWith(emoji(m.emoji)));
+    const hit = marksOf(ws, projectId).find((m) => emoji(m.emoji) && emoji(title).startsWith(emoji(m.emoji)));
     if (hit) {
       mark = hit;
       title = title.replace(/^\S+\s*/, '').trim();
@@ -209,12 +210,14 @@ function findProject(ws: Workspace, q: string): Project | null {
   );
 }
 
-function findMark(ws: Workspace, q: string): Mark | null {
+/** Nur die Markierungen des Projekts – jedes hat seine eigenen. */
+function findMark(ws: Workspace, q: string, projectId: string): Mark | null {
   const n = q.toLowerCase();
+  const own = marksOf(ws, projectId);
   return (
-    ws.marks.find((m) => m.name.toLowerCase() === n) ??
-    ws.marks.find((m) => m.name.toLowerCase().startsWith(n)) ??
-    ws.marks.find((m) => emoji(m.emoji) === emoji(q)) ??
+    own.find((m) => m.name.toLowerCase() === n) ??
+    own.find((m) => m.name.toLowerCase().startsWith(n)) ??
+    own.find((m) => emoji(m.emoji) === emoji(q)) ??
     null
   );
 }

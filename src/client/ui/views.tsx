@@ -196,7 +196,7 @@ function KbdHint() {
 function SectionAction({ row }: { row: Extract<OutlineRow, { type: 'section' }> }) {
   if (row.action === 'manage-marks') {
     return (
-      <button className="linkish" onClick={() => useStore.getState().setDialog('marks')}>
+      <button className="linkish" onClick={() => useStore.getState().openMarks(row.projectId)}>
         Markierungen verwalten
       </button>
     );

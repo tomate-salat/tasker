@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Project, type Task } from '@shared/model.js';
-import { categoriesOf, categoryColorIndex, isLooseRoot } from '@shared/outline.js';
+import { categoriesOf, categoryColorIndex, isLooseRoot, marksOf } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
 import { archiveWorkspace, currentProjectId, useStore } from '../store.js';
@@ -82,6 +82,7 @@ export function Sidebar({
   const categories = projectId
     ? categoriesOf(ws, projectId)
     : [];
+  const marks = projectId ? marksOf(ws, projectId) : [];
 
   const trashCount = state.trash?.length ?? 0;
 
@@ -205,33 +206,35 @@ export function Sidebar({
         </div>
       )}
 
-      <div className="nav" aria-label="Markierungen">
-        <div className="nav-h nav-h-row">
-          Markierungen
-          <button className="linkish" onClick={onManageMarks}>
-            Verwalten
-          </button>
-        </div>
-        {ws.marks.map((k) => {
-          const n = countBy((t) => t.markId === k.id);
-          return (
-            <button
-              key={k.id}
-              className={`nav-i ${filter.markId === k.id ? 'on' : ''}`}
-              onClick={() => setFilter({ markId: filter.markId === k.id ? null : k.id })}
-            >
-              <span className="hash mk">{k.emoji}</span>
-              <span>{k.name}</span>
-              <span className={n ? 'n' : 'n zero'}>{n}</span>
+      {projectId && scope !== 'all' && (
+        <div className="nav" aria-label="Markierungen">
+          <div className="nav-h nav-h-row">
+            Markierungen
+            <button className="linkish" onClick={onManageMarks}>
+              Verwalten
             </button>
-          );
-        })}
-        {!ws.marks.length && (
-          <button className="nav-i muted" onClick={onManageMarks}>
-            + Markierung anlegen
-          </button>
-        )}
-      </div>
+          </div>
+          {marks.map((k) => {
+            const n = countBy((t) => t.markId === k.id);
+            return (
+              <button
+                key={k.id}
+                className={`nav-i ${filter.markId === k.id ? 'on' : ''}`}
+                onClick={() => setFilter({ markId: filter.markId === k.id ? null : k.id })}
+              >
+                <span className="hash mk">{k.emoji}</span>
+                <span>{k.name}</span>
+                <span className={n ? 'n' : 'n zero'}>{n}</span>
+              </button>
+            );
+          })}
+          {!marks.length && (
+            <button className="nav-i muted" onClick={onManageMarks}>
+              + Markierung anlegen
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="nav" aria-label="Labels">
         <div className="nav-h">Labels</div>

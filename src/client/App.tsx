@@ -156,7 +156,7 @@ function Shell({
           account={account}
           onProfile={() => setDialog('profile')}
           onManageCategories={() => state.openCategories()}
-          onManageMarks={() => setDialog('marks')}
+          onManageMarks={() => state.openMarks()}
           onHelp={() => setDialog('help')}
         />
 
@@ -255,7 +255,13 @@ function Shell({
             onClose={() => setDialog('none')}
           />
         )}
-        {dialog === 'marks' && <MarksDialog ws={ws} onClose={() => setDialog('none')} />}
+        {dialog === 'marks' && (
+          <MarksDialog
+            ws={ws}
+            projectId={(state.catProject && ws.project(state.catProject)?.id) || projectId}
+            onClose={() => setDialog('none')}
+          />
+        )}
         {dialog === 'profile' && (
           <ProfileDialog
             account={account}

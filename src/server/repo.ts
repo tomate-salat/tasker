@@ -347,6 +347,34 @@ const col = (field: string): string => COLUMN[field] ?? field;
 
 const nowIso = (): string => new Date().toISOString();
 
+/** Die Markierungen, mit denen ein neues Projekt anfängt – wie im Prototyp. */
+const DEFAULT_MARKS = [
+  ['🐞', 'Bug'],
+  ['🛠️', 'Refactoring'],
+] as const;
+
+/**
+ * Markierungen gehören zu einem Projekt. Hängt an einem Task eine aus einem
+ * anderen (weil er dorthin gewandert ist), nimmt er die gleichnamige seines
+ * Projekts – gibt es keine, wird sie dort angelegt, damit nichts verloren geht.
+ */
+function adoptMarks(ctx: DbCtx, taskIds: string[]): void {
+  const find = ctx.sqlite.prepare(
+    'SELECT t.project_id AS task_project, m.* FROM task t JOIN mark m ON m.id = t.mark_id WHERE t.id = ?',
+  );
+  for (const id of taskIds) {
+    const row = find.get(id) as (MarkRow & { task_project: string }) | undefined;
+    // Ohne `project_id` an der Markierung (Stand vor Migration 0014) gibt es nichts anzupassen.
+    if (!row?.project_id || row.project_id === row.task_project) continue;
+    const same = ctx.sqlite
+      .prepare('SELECT id FROM mark WHERE project_id = ? AND lower(name) = lower(?) ORDER BY sort_order LIMIT 1')
+      .get(row.task_project, row.name) as { id: string } | undefined;
+    const markId =
+      same?.id ?? (create(ctx, 'mark', { projectId: row.task_project, emoji: row.emoji, name: row.name }) as Mark).id;
+    ctx.sqlite.prepare('UPDATE task SET mark_id = ? WHERE id = ?').run(markId, id);
+  }
+}
+
 export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): unknown {
   return ctx.sqlite.transaction(() => {
     const id = newId(PREFIX[kind]);
@@ -390,6 +418,12 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
     if (kind === 'task' && values['status'] === 'done') {
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(nowIso(), id);
     }
+    if (kind === 'task') adoptMarks(ctx, [id]);
+    // Jedes Projekt ist für seine Markierungen selbst zuständig, fängt aber mit
+    // denselben zwei an wie der Prototyp.
+    if (kind === 'project') {
+      for (const [emoji, name] of DEFAULT_MARKS) create(ctx, 'mark', { projectId: id, emoji, name });
+    }
 
     return read(ctx, kind, id);
   })();
@@ -429,6 +463,7 @@ export function patch(
     if ((kind === 'task' || kind === 'milestone') && Array.isArray(deps)) {
       setDeps(ctx, kind, id, deps as string[]);
     }
+    if (kind === 'task' && typeof fields['markId'] === 'string') adoptMarks(ctx, [id]);
 
     // Ein Milestone nimmt beim Projektwechsel seine Wurzelaufgaben mit – sonst
     // hinge er in einem Projekt und seine Aufgaben in einem anderen.
@@ -439,6 +474,7 @@ export function patch(
         ctx.sqlite
           .prepare(`UPDATE task SET project_id = ? WHERE id IN (${ids.map(() => '?').join(',')})`)
           .run(target, ...ids);
+        adoptMarks(ctx, ids);
       }
     }
 
@@ -600,6 +636,7 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
         )
         .run(projectId, ...subtree);
     }
+    adoptMarks(ctx, [id, ...subtree]);
 
     if (target.index !== undefined) {
       reorder(
@@ -1176,11 +1213,12 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
             ? milestoneRoots(ctx, id).flatMap((r) => [r, ...descendantIds(ctx, r)])
             : [];
 
-    // Ein Projekt besitzt Kategorien, Gruppen und Milestones; die Datenbank
-    // löscht sie mit, also müssen sie mit in den Eintrag.
+    // Ein Projekt besitzt Kategorien, Markierungen, Gruppen und Milestones; die
+    // Datenbank löscht sie mit, also müssen sie mit in den Eintrag.
     const owned = (table: string): Record<string, unknown>[] =>
       kind === 'project' ? rowsFor(ctx, table, 'project_id', [id]) as Record<string, unknown>[] : [];
     const categories = owned('category');
+    const marks = owned('mark');
     const groups = owned('"group"');
     const milestones = owned('milestone');
     // Dazu der Milestone selbst: Protokoll und Zeichnungen gehen mit ihm und kommen mit ihm zurück.
@@ -1193,6 +1231,7 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
       /** Die gelösten Wurzelaufgaben – beim Wiederherstellen kehren sie zurück. */
       moved: detached,
       categories,
+      marks,
       groups,
       milestones,
       milestoneLog: milestoneIds.length ? rowsFor(ctx, 'milestone_log', 'milestone_id', milestoneIds) : [],
@@ -1304,6 +1343,7 @@ type TrashPayload = {
   moved?: string[];
   /** Nur bei einem Projekt; ältere Einträge haben sie nicht. */
   categories?: Record<string, unknown>[];
+  marks?: Record<string, unknown>[];
   groups?: Record<string, unknown>[];
   milestones?: Record<string, unknown>[];
   milestoneLog?: Record<string, unknown>[];
@@ -1342,7 +1382,7 @@ export function restoreTrash(
       !!id && !!ctx.sqlite.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id);
 
     const pid = p.row['project_id'];
-    if (p.kind !== 'project' && p.kind !== 'mark' && pid && !exists('project', pid)) {
+    if (p.kind !== 'project' && pid && !exists('project', pid)) {
       throw new Error('Das Projekt dazu liegt im Papierkorb – stell zuerst das Projekt wieder her');
     }
 
@@ -1370,6 +1410,7 @@ export function restoreTrash(
     if (p.kind === 'milestone' && o.toEnd) milestoneToEnd(ctx, p.row['id'] as string);
     // Erst was das Projekt besitzt, dann die Aufgaben, die darauf zeigen.
     insertRows(ctx, 'category', p.categories ?? []);
+    insertRows(ctx, 'mark', p.marks ?? []);
     insertRows(ctx, '"group"', p.groups ?? []);
     insertRows(ctx, 'milestone', p.milestones ?? []);
     insertRows(ctx, 'milestone_log', p.milestoneLog ?? []);
@@ -1384,6 +1425,8 @@ export function restoreTrash(
     for (const t of p.tasks) {
       if (!t['parent_id']) refreshHidden(ctx, t['id'] as string);
     }
+    // Ältere Einträge zeigen noch auf Markierungen anderer Projekte.
+    adoptMarks(ctx, p.tasks.map((t) => t['id'] as string));
 
     // Was der Milestone oder die Gruppe losgelassen hat, kehrt zurück – sofern es noch lose liegt.
     const column = p.kind === 'milestone' ? 'milestone_id' : p.kind === 'group' ? 'group_id' : null;
@@ -1670,10 +1713,9 @@ function targetProject(ctx: DbCtx, t: MoveTarget): string | null {
 const PROJECT_COLORS = ['#7A4FA0', '#B04A6A', '#3E8A8A', '#6B7A2A', '#4A5BB0'];
 
 function nextOrder(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): number {
-  if (kind === 'project' || kind === 'mark') {
-    const table = kind === 'project' ? 'project' : 'mark';
+  if (kind === 'project') {
     return (
-      (ctx.sqlite.prepare(`SELECT coalesce(max(sort_order), -1) AS m FROM ${table}`).get() as {
+      (ctx.sqlite.prepare('SELECT coalesce(max(sort_order), -1) AS m FROM project').get() as {
         m: number;
       }).m + 1
     );
@@ -1688,8 +1730,8 @@ function nextOrder(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): numb
           : input['groupId']
             ? ['task', 'group_id = ?', input['groupId']]
             : ['task', 'project_id = ?', input['projectId']]
-      : kind === 'category'
-        ? ['category', 'project_id = ?', input['projectId']]
+      : kind === 'category' || kind === 'mark'
+        ? [kind, 'project_id = ?', input['projectId']]
         : kind === 'group'
           ? ['"group"', 'project_id = ?', input['projectId']]
           : ['milestone', 'project_id = ?', input['projectId']];
@@ -1772,7 +1814,8 @@ type CategoryRow = {
   id: string; version: number; project_id: string; name: string; sort_order: number; cover_image_id: string | null;
 };
 type MarkRow = {
-  id: string; version: number; emoji: string; name: string; sort_order: number; cover_image_id: string | null;
+  id: string; version: number; project_id: string; emoji: string; name: string; sort_order: number;
+  cover_image_id: string | null;
 };
 type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number };
 type MilestoneRow = {
@@ -1798,7 +1841,7 @@ const toCategory = (r: CategoryRow): Category => ({
 });
 
 const toMark = (r: MarkRow): Mark => ({
-  id: r.id, version: r.version, emoji: r.emoji, name: r.name, order: r.sort_order,
+  id: r.id, version: r.version, projectId: r.project_id, emoji: r.emoji, name: r.name, order: r.sort_order,
   coverImageId: r.cover_image_id ?? null,
 });
 

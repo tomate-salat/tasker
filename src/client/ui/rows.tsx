@@ -271,7 +271,7 @@ export function GroupRow({
   count: number;
   onAdd: () => void;
 }) {
-  const { collapsed, setCollapsed, editing, edit, remove, setDialog, openCategories, ws } = useStore();
+  const { collapsed, setCollapsed, editing, edit, remove, openMarks, openCategories, ws } = useStore();
   const { id, group, mark, smart, category } = row;
   // Eine leere Gruppe ist von sich aus zu – geklappt wird darum gegen das, was
   // dasteht, sonst liefe der erste Klick ins Leere.
@@ -352,7 +352,7 @@ export function GroupRow({
           <button
             title={smart === 'mark' ? 'Markierungen verwalten' : 'Kategorien verwalten'}
             aria-label={smart === 'mark' ? 'Markierungen verwalten' : 'Kategorien verwalten'}
-            onClick={() => (smart === 'mark' ? setDialog('marks') : openCategories(row.projectId))}
+            onClick={() => (smart === 'mark' ? openMarks(row.projectId) : openCategories(row.projectId))}
           >
             ✎
           </button>

@@ -54,6 +54,10 @@ const dump = JSON.parse(
   readFileSync(new URL('./prototype-parity.json', import.meta.url), 'utf8'),
 ) as Dump;
 
+/** Die ID einer Markierung im Projekt – siehe `toData`. */
+const markIdIn = (d: Dump['data'], markId: string, projectId: string): string =>
+  projectId === d.projects[0]?.id ? markId : `${markId}:${projectId}`;
+
 /** Übersetzt den Prototyp-State ins neue Datenmodell. */
 function toData(d: Dump['data']): Data {
   return {
@@ -61,7 +65,11 @@ function toData(d: Dump['data']): Data {
     categories: d.projects.flatMap((p) =>
       p.categories.map((c, i) => ({ id: c.id, version: 1, projectId: p.id, name: c.name, order: i, coverImageId: null })),
     ),
-    marks: d.marks.map((k, i) => ({ ...k, version: 1, order: i, coverImageId: null })),
+    // Der Prototyp kennt Markierungen nur global; hier hat jedes Projekt seine
+    // eigenen – das erste behält die IDs, die anderen bekommen Kopien.
+    marks: d.projects.flatMap((p) =>
+      d.marks.map((k, i) => ({ ...k, id: markIdIn(d, k.id, p.id), projectId: p.id, version: 1, order: i, coverImageId: null })),
+    ),
     groups: d.groups.map((g) => ({ id: g.id, version: 1, projectId: g.project, title: g.title, order: g.order })),
     milestones: d.milestones.map((m, i) => ({
       id: m['id'] as string,
@@ -98,7 +106,7 @@ function toData(d: Dump['data']): Data {
       doneAt: (t['doneAt'] as string | null) ?? null,
       order: t['order'] as number,
       categoryId: (t['cat'] as string | null) ?? null,
-      markId: (t['mark'] as string | null) ?? null,
+      markId: t['mark'] ? markIdIn(d, t['mark'] as string, t['project'] as string) : null,
       // Im Prototyp steht eine lose Aufgabe mit Markierung in der smarten Gruppe –
       // hier heißt das: ready (die smarten Gruppen stehen im Reiter „Ready“).
       ready: String(t['group'] ?? '').startsWith('k:'),

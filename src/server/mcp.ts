@@ -189,9 +189,11 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
             categories: boot.categories
               .filter((c) => c.projectId === p.id)
               .map((c) => ({ id: c.id, name: c.name })),
+            marks: boot.marks
+              .filter((m) => m.projectId === p.id)
+              .map((m) => ({ id: m.id, emoji: m.emoji, name: m.name })),
             openTasks: boot.tasks.filter((t) => t.projectId === p.id && t.status !== 'done' && !t.doc).length,
           })),
-          marks: boot.marks.map((m) => ({ id: m.id, emoji: m.emoji, name: m.name })),
         };
       }),
   );

@@ -1,7 +1,7 @@
 import type { BulkAction } from '@shared/api.js';
 import { projectTags } from '@shared/inherit.js';
 import type { Status, Task } from '@shared/model.js';
-import { categoriesOf, draftMilestones, groupsOf, plannedMilestones } from '@shared/outline.js';
+import { categoriesOf, draftMilestones, marksOf, groupsOf, plannedMilestones } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PRIO_LABEL, STATUS_LABEL } from './icons.js';
@@ -203,19 +203,27 @@ function categoryItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
   ];
 }
 
-const markItems = (ws: Workspace, tasks: Task[], run: Run): MenuItem[] => [
-  {
-    label: 'Keine',
-    check: allSame(tasks, (t) => t.markId, null),
-    onSelect: () => run({ type: 'patch', changes: { markId: null } }, 'Markierung entfernt'),
-  },
-  ...ws.marks.map((k) => ({
-    label: `${k.emoji} ${k.name}`,
-    check: allSame(tasks, (t) => t.markId, k.id),
-    onSelect: () =>
-      run({ type: 'patch', changes: { markId: k.id } }, `Markierung → ${k.emoji} ${k.name}`),
-  })),
-];
+/** Markierungen gehören wie Kategorien einem Projekt – gemischte Auswahl kann das nicht. */
+function markItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
+  const projectIds = [...new Set(tasks.map((t) => t.projectId))];
+  if (projectIds.length !== 1) {
+    return [{ label: 'Nur für Aufgaben aus einem Projekt', disabled: true }];
+  }
+
+  return [
+    {
+      label: 'Keine',
+      check: allSame(tasks, (t) => t.markId, null),
+      onSelect: () => run({ type: 'patch', changes: { markId: null } }, 'Markierung entfernt'),
+    },
+    ...marksOf(ws, projectIds[0] as string).map((k) => ({
+      label: `${k.emoji} ${k.name}`,
+      check: allSame(tasks, (t) => t.markId, k.id),
+      onSelect: () =>
+        run({ type: 'patch', changes: { markId: k.id } }, `Markierung → ${k.emoji} ${k.name}`),
+    })),
+  ];
+}
 
 function labelItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
   const all = projectTags(ws, tasks.map((t) => t.projectId));

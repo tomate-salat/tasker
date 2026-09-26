@@ -207,7 +207,8 @@ export function outline(
       category: null,
     });
 
-    if (!ws.marks.length) return;
+    const marks = marksOf(ws, projectId);
+    if (!marks.length) return;
     rows.push({
       type: 'section',
       id: `sec:smart:${projectId}`,
@@ -215,7 +216,7 @@ export function outline(
       action: 'manage-marks',
       projectId,
     });
-    for (const k of ws.marks) {
+    for (const k of marks) {
       const place = { ready: true, markId: k.id };
       box(smartId(projectId, k.id), k.name, projectId, place, smartTasks(ws, projectId, k.id), {
         smart: 'mark',
@@ -303,6 +304,10 @@ export const looseBoxId = (t: Task, ws: Workspace): string =>
     : t.markId
       ? smartId(t.projectId, t.markId)
       : categoryGroupId(t.projectId, readyCategory(ws, t));
+
+/** Die Markierungen eines Projekts – jedes Projekt hat seine eigenen. */
+export const marksOf = (ws: Workspace, projectId: string): Mark[] =>
+  ws.marks.filter((k) => k.projectId === projectId).sort((a, b) => a.order - b.order);
 
 /** Die Kategorien eines Projekts, alphabetisch (Wunsch des Nutzers). */
 export const categoriesOf = (ws: Workspace, projectId: string): Category[] =>

@@ -20,7 +20,7 @@ export const kindSchema = z.enum(KINDS);
 export const createSchemas = {
   project: z.object({ name: title, color: z.string().max(32).optional() }),
   category: z.object({ projectId: id, name: title }),
-  mark: z.object({ emoji: z.string().min(1).max(8), name: title }),
+  mark: z.object({ projectId: id, emoji: z.string().min(1).max(8), name: title }),
   group: z.object({ projectId: id, title }),
   milestone: z.object({
     projectId: id,

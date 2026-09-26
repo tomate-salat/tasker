@@ -9,6 +9,7 @@ import {
 } from '@shared/model.js';
 import {
   categoriesOf,
+  marksOf,
   doneInContainer,
   draftMilestones,
   groupsOf,
@@ -240,7 +241,7 @@ export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group
       ...common,
       { sep: true },
       row.smart === 'mark'
-        ? { label: 'Markierungen verwalten …', onSelect: () => store.setDialog('marks') }
+        ? { label: 'Markierungen verwalten …', onSelect: () => store.openMarks(row.projectId) }
         : { label: 'Kategorien verwalten …', onSelect: () => store.openCategories(row.projectId) },
     ];
   }
@@ -380,13 +381,14 @@ export function markSub(ws: Workspace, t: Task): MenuItem[] {
       check: !t.markId,
       onSelect: () => void store.patch('task', t.id, { markId: null }),
     },
-    ...ws.marks.map((k) => ({
+    ...marksOf(ws, t.projectId).map((k) => ({
       label: `${k.emoji} ${k.name}`,
       check: t.markId === k.id,
       onSelect: () => void store.patch('task', t.id, { markId: k.id }),
     })),
     { sep: true },
-    { label: 'Markierungen verwalten …', onSelect: () => store.setDialog('marks') },
+    // Die Markierungen gehören zum Projekt der Aufgabe, auch unter „Alle Projekte“.
+    { label: 'Markierungen verwalten …', onSelect: () => store.openMarks(t.projectId) },
   ];
 }
 
@@ -507,7 +509,7 @@ export function readyTargets(ws: Workspace, projectId: string): [Record<string, 
       (c): [Record<string, unknown>, string] => [{ ready: true, markId: null, categoryId: c.id }, c.name],
     ),
     [{ ready: true, markId: null, categoryId: null }, 'Ohne Kategorie'],
-    ...ws.marks.map((k): [Record<string, unknown>, string] => [
+    ...marksOf(ws, projectId).map((k): [Record<string, unknown>, string] => [
       { ready: true, markId: k.id },
       `${k.emoji} ${k.name}`,
     ]),

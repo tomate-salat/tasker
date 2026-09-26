@@ -359,7 +359,7 @@ describe('Reihenfolge beim Verschieben', () => {
    */
   it('nummeriert Unsortiert und die Gruppen in „Ready“ getrennt', () => {
     const p = mkProject();
-    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const k = create(ctx, 'mark', { projectId: p.id, emoji: '🐛', name: 'Bug' }) as { id: string };
     const c = create(ctx, 'category', { projectId: p.id, name: 'Arena' }) as { id: string };
     for (const title of ['A', 'B']) mkTask({ projectId: p.id, title, markId: k.id });
     for (const title of ['X', 'Y']) mkTask({ projectId: p.id, title, ready: true, markId: k.id });
@@ -393,7 +393,7 @@ describe('Reihenfolge beim Verschieben', () => {
 
   it('in eine Gruppe von „Ready“ setzt ready, Markierung oder Kategorie; zurück nach Unsortiert lässt beides', () => {
     const p = mkProject();
-    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const k = create(ctx, 'mark', { projectId: p.id, emoji: '🐛', name: 'Bug' }) as { id: string };
     const c = create(ctx, 'category', { projectId: p.id, name: 'Arena' }) as { id: string };
     const t = mkTask({ projectId: p.id, title: 'A' });
 
@@ -428,7 +428,7 @@ describe('Reihenfolge beim Verschieben', () => {
 
   it('lässt die Markierung stehen, wenn keine mitgeschickt wird', () => {
     const p = mkProject();
-    const k = create(ctx, 'mark', { emoji: '🐛', name: 'Bug' }) as { id: string };
+    const k = create(ctx, 'mark', { projectId: p.id, emoji: '🐛', name: 'Bug' }) as { id: string };
     const m = mkMilestone({ projectId: p.id, title: 'M' });
     const t = mkTask({ projectId: p.id, title: 'A', markId: k.id });
 
@@ -1045,3 +1045,51 @@ const one = (id: string): Task => {
   ).map((x) => x.tag);
   return { ...(r as unknown as Task), tags, doneAt: (r['done_at'] as string | null) ?? null };
 };
+
+describe('Markierungen je Projekt', () => {
+  const marksIn = (projectId: string) =>
+    loadBootstrap(ctx)
+      .marks.filter((k) => k.projectId === projectId)
+      .map((k) => `${k.emoji} ${k.name}`);
+
+  it('ein neues Projekt fängt mit Bug und Refactoring an', () => {
+    const p = mkProject();
+    assert.deepEqual(marksIn(p.id), ['🐞 Bug', '🛠️ Refactoring']);
+  });
+
+  it('eine Markierung gilt nur im eigenen Projekt', () => {
+    const a = mkProject();
+    const b = mkProject();
+    create(ctx, 'mark', { projectId: a.id, emoji: '🎨', name: 'Art' });
+    assert.deepEqual(marksIn(a.id), ['🐞 Bug', '🛠️ Refactoring', '🎨 Art']);
+    assert.deepEqual(marksIn(b.id), ['🐞 Bug', '🛠️ Refactoring']);
+  });
+
+  it('wandert ein Task ins andere Projekt, nimmt er dort die gleichnamige Markierung oder legt sie an', () => {
+    const a = mkProject();
+    const b = mkProject();
+    const byName = (projectId: string, name: string) =>
+      loadBootstrap(ctx).marks.find((k) => k.projectId === projectId && k.name === name)!.id;
+    const art = create(ctx, 'mark', { projectId: a.id, emoji: '🎨', name: 'Art' }) as { id: string };
+    const bug = mkTask({ projectId: a.id, title: 'Bug', markId: byName(a.id, 'Bug') });
+    const kid = mkTask({ projectId: a.id, parentId: bug.id, title: 'Kind', markId: art.id });
+
+    move(ctx, bug.id, bug.version, { projectId: b.id });
+
+    assert.equal(one(bug.id).markId, byName(b.id, 'Bug'));
+    assert.equal(one(kid.id).markId, byName(b.id, 'Art'));
+    assert.deepEqual(marksIn(b.id), ['🐞 Bug', '🛠️ Refactoring', '🎨 Art']);
+  });
+
+  it('ein gelöschtes Projekt kommt mit seinen Markierungen zurück', () => {
+    const p = mkProject();
+    const k = create(ctx, 'mark', { projectId: p.id, emoji: '🎨', name: 'Art' }) as { id: string };
+    const t = mkTask({ projectId: p.id, title: 'A', markId: k.id });
+    const { trashId } = remove(ctx, 'project', p.id);
+    assert.deepEqual(marksIn(p.id), []);
+
+    restoreTrash(ctx, trashId);
+    assert.deepEqual(marksIn(p.id), ['🐞 Bug', '🛠️ Refactoring', '🎨 Art']);
+    assert.equal(one(t.id).markId, k.id);
+  });
+});
