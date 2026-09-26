@@ -244,8 +244,8 @@
 
 /* Der Fuß trägt die Farbe des Status (Wunsch des Nutzers); „Offen“ bleibt grau. */
 .tcard-foot.st-progress {
-  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
-  border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--info) 22%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--info) 45%, var(--line));
 }
 
 .tcard-foot.st-done {
