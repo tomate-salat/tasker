@@ -22,7 +22,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      // Mit Schrägstrich: ein bloßes '/api' finge auch die Quelldatei /api.ts ab.
+      '/api/': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },

@@ -18,11 +18,13 @@ import {
   plannedMilestones,
   readyCategory,
   type OutlineRow,
+  type OutlineView,
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import {
+  addAndEdit,
   addChild,
   addIn,
   addSibling,
@@ -273,6 +275,33 @@ export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group
     { sep: true },
     { label: 'Neue Gruppe', onSelect: () => void newGroup(row.projectId) },
     { label: 'Gruppe löschen', danger: true, onSelect: () => void store.remove('group', g.id) },
+  ];
+}
+
+/**
+ * Rechtsklick auf die freie Fläche der Liste: anlegen, was in diese Ansicht
+ * gehört – dieselben Wege wie die Knöpfe im Kopf und in den Abschnitten.
+ */
+export function listMenu(view: OutlineView, projectId: string): MenuItem[] {
+  const store = useStore.getState();
+  const milestone = (planned: boolean): MenuItem => ({
+    label: 'Neuer Milestone',
+    onSelect: () =>
+      void store.addMilestone('', { planned, projectId }).then((id) => id && store.edit(id, true)),
+  });
+
+  if (view === 'plan') return [milestone(true)];
+  if (view === 'docs') {
+    return [{ label: 'Neue Seite', onSelect: () => void addAndEdit({ projectId, doc: true }) }];
+  }
+  if (view === 'ready') {
+    return [{ label: 'Neuer Task', onSelect: () => void addIn(projectId, { ready: true }) }];
+  }
+  return [
+    { label: 'Neuer Task', onSelect: () => void addIn(projectId, {}) },
+    { sep: true },
+    milestone(false),
+    { label: 'Neue Gruppe', onSelect: () => void newGroup(projectId) },
   ];
 }
 

@@ -710,77 +710,6 @@
   }
 }
 
-/* -------------------------------------------------------- Schnell-Erfassung */
-
-.qa-wrap {
-  padding: 16px 24px 4px;
-}
-
-.qa {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface);
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-}
-
-.qa:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.qa-plus {
-  font: 500 18px/1 var(--mono);
-  color: var(--accent);
-}
-
-.qa input {
-  flex: 1;
-  min-width: 0;
-  padding: 11px 0;
-  border: 0;
-  background: transparent;
-  font: 14px var(--mono);
-  outline: none;
-}
-
-.qa input::placeholder {
-  color: var(--faint);
-}
-
-.qa-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 8px;
-  font-size: 12px;
-}
-
-.pv {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 5px;
-  background: var(--sunk);
-  color: var(--muted);
-}
-
-.pv b {
-  color: var(--ink);
-  font-weight: 500;
-}
-
-.pv.bad {
-  background: var(--warn-soft);
-  color: var(--p1);
-}
-
 /* ----------------------------------------------------------------- Liste
  *
  * Tabellen-Layout aus dem Prototyp: links die feste Markierungs- und
@@ -799,8 +728,8 @@
   container-type: inline-size;
 }
 
-/* Ohne Filterleiste rückt die Liste etwas von der Schnell-Erfassung ab. */
-.qa-wrap + .list {
+/* Ohne Filterleiste rückt die Liste etwas vom Kopf ab. */
+.mhead + .list {
   padding-top: 12px;
 }
 
@@ -3715,10 +3644,6 @@ body:has(.bulk) .toast {
     padding: 14px 16px 0;
   }
 
-  .qa-wrap {
-    padding: 12px 16px 4px;
-  }
-
   .toolbar {
     padding: 10px 16px;
   }
@@ -3731,10 +3656,6 @@ body:has(.bulk) .toast {
   .bar:not(.wide),
   .eta,
   .from {
-    display: none;
-  }
-
-  .qa kbd {
     display: none;
   }
 }

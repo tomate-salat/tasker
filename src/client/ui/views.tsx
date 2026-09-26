@@ -4,13 +4,13 @@ import { outline, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
-import { scopeProjectIds, useStore } from '../store.js';
+import { currentProjectId, scopeProjectIds, useStore } from '../store.js';
 import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { useDropFlip } from './dropFlip.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
-import { rowMenu } from './rowMenu.js';
+import { listMenu, rowMenu } from './rowMenu.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
 import { cardArea, CardGrid, cardRows, cardsOn, chunkCards } from './Cards.js';
 
@@ -42,12 +42,24 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const listRef = useRef<HTMLDivElement>(null);
   useDropFlip(listRef, ws);
 
+  // Rechtsklick auf die freie Fläche: das Menü der Ansicht.
+  const openListMenu = (e: React.MouseEvent): void => {
+    const projectId = currentProjectId(state);
+    if (!projectId || (e.target as HTMLElement).closest('input, textarea, button, a')) return;
+    e.preventDefault();
+    state.clearMulti();
+    menu.openAtPoint(e.clientX, e.clientY, listMenu(view, projectId));
+  };
+
   if (!rows.length) {
     return (
-      <div className="list">
-        <Empty>{view === 'plan' ? <PlanEmpty /> : EMPTY[view]}</Empty>
-        <KbdHint />
-      </div>
+      <>
+        <div className="list" onContextMenu={openListMenu}>
+          <Empty>{view === 'plan' ? <PlanEmpty /> : EMPTY[view]}</Empty>
+          <KbdHint />
+        </div>
+        {menu.node}
+      </>
     );
   }
 
@@ -61,7 +73,11 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
           // Die freie Fläche eines Kartenrasters gilt als ihre Kopfzeile (`data-area`).
           const hit = el.closest('[data-row], [data-area]');
           const id = hit?.getAttribute('data-row') ?? hit?.getAttribute('data-area');
-          if (!id || el.closest('input, textarea')) return;
+          if (!id) {
+            openListMenu(e);
+            return;
+          }
+          if (el.closest('input, textarea')) return;
           e.preventDefault();
 
           // Rechtsklick auf eine ausgewählte Zeile gilt der ganzen Auswahl,
@@ -170,9 +186,6 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
 function KbdHint() {
   return (
     <div className="kbd-hint">
-      <span>
-        <kbd>N</kbd> Neu
-      </span>
       <span>
         <kbd>Enter</kbd> gleiche Ebene
       </span>

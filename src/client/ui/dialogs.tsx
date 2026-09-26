@@ -840,10 +840,6 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>Rückgängig</dd>
         <dt>
-          <kbd>N</kbd> / <kbd>/</kbd>
-        </dt>
-        <dd>Schnell-Erfassung</dd>
-        <dt>
           <kbd>[</kbd>
         </dt>
         <dd>Seitenleiste ein-/ausklappen</dd>

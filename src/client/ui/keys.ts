@@ -5,7 +5,6 @@ import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { addAndEdit, addChild, addSibling, indent, moveRowBy, outdent, toBacklog } from './actions.js';
 import type { Menu } from './Menu.js';
-import { focusQuickAdd } from './QuickAdd.js';
 import { locationMenu, rowMenu } from './rowMenu.js';
 
 /**
@@ -13,8 +12,8 @@ import { locationMenu, rowMenu } from './rowMenu.js';
  * Zeilenfolge, die auch angezeigt wird (`outline`), damit Pfeiltasten und
  * Bildschirm nicht auseinanderlaufen können.
  *
- * Während in einem Feld getippt wird, greift hier nichts – die Erfassungszeile
- * und die Titelbearbeitung haben ihre eigenen Tasten.
+ * Während in einem Feld getippt wird, greift hier nichts – die
+ * Titelbearbeitung hat ihre eigenen Tasten.
  */
 export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
   const store = useStore();
@@ -266,13 +265,6 @@ export function useGlobalKeys(): void {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void store.undo();
-        return;
-      }
-      if (e.ctrlKey || e.metaKey) return;
-
-      if (e.key === 'n' || e.key === 'N' || e.key === '/') {
-        e.preventDefault();
-        focusQuickAdd();
       }
     };
     window.addEventListener('keydown', onKey);
