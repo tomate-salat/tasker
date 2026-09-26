@@ -6,16 +6,20 @@
  *
  * Das Board zeigt einen Ausschnitt: von einem Task aus alles, was er in jeder
  * Tiefe benötigt und was auf ihn wartet; von einem Milestone aus dasselbe für
- * ihn und seine Tasks. Was nur daneben hängt, fehlt.
+ * ihn und seine Tasks – die der obersten Ebene immer, auch ohne Pfeile. Was
+ * nur daneben hängt, fehlt.
  *
  * Die Pfeile sind die `deps` selbst – ein Pfeil von A nach B heißt „B benötigt
- * A“. Gespeichert wird zusätzlich nur, wo die Knoten liegen – je Ausgangspunkt.
+ * A“. Gespeichert wird zusätzlich, wo die Knoten liegen und wie die Pfeile aus
+ * „Neu anordnen“ verlaufen (`graphElk.ts`) – je Ausgangspunkt. Wird ein Knoten
+ * verschoben, fallen seine Pfeile auf die einfache Stufenform zurück.
  *
  * Das Modul wird nachgeladen, damit React Flow nicht im Startpaket steckt.
  */
 import '@xyflow/react/dist/style.css';
 import {
   Background,
+  BaseEdge,
   ConnectionLineType,
   Controls,
   Handle,
@@ -26,10 +30,12 @@ import {
   ReactFlowProvider,
   applyEdgeChanges,
   applyNodeChanges,
+  getSmoothStepPath,
   useReactFlow,
   type Connection,
   type Edge,
   type EdgeChange,
+  type EdgeProps,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -37,7 +43,7 @@ import {
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dependsOn } from '@shared/blocking.js';
-import { dependencyScope, layerLayout, ROW_GAP, type Pos } from '@shared/graphLayout.js';
+import { dependencyScope, type Pos } from '@shared/graphLayout.js';
 import { isArchived, isDone, type Milestone, type Task } from '@shared/model.js';
 import { draftMilestones, plannedMilestones } from '@shared/outline.js';
 import { milestoneDone, milestoneProgressPct } from '@shared/progress.js';
@@ -45,6 +51,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { useStore } from '../store.js';
 import { CardFace } from './Cards.js';
+import { edgeKey, elkLayout, fitRoute, roundedPath, type Layout } from './graphElk.js';
 import { DEFAULT_MARK, MS_STATUS, STATUS_LABEL } from './icons.js';
 import { Inspector } from './Inspector.js';
 import { useMenu, type MenuItem } from './Menu.js';
@@ -52,6 +59,7 @@ import { milestoneMenu, taskMenu } from './rowMenu.js';
 
 type Item = Task | Milestone;
 type ItemNode = Node<{ item: Item; sub: string; done: boolean; focus: boolean }, 'item'>;
+type RoutedEdge = Edge<{ route?: Pos[] }, 'routed'>;
 
 const isMs = (x: Item): x is Milestone => 'planned' in x;
 const kindOf = (x: Item): 'task' | 'milestone' => (isMs(x) ? 'milestone' : 'task');
@@ -119,16 +127,17 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
 
   /* ------------------------------------------------ Positionen & Speichern */
 
-  const [pos, setPos] = useState<Record<string, Pos> | null>(null);
+  const [layout, setLayout] = useState<Layout | null>(null);
+  const pos = layout?.nodes ?? null;
   useEffect(() => {
     let alive = true;
     void api
       .graph(focusId)
-      .then((g) => alive && setPos(g.nodes))
+      .then((g) => alive && setLayout({ nodes: g.nodes, edges: g.edges ?? {} }))
       .catch((e: unknown) => {
         if (!alive) return;
         say(e instanceof Error ? e.message : 'Board konnte nicht geladen werden');
-        setPos({});
+        setLayout({ nodes: {}, edges: {} });
       });
     return () => {
       alive = false;
@@ -137,20 +146,34 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
 
   const saveTimer = useRef<number | undefined>(undefined);
   const save = useCallback(
-    (next: Record<string, Pos>) => {
+    (next: Layout) => {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => {
-        void api.putGraph(focusId, { nodes: next }).catch((e: unknown) => {
+        void api.putGraph(focusId, next).catch((e: unknown) => {
           say(e instanceof Error ? e.message : 'Board konnte nicht gespeichert werden');
         });
       }, SAVE_AFTER_MS);
     },
     [focusId, say],
   );
+  /**
+   * Knoten setzen. Ein Pfeil, dessen Enden sich dabei bewegen, verliert seinen
+   * berechneten Verlauf – der passte nicht mehr.
+   */
   const place = useCallback(
     (update: (prev: Record<string, Pos>) => Record<string, Pos>) => {
-      setPos((prev) => {
-        const next = update(prev ?? {});
+      setLayout((prev) => {
+        const before = prev?.nodes ?? {};
+        const nodes = update(before);
+        const same = (id: string): boolean =>
+          !!nodes[id] && nodes[id]!.x === before[id]?.x && nodes[id]!.y === before[id]?.y;
+        const edges = Object.fromEntries(
+          Object.entries(prev?.edges ?? {}).filter(([k]) => {
+            const [s, t] = k.split('>');
+            return same(s!) && same(t!);
+          }),
+        );
+        const next = { nodes, edges };
         save(next);
         return next;
       });
@@ -158,15 +181,26 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     [save],
   );
 
-  // Der Ausschnitt: ein Task allein, ein Milestone mit seinen Tasks, die
-  // Abhängigkeiten haben – dazu alles, was sie benötigen und was auf sie wartet.
+  /** Die Größe eines Knotens, wie er gezeichnet ist – vor dem Zeichnen die der Karten. */
+  const sized = useCallback(
+    (id: string) => {
+      const m = flow.getNode(id)?.measured;
+      return { id, width: m?.width ?? CARD_W, height: m?.height ?? CARD_H };
+    },
+    [flow],
+  );
+
+  // Der Ausschnitt: ein Task allein; ein Milestone mit all seinen Tasks der
+  // obersten Ebene (auch ohne Abhängigkeiten) und den Unteraufgaben, die welche
+  // haben – dazu alles, was sie benötigen und was auf sie wartet.
   const scope = useMemo(() => {
     const seeds = [focusId];
     const m = ws.milestone(focusId);
     if (m) {
       const linked = new Set(links.flatMap((l) => [l.source, l.target]));
-      for (const t of ws.msRoots(m).flatMap((r) => [r, ...ws.desc(r)])) {
-        if (linked.has(t.id)) seeds.push(t.id);
+      for (const r of ws.msRoots(m)) {
+        seeds.push(r.id);
+        for (const d of ws.desc(r)) if (linked.has(d.id)) seeds.push(d.id);
       }
     }
     return dependencyScope(seeds, links);
@@ -182,22 +216,38 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   }, [pos, items, scope, added]);
   const onBoard = useMemo(() => new Set(boardIds), [boardIds]);
 
-  // Was noch keinen Platz hat, bekommt einen aus der Spaltenanordnung – unter
-  // allem, was schon liegt – und behält ihn dann, damit nichts herumspringt.
+  // Was noch keinen Platz hat, bekommt einen: beim ersten Öffnen ordnet ELK
+  // alles an, samt Pfeilen. Kommt später etwas dazu, landet es unter dem, was
+  // schon liegt – das Bestehende springt nicht herum.
+  const placing = useRef(false);
   useEffect(() => {
-    if (!pos) return;
+    if (!pos || placing.current) return;
     const missing = boardIds.filter((id) => !pos[id]);
     if (!missing.length) return;
-    const auto = layerLayout(boardIds, links);
-    const placed = boardIds.filter((id) => pos[id]).map((id) => pos[id]!);
-    const top = placed.length ? Math.max(...placed.map((p) => p.y)) + ROW_GAP * 2 : 0;
-    const minY = Math.min(...missing.map((id) => auto[id]!.y));
-    place((prev) => {
-      const next = { ...prev };
-      for (const id of missing) next[id] = { x: auto[id]!.x, y: auto[id]!.y - minY + top };
-      return next;
-    });
-  }, [pos, boardIds, links, place]);
+    const fresh = missing.length === boardIds.length;
+    placing.current = true;
+    void elkLayout(boardIds.map(sized), links)
+      .then((auto) => {
+        if (fresh) {
+          setLayout(auto);
+          save(auto);
+          window.setTimeout(() => void flow.fitView({ maxZoom: 1.2 }), 50);
+          return;
+        }
+        const placed = boardIds.filter((id) => pos[id]).map((id) => pos[id]!.y + sized(id).height);
+        const top = placed.length ? Math.max(...placed) + 80 : 0;
+        const minY = Math.min(...missing.map((id) => auto.nodes[id]!.y));
+        place((prev) => {
+          const next = { ...prev };
+          for (const id of missing) next[id] = { x: auto.nodes[id]!.x, y: auto.nodes[id]!.y - minY + top };
+          return next;
+        });
+      })
+      .catch((e: unknown) => say(e instanceof Error ? e.message : 'Anordnen fehlgeschlagen'))
+      .finally(() => {
+        placing.current = false;
+      });
+  }, [pos, boardIds, links, place, save, sized, flow, say]);
 
   /* ----------------------------------------------------- Knoten & Pfeile */
 
@@ -224,17 +274,19 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     });
   }, [pos, boardIds, items, ws, focusId]);
 
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const routes = layout?.edges;
+  const [edges, setEdges] = useState<RoutedEdge[]>([]);
   useEffect(() => {
     setEdges((prev) => {
       const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
-      return links.filter((l) => onBoard.has(l.source) && onBoard.has(l.target)).map((l): Edge => {
-        const id = `${l.source}>${l.target}`;
+      return links.filter((l) => onBoard.has(l.source) && onBoard.has(l.target)).map((l): RoutedEdge => {
+        const id = edgeKey(l.source, l.target);
         const src = items.get(l.source)!;
         const done = isMs(src) ? milestoneDone(ws, src) : isDone(src);
         return {
           id,
-          type: 'smoothstep',
+          type: 'routed',
+          data: { route: routes?.[id] },
           source: l.source,
           target: l.target,
           selected: selected.has(id),
@@ -243,7 +295,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         };
       });
     });
-  }, [links, items, ws, onBoard]);
+  }, [links, items, ws, onBoard, routes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<ItemNode>[]) =>
@@ -252,7 +304,8 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     [],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((e) => applyEdgeChanges(changes.filter((c) => c.type !== 'remove'), e)),
+    (changes: EdgeChange<RoutedEdge>[]) =>
+      setEdges((e) => applyEdgeChanges(changes.filter((c) => c.type !== 'remove'), e)),
     [],
   );
 
@@ -298,7 +351,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
    * liegen – sonst wäre es beim nächsten Öffnen ohnehin wieder da. React Flow
    * selbst entfernt nichts: das Board zeigt immer die Daten.
    */
-  const onBeforeDelete: OnBeforeDelete<ItemNode, Edge> = useCallback(
+  const onBeforeDelete: OnBeforeDelete<ItemNode, RoutedEdge> = useCallback(
     async ({ nodes: gone, edges: goneEdges }) => {
       const cut = goneEdges.filter((e) => e.selected);
       const byTarget = new Map<string, Set<string>>();
@@ -387,20 +440,28 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     place((prev) => ({ ...prev, [id]: { x: Math.round(p.x - CARD_W / 2), y: Math.round(p.y - 30) } }));
   };
 
-  /** „Neu anordnen“: alles auf dem Board in Spalten, wie beim ersten Öffnen. */
+  /** „Neu anordnen“: alles auf dem Board mit ELK, samt Pfeilverläufen. */
   const relayout = (): void => {
-    const auto = layerLayout(boardIds, links);
-    place((prev) => ({ ...prev, ...auto }));
-    window.setTimeout(() => void flow.fitView({ duration: 300 }), 50);
+    void elkLayout(boardIds.map(sized), links)
+      .then((auto) => {
+        setLayout((prev) => {
+          const next = { nodes: { ...prev?.nodes, ...auto.nodes }, edges: auto.edges };
+          save(next);
+          return next;
+        });
+        window.setTimeout(() => void flow.fitView({ duration: 300 }), 50);
+      })
+      .catch((e: unknown) => say(e instanceof Error ? e.message : 'Anordnen fehlgeschlagen'));
   };
 
   /* ------------------------------------------------------ Kontextmenüs */
 
-  const nodeMenu = (id: string): MenuItem[] => {
+  /** Auf dem Board öffnet der Doppelklick die Details, in der Liste den Graph. */
+  const nodeMenu = (id: string, inList = false): MenuItem[] => {
     const item = items.get(id);
     if (!item) return [];
     return [
-      { label: 'Details anzeigen', kbd: 'Doppelklick', onSelect: () => showDetail(id) },
+      { label: 'Details anzeigen', kbd: inList ? undefined : 'Doppelklick', onSelect: () => showDetail(id) },
       {
         label: 'Vom Board nehmen',
         disabled: scope.has(id) || !onBoard.has(id),
@@ -454,6 +515,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   }, [openGraph, undo]);
 
   const nodeTypes = useMemo(() => ({ item: ItemNodeView }), []);
+  const edgeTypes = useMemo(() => ({ routed: RoutedEdgeView }), []);
 
   return (
     // `draw-modal`: die Tasten der Liste und die globalen Tasten halten sich raus.
@@ -484,10 +546,10 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
           items={items}
           onBoard={onBoard}
           onShow={showNode}
-          onOpen={showDetail}
+          onOpen={(id) => openGraph({ projectId, focusId: id })}
           onMenu={(e, id) => {
             e.preventDefault();
-            menu.openAtPoint(e.clientX, e.clientY, nodeMenu(id));
+            menu.openAtPoint(e.clientX, e.clientY, nodeMenu(id, true));
           }}
         />
         <div
@@ -501,10 +563,11 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
           onDrop={onDrop}
         >
           {pos && (
-            <ReactFlow<ItemNode, Edge>
+            <ReactFlow<ItemNode, RoutedEdge>
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeDragStop={onNodeDragStop}
@@ -585,6 +648,28 @@ function boardItems(list: MenuItem[]): MenuItem[] {
   }
   while (out.length && 'sep' in out[out.length - 1]!) out.pop();
   return out;
+}
+
+/**
+ * Ein Pfeil: mit Verlauf aus „Neu anordnen“ genau diesen, sonst – nach dem
+ * Verschieben oder frisch verbunden – die einfache Stufenform.
+ */
+function RoutedEdgeView(p: EdgeProps<RoutedEdge>) {
+  const route = p.data?.route;
+  const source = { x: p.sourceX, y: p.sourceY };
+  const target = { x: p.targetX, y: p.targetY };
+  const path =
+    route && route.length > 2
+      ? roundedPath(fitRoute(route, source, target))
+      : getSmoothStepPath({
+          sourceX: p.sourceX,
+          sourceY: p.sourceY,
+          sourcePosition: p.sourcePosition,
+          targetX: p.targetX,
+          targetY: p.targetY,
+          targetPosition: p.targetPosition,
+        })[0];
+  return <BaseEdge id={p.id} path={path} markerEnd={p.markerEnd} style={p.style} interactionWidth={16} />;
 }
 
 /** Wo ein Eintrag hängt – als zweite Zeile im Knoten. */
@@ -685,7 +770,7 @@ function ItemList({
   items: Map<string, Item>;
   onBoard: Set<string>;
   onShow: (id: string) => void;
-  /** Doppelklick: den Inspektor rechts einblenden – wie auf dem Board. */
+  /** Doppelklick: den Graph dieses Eintrags zeigen – auf dem Board öffnet er den Inspektor. */
   onOpen: (id: string) => void;
   onMenu: (e: React.MouseEvent, id: string) => void;
 }) {
@@ -743,8 +828,8 @@ function ItemList({
                     onContextMenu={(e) => onMenu(e, item.id)}
                     title={
                       on
-                        ? 'Liegt auf dem Board – klicken zum Hinspringen, Doppelklick zeigt Details'
-                        : 'Aufs Board ziehen · Doppelklick zeigt Details'
+                        ? 'Liegt auf dem Board – klicken zum Hinspringen, Doppelklick zeigt seinen Graph'
+                        : 'Aufs Board ziehen · Doppelklick zeigt seinen Graph'
                     }
                   >
                     <Glyph ws={ws} item={item} />

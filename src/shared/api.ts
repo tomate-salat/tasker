@@ -328,13 +328,20 @@ export const settingsBody = z
   .partial();
 
 /**
- * Wo die Knoten des Abhängigkeits-Boards liegen – je Task oder Milestone, von
- * dem aus es geöffnet wird. Die Pfeile selbst sind die `deps`.
+ * Wo die Knoten des Abhängigkeits-Boards liegen und wie die Pfeile laufen – je
+ * Task oder Milestone, von dem aus es geöffnet wird. Die Pfeile selbst sind die
+ * `deps`, hier steht nur ihr Verlauf.
  */
+const point = z.object({ x: z.number().finite(), y: z.number().finite() });
 export const graphLayout = z.object({
   nodes: z
-    .record(id, z.object({ x: z.number().finite(), y: z.number().finite() }))
+    .record(id, point)
     .refine((n) => Object.keys(n).length <= 5000, { message: 'Zu viele Knoten' }),
+  /** Die Knickpunkte der Pfeile aus „Neu anordnen“ – je `quelle>ziel`. */
+  edges: z
+    .record(z.string().max(200), z.array(point).max(200))
+    .refine((e) => Object.keys(e).length <= 10000, { message: 'Zu viele Pfeile' })
+    .optional(),
 });
 export type GraphLayout = z.infer<typeof graphLayout>;
 
