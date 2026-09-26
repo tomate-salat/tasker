@@ -335,10 +335,11 @@ export const api = {
 
   settings: () => request<Settings>('/api/settings'),
 
-  graph: (projectId: string) => request<GraphLayout>(`/api/graph/${projectId}`),
+  /** Die Positionen je Ausgangspunkt – ID des Tasks oder Milestones. */
+  graph: (id: string) => request<GraphLayout>(`/api/graph/${id}`),
 
-  putGraph: (projectId: string, layout: GraphLayout) =>
-    request<GraphLayout>(`/api/graph/${projectId}`, { method: 'PUT', body: JSON.stringify(layout) }),
+  putGraph: (id: string, layout: GraphLayout) =>
+    request<GraphLayout>(`/api/graph/${id}`, { method: 'PUT', body: JSON.stringify(layout) }),
 
   putSettings: (patch: Partial<Settings>) =>
     request<Settings>('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),

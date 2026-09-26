@@ -4,8 +4,12 @@
  * Milestones des Projekts als Baum, von dort kommen sie per Drag & Drop aufs
  * Board; rechts werden sie verbunden.
  *
+ * Das Board zeigt einen Ausschnitt: von einem Task aus alles, was er in jeder
+ * Tiefe benötigt und was auf ihn wartet; von einem Milestone aus dasselbe für
+ * ihn und seine Tasks. Was nur daneben hängt, fehlt.
+ *
  * Die Pfeile sind die `deps` selbst – ein Pfeil von A nach B heißt „B benötigt
- * A“. Gespeichert wird zusätzlich nur, was auf dem Board liegt und wo.
+ * A“. Gespeichert wird zusätzlich nur, wo die Knoten liegen – je Ausgangspunkt.
  *
  * Das Modul wird nachgeladen, damit React Flow nicht im Startpaket steckt.
  */
@@ -32,7 +36,7 @@ import {
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dependsOn } from '@shared/blocking.js';
-import { layerLayout, ROW_GAP, type Pos } from '@shared/graphLayout.js';
+import { dependencyScope, layerLayout, ROW_GAP, type Pos } from '@shared/graphLayout.js';
 import { isArchived, isDone, type Milestone, type Task } from '@shared/model.js';
 import { draftMilestones, plannedMilestones } from '@shared/outline.js';
 import { milestoneDone } from '@shared/progress.js';
@@ -62,7 +66,12 @@ export default function DepGraph() {
   if (!graphOpen || !ws) return null;
   return (
     <ReactFlowProvider>
-      <Board ws={ws} projectId={graphOpen.projectId} focusId={graphOpen.focusId} />
+      <Board
+        key={graphOpen.focusId}
+        ws={ws}
+        projectId={graphOpen.projectId}
+        focusId={graphOpen.focusId}
+      />
     </ReactFlowProvider>
   );
 }
@@ -79,10 +88,10 @@ function refusal(ws: Workspace, source: Item, target: Item): string | null {
   return null;
 }
 
-function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; focusId: string | null }) {
+function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; focusId: string }) {
   const { openGraph, patch, say, undo } = useStore();
   const flow = useReactFlow();
-  const project = ws.project(projectId);
+  const focus = ws.task(focusId) ?? ws.milestone(focusId);
 
   // Alles Aktive des Projekts; Doku-Seiten sind keine Aufgaben.
   const items = useMemo(() => {
@@ -105,7 +114,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   useEffect(() => {
     let alive = true;
     void api
-      .graph(projectId)
+      .graph(focusId)
       .then((g) => alive && setPos(g.nodes))
       .catch((e: unknown) => {
         if (!alive) return;
@@ -115,19 +124,19 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     return () => {
       alive = false;
     };
-  }, [projectId, say]);
+  }, [focusId, say]);
 
   const saveTimer = useRef<number | undefined>(undefined);
   const save = useCallback(
     (next: Record<string, Pos>) => {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => {
-        void api.putGraph(projectId, { nodes: next }).catch((e: unknown) => {
+        void api.putGraph(focusId, { nodes: next }).catch((e: unknown) => {
           say(e instanceof Error ? e.message : 'Board konnte nicht gespeichert werden');
         });
       }, SAVE_AFTER_MS);
     },
-    [projectId, say],
+    [focusId, say],
   );
   const place = useCallback(
     (update: (prev: Record<string, Pos>) => Record<string, Pos>) => {
@@ -140,16 +149,29 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     [save],
   );
 
-  // Auf dem Board liegt, was verbunden ist oder hingelegt wurde – und das, von
-  // dem aus der Editor geöffnet wurde.
+  // Der Ausschnitt: ein Task allein, ein Milestone mit seinen Tasks, die
+  // Abhängigkeiten haben – dazu alles, was sie benötigen und was auf sie wartet.
+  const scope = useMemo(() => {
+    const seeds = [focusId];
+    const m = ws.milestone(focusId);
+    if (m) {
+      const linked = new Set(links.flatMap((l) => [l.source, l.target]));
+      for (const t of ws.msRoots(m).flatMap((r) => [r, ...ws.desc(r)])) {
+        if (linked.has(t.id)) seeds.push(t.id);
+      }
+    }
+    return dependencyScope(seeds, links);
+  }, [ws, focusId, links]);
+
+  // Was in dieser Sitzung aus der Liste dazukam – oder durch einen gelöschten
+  // Pfeil aus dem Ausschnitt fiele: es bleibt liegen, bis das Board zugeht.
+  const [added, setAdded] = useState<Set<string>>(() => new Set());
+
   const boardIds = useMemo(() => {
     if (!pos) return [];
-    const ids = new Set<string>();
-    for (const l of links) ids.add(l.source).add(l.target);
-    for (const id of Object.keys(pos)) if (items.has(id)) ids.add(id);
-    if (focusId && items.has(focusId)) ids.add(focusId);
-    return [...items.keys()].filter((id) => ids.has(id));
-  }, [pos, links, items, focusId]);
+    return [...items.keys()].filter((id) => scope.has(id) || added.has(id));
+  }, [pos, items, scope, added]);
+  const onBoard = useMemo(() => new Set(boardIds), [boardIds]);
 
   // Was noch keinen Platz hat, bekommt einen aus der Spaltenanordnung – unter
   // allem, was schon liegt – und behält ihn dann, damit nichts herumspringt.
@@ -158,15 +180,15 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     const missing = boardIds.filter((id) => !pos[id]);
     if (!missing.length) return;
     const auto = layerLayout(boardIds, links);
-    const placed = Object.entries(pos).filter(([id]) => items.has(id));
-    const top = placed.length ? Math.max(...placed.map(([, p]) => p.y)) + ROW_GAP * 2 : 0;
+    const placed = boardIds.filter((id) => pos[id]).map((id) => pos[id]!);
+    const top = placed.length ? Math.max(...placed.map((p) => p.y)) + ROW_GAP * 2 : 0;
     const minY = Math.min(...missing.map((id) => auto[id]!.y));
     place((prev) => {
       const next = { ...prev };
       for (const id of missing) next[id] = { x: auto[id]!.x, y: auto[id]!.y - minY + top };
       return next;
     });
-  }, [pos, boardIds, links, items, place]);
+  }, [pos, boardIds, links, place]);
 
   /* ----------------------------------------------------- Knoten & Pfeile */
 
@@ -197,7 +219,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   useEffect(() => {
     setEdges((prev) => {
       const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
-      return links.map((l): Edge => {
+      return links.filter((l) => onBoard.has(l.source) && onBoard.has(l.target)).map((l): Edge => {
         const id = `${l.source}>${l.target}`;
         const src = items.get(l.source)!;
         const done = isMs(src) ? milestoneDone(ws, src) : isDone(src);
@@ -211,7 +233,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         };
       });
     });
-  }, [links, items, ws]);
+  }, [links, items, ws, onBoard]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<ItemNode>[]) =>
@@ -262,9 +284,9 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
 
   /**
    * Entf löscht ausgewählte Pfeile (also Abhängigkeiten) und nimmt ausgewählte
-   * Knoten vom Board. Ein Knoten mit Verbindungen bleibt liegen – sonst wäre er
-   * beim nächsten Öffnen ohnehin wieder da. React Flow selbst entfernt nichts:
-   * das Board zeigt immer die Daten.
+   * Knoten vom Board. Was über Abhängigkeiten zum Ausschnitt gehört, bleibt
+   * liegen – sonst wäre es beim nächsten Öffnen ohnehin wieder da. React Flow
+   * selbst entfernt nichts: das Board zeigt immer die Daten.
    */
   const onBeforeDelete: OnBeforeDelete<ItemNode, Edge> = useCallback(
     async ({ nodes: gone, edges: goneEdges }) => {
@@ -279,28 +301,23 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         if (t) await patch(kindOf(t), t.id, { deps: t.deps.filter((d) => !sources.has(d)) });
       }
 
-      const cutIds = new Set(cut.map((e) => e.id));
-      const still = (id: string): boolean =>
-        links.some((l) => (l.source === id || l.target === id) && !cutIds.has(`${l.source}>${l.target}`));
-      const free = gone.filter((n) => !still(n.id));
-      if (free.length) {
-        place((prev) => {
-          const next = { ...prev };
-          for (const n of free) delete next[n.id];
-          return next;
-        });
-      }
+      const free = gone.filter((n) => !scope.has(n.id));
+      setAdded((prev) => {
+        const next = new Set(prev);
+        // Ein gelöschter Pfeil soll nichts unter der Hand verschwinden lassen.
+        for (const e of cut) next.add(e.source).add(e.target);
+        for (const n of free) next.delete(n.id);
+        return next;
+      });
       if (free.length < gone.length) {
-        say('Verbundene Einträge bleiben auf dem Board – erst die Pfeile entfernen.');
+        say('Hängt über Abhängigkeiten mit dem Ausschnitt zusammen – erst die Pfeile entfernen.');
       }
       return false;
     },
-    [items, links, patch, place, say],
+    [items, patch, say, scope],
   );
 
   /* ------------------------------------------------------ Aus der Liste */
-
-  const onBoard = useMemo(() => new Set(boardIds), [boardIds]);
 
   const showNode = useCallback(
     (id: string) => {
@@ -321,6 +338,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
       return;
     }
     const p = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    setAdded((prev) => new Set(prev).add(id));
     // Der Mauszeiger soll etwa in der Mitte des Knotens landen.
     place((prev) => ({ ...prev, [id]: { x: Math.round(p.x - 100), y: Math.round(p.y - 18) } }));
   };
@@ -366,7 +384,11 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     <div className="draw-modal graph-modal" ref={root} tabIndex={-1}>
       <div className="draw-head">
         <strong className="graph-title">
-          Abhängigkeiten <span className="muted">· {project?.name ?? ''}</span>
+          Abhängigkeiten{' '}
+          <span className="muted">
+            · {focus && isMs(focus) ? '◆ ' : ''}
+            {focus?.title || 'Ohne Titel'}
+          </span>
         </strong>
         <span className="graph-help muted">
           Aus der Liste aufs Board ziehen · vom rechten Punkt zum nächsten Eintrag ziehen = „benötigt“ ·

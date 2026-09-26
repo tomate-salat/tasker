@@ -65,18 +65,21 @@ export function putSettings(ctx: DbCtx, patch: Partial<Settings>): Settings {
   return getSettings(ctx);
 }
 
-/** Das Abhängigkeits-Board liegt je Projekt als eine Zeile hier – nur Positionen. */
-export function getGraph(ctx: DbCtx, projectId: string): GraphLayout {
+/**
+ * Das Abhängigkeits-Board liegt je Ausgangspunkt (Task oder Milestone) als
+ * eine Zeile hier – nur Positionen.
+ */
+export function getGraph(ctx: DbCtx, id: string): GraphLayout {
   try {
-    const raw = JSON.parse(getSetting(ctx, `graph.${projectId}`) ?? '') as GraphLayout;
+    const raw = JSON.parse(getSetting(ctx, `graph.${id}`) ?? '') as GraphLayout;
     return raw && typeof raw.nodes === 'object' ? raw : { nodes: {} };
   } catch {
     return { nodes: {} };
   }
 }
 
-export function putGraph(ctx: DbCtx, projectId: string, layout: GraphLayout): void {
-  setSetting(ctx, `graph.${projectId}`, JSON.stringify(layout));
+export function putGraph(ctx: DbCtx, id: string, layout: GraphLayout): void {
+  setSetting(ctx, `graph.${id}`, JSON.stringify(layout));
 }
 
 export const ACCOUNT = {

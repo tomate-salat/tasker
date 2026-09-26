@@ -190,9 +190,9 @@ type State = {
    */
   drawingOpen: { owner: DrawingOwner; id: string } | null;
   openDrawing: (open: { owner: DrawingOwner; id: string } | null) => void;
-  /** Das Abhängigkeits-Board eines Projekts, geöffnet aus dem Inspektor heraus. */
-  graphOpen: { projectId: string; focusId: string | null } | null;
-  openGraph: (open: { projectId: string; focusId: string | null } | null) => void;
+  /** Das Abhängigkeits-Board um einen Task oder Milestone, geöffnet aus dem Inspektor. */
+  graphOpen: { projectId: string; focusId: string } | null;
+  openGraph: (open: { projectId: string; focusId: string } | null) => void;
   /** Klappt die Behälter einer Aufgabe auf (`expandTo` im Prototyp) – nur die Ansicht bleibt. */
   expandTo: (id: string) => void;
   /** Meldung mit eigenem Knopf, etwa „Anzeigen“. */

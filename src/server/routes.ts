@@ -102,7 +102,7 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
 
   app.get('/settings', (c) => c.json(getSettings(ctx)));
 
-  app.get('/graph/:projectId', (c) => c.json(getGraph(ctx, c.req.param('projectId'))));
+  app.get('/graph/:id', (c) => c.json(getGraph(ctx, c.req.param('id'))));
 
   app.get('/drawings', (c) => {
     const taskId = c.req.query('taskId');
@@ -290,10 +290,10 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     return c.json(next);
   });
 
-  app.put('/graph/:projectId', async (c) => {
+  app.put('/graph/:id', async (c) => {
     const body = graphLayout.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
-    putGraph(ctx, c.req.param('projectId'), body.data);
+    putGraph(ctx, c.req.param('id'), body.data);
     return c.json(body.data);
   });
 

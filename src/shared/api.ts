@@ -328,8 +328,8 @@ export const settingsBody = z
   .partial();
 
 /**
- * Das Abhängigkeits-Board eines Projekts: welche Knoten darauf liegen und wo.
- * Die Pfeile selbst sind die `deps` der Aufgaben und Milestones.
+ * Wo die Knoten des Abhängigkeits-Boards liegen – je Task oder Milestone, von
+ * dem aus es geöffnet wird. Die Pfeile selbst sind die `deps`.
  */
 export const graphLayout = z.object({
   nodes: z
