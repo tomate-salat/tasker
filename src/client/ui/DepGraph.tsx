@@ -40,11 +40,12 @@ import { dependsOn } from '@shared/blocking.js';
 import { dependencyScope, layerLayout, ROW_GAP, type Pos } from '@shared/graphLayout.js';
 import { isArchived, isDone, type Milestone, type Task } from '@shared/model.js';
 import { draftMilestones, plannedMilestones } from '@shared/outline.js';
-import { milestoneDone } from '@shared/progress.js';
+import { milestoneDone, milestoneProgressPct } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { useStore } from '../store.js';
-import { DEFAULT_MARK, STATUS_LABEL } from './icons.js';
+import { CardFace } from './Cards.js';
+import { DEFAULT_MARK, MS_STATUS, STATUS_LABEL } from './icons.js';
 import { Inspector } from './Inspector.js';
 import { useMenu, type MenuItem } from './Menu.js';
 import { milestoneMenu, taskMenu } from './rowMenu.js';
@@ -56,6 +57,9 @@ const isMs = (x: Item): x is Milestone => 'planned' in x;
 const kindOf = (x: Item): 'task' | 'milestone' => (isMs(x) ? 'milestone' : 'task');
 /** Der Datentyp beim Ziehen aus der Liste aufs Board. */
 const DRAG_TYPE = 'application/x-tasker-graph';
+/** Größe eines Knotens – so breit wie die Karten der Kartenansicht. */
+const CARD_W = 142;
+const CARD_H = 176;
 /** Wie lange nach dem letzten Verschieben die Positionen gespeichert werden. */
 const SAVE_AFTER_MS = 600;
 
@@ -363,7 +367,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     (id: string) => {
       const p = pos?.[id];
       if (!p) return;
-      void flow.setCenter(p.x + 100, p.y + 20, { zoom: Math.max(flow.getZoom(), 1), duration: 300 });
+      void flow.setCenter(p.x + CARD_W / 2, p.y + CARD_H / 2, { zoom: Math.max(flow.getZoom(), 1), duration: 300 });
       setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === id })));
     },
     [pos, flow],
@@ -380,7 +384,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     const p = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
     setAdded((prev) => new Set(prev).add(id));
     // Der Mauszeiger soll etwa in der Mitte des Knotens landen.
-    place((prev) => ({ ...prev, [id]: { x: Math.round(p.x - 100), y: Math.round(p.y - 18) } }));
+    place((prev) => ({ ...prev, [id]: { x: Math.round(p.x - CARD_W / 2), y: Math.round(p.y - 30) } }));
   };
 
   /** „Neu anordnen“: alles auf dem Board in Spalten, wie beim ersten Öffnen. */
@@ -598,22 +602,39 @@ function Glyph({ ws, item }: { ws: Workspace; item: Item }) {
   return <span className="mk-emoji">{mark ? mark.emoji : DEFAULT_MARK.emoji}</span>;
 }
 
+/**
+ * Ein Knoten sieht aus wie eine Karte der Kartenansicht (`CardFace`), nur dass
+ * sich darin nichts anklicken lässt – Klicks gehören dem Board. Ein Milestone
+ * bekommt dieselbe Form, mit ◆-Leiste statt Markierung und seinem Fortschritt.
+ */
 function ItemNodeView({ data }: NodeProps<ItemNode>) {
   const ws = useStore((s) => s.ws);
   const { item, sub, done, focus } = data;
+  if (!ws) return null;
   return (
-    <div
-      className={`gn ${isMs(item) ? 'ms' : ''} ${done ? 'done' : ''} ${focus ? 'focus' : ''}`}
-      data-st={item.status}
-      title={STATUS_LABEL[item.status]}
-    >
+    <div className={`tcard gn ${isMs(item) ? 'gn-ms' : ''} ${done ? 'done' : ''} ${focus ? 'holds' : ''}`}>
       <Handle type="target" position={Position.Left} />
-      <span className="gn-st" />
-      {ws && <Glyph ws={ws} item={item} />}
-      <span className="gn-text">
-        <span className="gn-title">{item.title || 'Ohne Titel'}</span>
-        <span className="gn-sub">{sub}</span>
-      </span>
+      {isMs(item) ? (
+        <>
+          <div className="tcard-markbar">
+            <span className="ico ms">◆</span>
+            <span className="tcard-markname">{sub}</span>
+          </div>
+          <div className="tcard-head">
+            <span className="tcard-title">{item.title || <em>Ohne Titel</em>}</span>
+          </div>
+          <div className="tcard-foot">
+            <div className="tcard-meta">
+              <span className="gn-ms-status">{MS_STATUS[item.status as keyof typeof MS_STATUS] ?? STATUS_LABEL[item.status]}</span>
+              <span className="tcard-badges">
+                <span className="tcard-count">{milestoneProgressPct(ws, item)} %</span>
+              </span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <CardFace ws={ws} task={item} />
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   );

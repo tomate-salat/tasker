@@ -30,6 +30,8 @@ import './cards.css';
  *
  * Alles hängt an `cardsOn`; fliegt die Ansicht wieder raus, gehen
  * diese Datei, `cards.css` und die paar Aufrufe mit „Karten“ im Kommentar.
+ * Das Abhängigkeits-Board zeigt seine Tasks mit `CardFace` – es braucht dann
+ * wieder eigene Knoten.
  * `cardTilt.ts` bleibt – die Galerie kippt ihre Bilder damit ebenso.
  */
 
@@ -504,22 +506,11 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const files = useFileDrop({ kind: 'task', item: task });
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
-  // Zähler und Balken zählen erledigt Archiviertes mit (siehe `countedKids`).
-  const counted = ws.countedKids(task.id).length;
-  const doc = ws.isDoc(task);
-  const mark = ws.mark(task.markId);
   const cover = coverOf(ws, task);
-  const segments = statusSegments(ws, task);
-  const cl = checklist(task.desc);
   // Ist eine Unteraufgabe dieser Karte ausgewählt, bleibt die Karte markiert.
   const holds = selected !== task.id && hierarchyRoot(ws, selected)?.id === task.id;
   // Karten kippen beim Ziehen in die Bewegungsrichtung (`cardTilt.ts`).
   const drag = dragSource('task', task.id, !editing);
-  const implicit =
-    !isDone(task) &&
-    task.status === 'open' &&
-    kids.length > 0 &&
-    ws.desc(task).some((d) => d.status === 'progress');
 
   // Strg+V mit einem Bild in der Zwischenablage macht es zum Titelbild der
   // ausgewählten Karte – solange kein Eingabefeld den Fokus hat.
@@ -583,6 +574,60 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         startTilt(e);
       }}
     >
+      <CardFace
+        ws={ws}
+        task={task}
+        onCell={cell}
+        title={
+          // Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet.
+          editing === task.id && !kids.length ? (
+            <TitleEdit kind="task" id={task.id} title={task.title} />
+          ) : (
+            <span className="tcard-title" onDoubleClick={() => useStore.getState().edit(task.id)}>
+              {task.title || <em>Ohne Titel</em>}
+            </span>
+          )
+        }
+      />
+    </div>
+    </div>
+  );
+}
+
+/**
+ * Das Innere einer Karte: Titelbild, Markierungsleiste, Titel und Fuß. Ohne
+ * `onCell` lässt sich darin nichts anklicken – so zeigt das Abhängigkeits-Board
+ * seine Tasks.
+ */
+export function CardFace({
+  ws,
+  task,
+  title,
+  onCell,
+}: {
+  ws: Workspace;
+  task: Task;
+  title?: React.ReactNode;
+  onCell?: (kind: CellKind) => (e: React.MouseEvent<HTMLElement>) => void;
+}) {
+  const kids = ws.kids(task.id);
+  // Zähler und Balken zählen erledigt Archiviertes mit (siehe `countedKids`).
+  const counted = ws.countedKids(task.id).length;
+  const doc = ws.isDoc(task);
+  const mark = ws.mark(task.markId);
+  const cover = coverOf(ws, task);
+  const segments = statusSegments(ws, task);
+  const cl = checklist(task.desc);
+  const implicit =
+    !isDone(task) &&
+    task.status === 'open' &&
+    kids.length > 0 &&
+    ws.desc(task).some((d) => d.status === 'progress');
+  const cellProps = (kind: CellKind) =>
+    onCell ? { role: 'button', tabIndex: -1, onClick: onCell(kind) } : {};
+
+  return (
+    <>
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
 
       {/* Die Markierung steht als Leiste über dem Titel, mit Emoji und Namen –
@@ -590,10 +635,8 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
       {mark && (
         <div
           className="tcard-markbar cell"
-          role="button"
-          tabIndex={-1}
-          title={`${mark.name} – klicken zum Ändern`}
-          onClick={cell('mark')}
+          title={onCell ? `${mark.name} – klicken zum Ändern` : mark.name}
+          {...cellProps('mark')}
         >
           <span className="mk-emoji">{mark.emoji}</span>
           <span className="tcard-markname">{mark.name}</span>
@@ -601,14 +644,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
       )}
 
       <div className="tcard-head">
-        {/* Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet. */}
-        {editing === task.id && !kids.length ? (
-          <TitleEdit kind="task" id={task.id} title={task.title} />
-        ) : (
-          <span className="tcard-title" onDoubleClick={() => useStore.getState().edit(task.id)}>
-            {task.title || <em>Ohne Titel</em>}
-          </span>
-        )}
+        {title ?? <span className="tcard-title">{task.title || <em>Ohne Titel</em>}</span>}
       </div>
 
       {/* Eine Doku-Seite hat wie im Inspektor weder Status noch Priorität noch Fortschritt. */}
@@ -617,8 +653,8 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           {!doc && <StatusDot task={task} implicit={implicit} />}
           {/* Die Priorität steht immer da, auch ohne – wie in der Liste. */}
           {!doc && (
-            <span className="cell" role="button" tabIndex={-1} onClick={cell('prio')}>
-              <PrioIcon prio={task.prio} cell />
+            <span className="cell" {...cellProps('prio')}>
+              <PrioIcon prio={task.prio} cell={!!onCell} />
             </span>
           )}
           {/* Abzeichen und Zähler rücken nach rechts, Status und Priorität bleiben links. */}
@@ -650,8 +686,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         </div>
         {!doc && (counted > 0 || cl.total > 0) && <SegBar segments={segments} />}
       </div>
-    </div>
-    </div>
+    </>
   );
 }
 

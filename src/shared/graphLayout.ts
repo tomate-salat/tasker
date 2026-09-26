@@ -9,8 +9,9 @@
  */
 export type Pos = { x: number; y: number };
 
-export const COL_GAP = 280;
-export const ROW_GAP = 84;
+/** Abstände für Knoten in Kartengröße (142 × 176) samt Platz für die Pfeile. */
+export const COL_GAP = 240;
+export const ROW_GAP = 210;
 
 export function layerLayout(
   ids: string[],
