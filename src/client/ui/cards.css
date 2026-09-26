@@ -491,3 +491,10 @@
 .cover-default .hint {
   margin: 0;
 }
+
+/* Die Markierung als Zeichen vor dem Titel (`markInTitle`, im Abhängigkeits-
+   Board) – ohne die schwarze Kontur des Titels, die dem Emoji nicht steht. */
+.tcard-title-mark {
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}

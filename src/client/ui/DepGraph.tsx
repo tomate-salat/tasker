@@ -50,7 +50,7 @@ import { milestoneDone, milestoneProgressPct } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { useStore } from '../store.js';
-import { CardFace } from './Cards.js';
+import { CardFace, coverOf } from './Cards.js';
 import { edgeKey, elkLayout, fitRoute, roundedPath, type Layout } from './graphElk.js';
 import { DEFAULT_MARK, MS_STATUS, STATUS_LABEL } from './icons.js';
 import { Inspector } from './Inspector.js';
@@ -698,7 +698,16 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
   const { item, sub, done, focus } = data;
   if (!ws) return null;
   return (
-    <div className={`tcard gn ${isMs(item) ? 'gn-ms' : ''} ${done ? 'done' : ''} ${focus ? 'holds' : ''}`}>
+    <div
+      className={[
+        'tcard gn',
+        isMs(item) ? 'gn-ms' : coverOf(ws, item) ? 'has-cover' : '',
+        done ? 'done' : '',
+        focus ? 'holds' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <Handle type="target" position={Position.Left} />
       {isMs(item) ? (
         <>
@@ -719,7 +728,7 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
           </div>
         </>
       ) : (
-        <CardFace ws={ws} task={item} />
+        <CardFace ws={ws} task={item} markInTitle />
       )}
       <Handle type="source" position={Position.Right} />
     </div>

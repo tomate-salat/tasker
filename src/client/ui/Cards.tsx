@@ -156,7 +156,7 @@ export function CardGrid({
  * die Kette Projekt → Markierung → Kategorie → Task → Unteraufgabe, siehe
  * `effectiveCover`.
  */
-const coverOf = (ws: Workspace, task: Task): string | null => {
+export const coverOf = (ws: Workspace, task: Task): string | null => {
   const id = effectiveCover(ws, task)?.imageId;
   return id ? imageUrl(id, 'klein') : null;
 };
@@ -597,18 +597,21 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
 /**
  * Das Innere einer Karte: Titelbild, Markierungsleiste, Titel und Fuß. Ohne
  * `onCell` lässt sich darin nichts anklicken – so zeigt das Abhängigkeits-Board
- * seine Tasks.
+ * seine Tasks. Mit `markInTitle` steht die Markierung als Zeichen vor dem Titel
+ * statt als Leiste darüber (Wunsch des Nutzers fürs Board).
  */
 export function CardFace({
   ws,
   task,
   title,
   onCell,
+  markInTitle = false,
 }: {
   ws: Workspace;
   task: Task;
   title?: React.ReactNode;
   onCell?: (kind: CellKind) => (e: React.MouseEvent<HTMLElement>) => void;
+  markInTitle?: boolean;
 }) {
   const kids = ws.kids(task.id);
   // Zähler und Balken zählen erledigt Archiviertes mit (siehe `countedKids`).
@@ -632,7 +635,7 @@ export function CardFace({
 
       {/* Die Markierung steht als Leiste über dem Titel, mit Emoji und Namen –
           als Gegenstück zum Fuß (Wunsch des Nutzers). */}
-      {mark && (
+      {mark && !markInTitle && (
         <div
           className="tcard-markbar cell"
           title={onCell ? `${mark.name} – klicken zum Ändern` : mark.name}
@@ -644,7 +647,16 @@ export function CardFace({
       )}
 
       <div className="tcard-head">
-        {title ?? <span className="tcard-title">{task.title || <em>Ohne Titel</em>}</span>}
+        {title ?? (
+          <span className="tcard-title">
+            {mark && markInTitle && (
+              <span className="tcard-title-mark" title={mark.name}>
+                {mark.emoji}{' '}
+              </span>
+            )}
+            {task.title || <em>Ohne Titel</em>}
+          </span>
+        )}
       </div>
 
       {/* Eine Doku-Seite hat wie im Inspektor weder Status noch Priorität noch Fortschritt. */}
