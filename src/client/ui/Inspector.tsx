@@ -957,7 +957,7 @@ function Deps({
 
       {(deps.length > 0 || inherited.deps.length > 0 || inherited.statusVia) && (
         <>
-          <div className="sub">Wird blockiert durch</div>
+          <div className="sub">Benötigt</div>
           {deps.map((d) => row(d, () => removeDep(d.id)))}
           {inherited.deps.map((x) => (
             <div key={x.blocker.id} className="dep inherited">
@@ -1016,7 +1016,7 @@ function Deps({
               title={`Kann erst starten, wenn der gewählte ${word} erledigt ist`}
               onClick={() => setDir('by')}
             >
-              Wird blockiert durch
+              Benötigt
             </button>
             <button
               className={dir === 'blocks' ? 'on' : ''}
@@ -1084,7 +1084,7 @@ function DepDrop({ dir, item }: { dir: 'by' | 'blocks'; item: Task | Milestone }
   const zone = useZone(target);
   return (
     <div className={`dep-drop ${zone ? 'on' : ''}`} {...dropTarget(target)}>
-      {dir === 'by' ? 'Wird blockiert durch' : 'Blockiert'}
+      {dir === 'by' ? 'Benötigt' : 'Blockiert'}
     </div>
   );
 }
