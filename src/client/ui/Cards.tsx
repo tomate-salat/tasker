@@ -578,15 +578,12 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
         ws={ws}
         task={task}
         onCell={cell}
-        title={
-          // Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet.
+        onTitleDoubleClick={() => useStore.getState().edit(task.id)}
+        // Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet.
+        titleEdit={
           editing === task.id && !kids.length ? (
             <TitleEdit kind="task" id={task.id} title={task.title} />
-          ) : (
-            <span className="tcard-title" onDoubleClick={() => useStore.getState().edit(task.id)}>
-              {task.title || <em>Ohne Titel</em>}
-            </span>
-          )
+          ) : undefined
         }
       />
     </div>
@@ -595,23 +592,23 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
 }
 
 /**
- * Das Innere einer Karte: Titelbild, Markierungsleiste, Titel und Fuß. Ohne
- * `onCell` lässt sich darin nichts anklicken – so zeigt das Abhängigkeits-Board
- * seine Tasks. Mit `markInTitle` steht die Markierung als Zeichen vor dem Titel
- * statt als Leiste darüber (Wunsch des Nutzers fürs Board).
+ * Das Innere einer Karte: Titelbild, Titel und Fuß – in der Kartenansicht und
+ * auf dem Abhängigkeits-Board gleich (Wunsch des Nutzers). Ohne `onCell` lässt
+ * sich darin nichts anklicken – so zeigt das Board seine Tasks.
  */
 export function CardFace({
   ws,
   task,
-  title,
+  titleEdit,
+  onTitleDoubleClick,
   onCell,
-  markInTitle = false,
 }: {
   ws: Workspace;
   task: Task;
-  title?: React.ReactNode;
+  /** Steht statt des Titels da, solange er bearbeitet wird. */
+  titleEdit?: React.ReactNode;
+  onTitleDoubleClick?: () => void;
   onCell?: (kind: CellKind) => (e: React.MouseEvent<HTMLElement>) => void;
-  markInTitle?: boolean;
 }) {
   const kids = ws.kids(task.id);
   // Zähler und Balken zählen erledigt Archiviertes mit (siehe `countedKids`).
@@ -633,26 +630,21 @@ export function CardFace({
     <>
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
 
-      {/* Die Markierung steht als Leiste über dem Titel, mit Emoji und Namen –
-          als Gegenstück zum Fuß (Wunsch des Nutzers). */}
-      {mark && !markInTitle && (
-        <div
-          className="tcard-markbar cell"
-          title={onCell ? `${mark.name} – klicken zum Ändern` : mark.name}
-          {...cellProps('mark')}
-        >
-          <span className="mk-emoji">{mark.emoji}</span>
-          <span className="tcard-markname">{mark.name}</span>
-        </div>
-      )}
-
+      {/* Die Markierung steht als Zeichen vor dem Titel und bricht mit ihm um
+          (Wunsch des Nutzers) – anklickbar wie die Zellen im Fuß. */}
       <div className="tcard-head">
-        {title ?? (
-          <span className="tcard-title">
-            {mark && markInTitle && (
-              <span className="tcard-title-mark" title={mark.name}>
-                {mark.emoji}{' '}
-              </span>
+        {titleEdit ?? (
+          <span className="tcard-title" onDoubleClick={onTitleDoubleClick}>
+            {mark && (
+              <>
+                <span
+                  className="tcard-title-mark cell"
+                  title={onCell ? `${mark.name} – klicken zum Ändern` : mark.name}
+                  {...cellProps('mark')}
+                >
+                  {mark.emoji}
+                </span>{' '}
+              </>
             )}
             {task.title || <em>Ohne Titel</em>}
           </span>

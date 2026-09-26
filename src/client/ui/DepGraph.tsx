@@ -728,7 +728,7 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
           </div>
         </>
       ) : (
-        <CardFace ws={ws} task={item} markInTitle />
+        <CardFace ws={ws} task={item} />
       )}
       <Handle type="source" position={Position.Right} />
     </div>

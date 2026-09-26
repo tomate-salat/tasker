@@ -385,7 +385,8 @@
   margin-left: auto;
 }
 
-/* Markierung als Leiste über dem Titel – gestaltet wie der Fuß. */
+/* Kopfleiste – gestaltet wie der Fuß. Trägt nur noch das ◆ der Milestones auf
+   dem Abhängigkeits-Board; die Markierung eines Tasks steht vor dem Titel. */
 .tcard .tcard-markbar {
   position: relative;
   z-index: 1;
@@ -399,10 +400,6 @@
   border-radius: 10px 10px 0 0;
   font: 600 12px/1.2 var(--body);
   color: var(--muted);
-}
-
-.tcard .tcard-markbar:hover {
-  background: color-mix(in srgb, var(--surface) 80%, var(--ink) 8%);
 }
 
 .tcard-markbar .mk-emoji {
@@ -492,9 +489,10 @@
   margin: 0;
 }
 
-/* Die Markierung als Zeichen vor dem Titel (`markInTitle`, im Abhängigkeits-
-   Board) – ohne die schwarze Kontur des Titels, die dem Emoji nicht steht. */
-.tcard-title-mark {
+/* Die Markierung als Zeichen vor dem Titel – ohne die schwarze Kontur des
+   Titels, die dem Emoji nicht steht. */
+.tcard .tcard-title-mark {
+  padding: 0 2px;
   -webkit-text-stroke: 0;
   text-shadow: none;
 }
