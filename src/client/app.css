@@ -3709,3 +3709,251 @@ body:has(.bulk) .toast {
   font-size: 12px;
   color: var(--faint);
 }
+
+/* ------------------------------------------------ Abhängigkeits-Board */
+
+.graph-modal:focus {
+  outline: none;
+}
+
+.graph-title {
+  font: 600 16px var(--body);
+  white-space: nowrap;
+}
+
+.graph-help {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.graph-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.graph-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.graph-q {
+  margin: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px var(--body);
+}
+
+.graph-rows {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.graph-sec {
+  padding: 12px 12px 4px;
+  font: 600 11px var(--body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.graph-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: grab;
+  user-select: none;
+}
+
+.graph-row:hover {
+  background: var(--hover);
+}
+
+.graph-row.ms {
+  font-weight: 600;
+}
+
+.graph-row.done .graph-row-t {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.graph-row.on {
+  cursor: pointer;
+}
+
+.graph-row-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Liegt schon auf dem Board. */
+.graph-on {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.graph-board {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.graph-board .react-flow {
+  --xy-background-color: var(--bg);
+  --xy-edge-stroke: var(--line-strong);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-connectionline-stroke: var(--accent);
+  --xy-handle-background-color: var(--line-strong);
+  --xy-handle-border-color: var(--surface);
+  --xy-minimap-background-color: var(--surface);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--hover);
+  --xy-controls-button-color: var(--ink);
+  --xy-controls-button-border-color: var(--line);
+}
+
+.graph-board .react-flow__edge-path {
+  stroke-width: 1.6;
+}
+
+.graph-board .react-flow__edge.done .react-flow__edge-path {
+  stroke-dasharray: 5 4;
+  opacity: 0.6;
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 40% 0 auto;
+  margin: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Ein Knoten: Statuspunkt, Zeichen, Titel und darunter, wo er hängt. */
+.gn {
+  --st: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 210px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--st);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 13px var(--body);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.gn[data-st='progress'] {
+  --st: var(--info);
+}
+.gn[data-st='done'],
+.gn.done {
+  --st: var(--ok);
+}
+.gn[data-st='unclear'] {
+  --st: var(--unclear);
+}
+.gn[data-st='blocked'] {
+  --st: var(--bad);
+}
+
+.gn.ms {
+  background: var(--sunk);
+  font-weight: 600;
+}
+
+.gn.done .gn-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* Von hier aus wurde das Board geöffnet. */
+.gn.focus {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  border-color: var(--accent);
+  border-left-color: var(--st);
+}
+
+.react-flow__node.selected .gn {
+  border-color: var(--accent);
+  border-left-color: var(--st);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.gn-st {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--st);
+}
+
+.gn-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gn-title,
+.gn-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gn-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.gn .react-flow__handle {
+  width: 10px;
+  height: 10px;
+}
+
+.gn .react-flow__handle:hover,
+.gn .react-flow__handle.connectingto {
+  background: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .graph-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 40% 1fr;
+  }
+
+  .graph-list {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .graph-help {
+    display: none;
+  }
+}

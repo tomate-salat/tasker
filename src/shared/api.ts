@@ -327,6 +327,17 @@ export const settingsBody = z
   })
   .partial();
 
+/**
+ * Das Abhängigkeits-Board eines Projekts: welche Knoten darauf liegen und wo.
+ * Die Pfeile selbst sind die `deps` der Aufgaben und Milestones.
+ */
+export const graphLayout = z.object({
+  nodes: z
+    .record(id, z.object({ x: z.number().finite(), y: z.number().finite() }))
+    .refine((n) => Object.keys(n).length <= 5000, { message: 'Zu viele Knoten' }),
+});
+export type GraphLayout = z.infer<typeof graphLayout>;
+
 export const archiveQuery = z.object({
   q: z.string().max(200).optional(),
   projectId: id.optional(),

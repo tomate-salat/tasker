@@ -190,6 +190,9 @@ type State = {
    */
   drawingOpen: { owner: DrawingOwner; id: string } | null;
   openDrawing: (open: { owner: DrawingOwner; id: string } | null) => void;
+  /** Das Abhängigkeits-Board eines Projekts, geöffnet aus dem Inspektor heraus. */
+  graphOpen: { projectId: string; focusId: string | null } | null;
+  openGraph: (open: { projectId: string; focusId: string | null } | null) => void;
   /** Klappt die Behälter einer Aufgabe auf (`expandTo` im Prototyp) – nur die Ansicht bleibt. */
   expandTo: (id: string) => void;
   /** Meldung mit eigenem Knopf, etwa „Anzeigen“. */
@@ -591,6 +594,8 @@ export const useStore = create<State>((set, get) => ({
   sayUndo: (message, steps) => remember(message, steps),
   drawingOpen: null,
   openDrawing: (drawingOpen) => set({ drawingOpen }),
+  graphOpen: null,
+  openGraph: (graphOpen) => set({ graphOpen }),
 
   expandTo: (id) => {
     const ws = get().ws;

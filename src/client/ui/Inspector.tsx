@@ -873,7 +873,7 @@ function Deps({
   kind: 'task' | 'milestone';
   item: Task | Milestone;
 }) {
-  const { patch, select } = useStore();
+  const { patch, select, openGraph } = useStore();
   // Solange eine Zeile gezogen wird, zeigt der Bereich seine beiden Ablagefelder.
   // Ein Bild gehört nicht hierher – dafür Felder anzubieten, wäre ein leeres Versprechen.
   // Was aus der Galerie kommt, ergibt hier keine Abhängigkeit – also auch keine Fläche.
@@ -953,7 +953,16 @@ function Deps({
 
   return (
     <section className="d-section deps-sec">
-      <h3>Abhängigkeiten</h3>
+      <div className="h3row">
+        <h3>Abhängigkeiten</h3>
+        <button
+          className="linkish"
+          title="Abhängigkeiten des Projekts als Graph bearbeiten"
+          onClick={() => openGraph({ projectId: item.projectId, focusId: item.id })}
+        >
+          Graph öffnen
+        </button>
+      </div>
 
       {(deps.length > 0 || inherited.deps.length > 0 || inherited.statusVia) && (
         <>

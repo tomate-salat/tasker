@@ -3,6 +3,7 @@ import type {
   BulkItem,
   CodecksRefsResult,
   CodecksSummary,
+  GraphLayout,
   Kind,
   Step,
   Stub,
@@ -333,6 +334,11 @@ export const api = {
     post<{ moved: number }>('/api/bildordner/einsortieren', { ids, folderId }),
 
   settings: () => request<Settings>('/api/settings'),
+
+  graph: (projectId: string) => request<GraphLayout>(`/api/graph/${projectId}`),
+
+  putGraph: (projectId: string, layout: GraphLayout) =>
+    request<GraphLayout>(`/api/graph/${projectId}`, { method: 'PUT', body: JSON.stringify(layout) }),
 
   putSettings: (patch: Partial<Settings>) =>
     request<Settings>('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),

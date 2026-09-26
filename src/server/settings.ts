@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { settings } from '../../db/schema.js';
+import type { GraphLayout } from '../shared/api.js';
 import type { Settings } from '../shared/model.js';
 import { appDb, type DbCtx } from './db.js';
 
@@ -62,6 +63,20 @@ export function putSettings(ctx: DbCtx, patch: Partial<Settings>): Settings {
     );
   }
   return getSettings(ctx);
+}
+
+/** Das Abhängigkeits-Board liegt je Projekt als eine Zeile hier – nur Positionen. */
+export function getGraph(ctx: DbCtx, projectId: string): GraphLayout {
+  try {
+    const raw = JSON.parse(getSetting(ctx, `graph.${projectId}`) ?? '') as GraphLayout;
+    return raw && typeof raw.nodes === 'object' ? raw : { nodes: {} };
+  } catch {
+    return { nodes: {} };
+  }
+}
+
+export function putGraph(ctx: DbCtx, projectId: string, layout: GraphLayout): void {
+  setSetting(ctx, `graph.${projectId}`, JSON.stringify(layout));
 }
 
 export const ACCOUNT = {

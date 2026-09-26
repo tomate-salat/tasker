@@ -13,6 +13,7 @@ import {
   folderCreate,
   folderPatch,
   folderSort,
+  graphLayout,
   kindSchema,
   moveBody,
   purgeBody,
@@ -66,7 +67,7 @@ import {
   purgeTrash,
   TRASH_DAYS,
 } from './repo.js';
-import { getSettings, putSettings } from './settings.js';
+import { getGraph, getSettings, putGraph, putSettings } from './settings.js';
 
 /**
  * Alle Datenrouten. Die Anmeldung liegt davor, siehe index.ts.
@@ -100,6 +101,8 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   app.get('/trash', (c) => c.json({ entries: loadTrash(ctx), days: TRASH_DAYS }));
 
   app.get('/settings', (c) => c.json(getSettings(ctx)));
+
+  app.get('/graph/:projectId', (c) => c.json(getGraph(ctx, c.req.param('projectId'))));
 
   app.get('/drawings', (c) => {
     const taskId = c.req.query('taskId');
@@ -285,6 +288,13 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     const next = putSettings(ctx, body.data);
     publish(c, bus, { type: 'settings', settings: next });
     return c.json(next);
+  });
+
+  app.put('/graph/:projectId', async (c) => {
+    const body = graphLayout.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    putGraph(ctx, c.req.param('projectId'), body.data);
+    return c.json(body.data);
   });
 
   app.post('/trash/:id/restore', (c) =>

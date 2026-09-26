@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { api, type Account } from './api.js';
 import { connectEvents } from './events.js';
 import { Login } from './Login.js';
@@ -28,6 +28,9 @@ import { Timeline } from './ui/Timeline.js';
 import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
 import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
+
+/** Das Abhängigkeits-Board bringt React Flow mit – erst laden, wenn es aufgeht. */
+const DepGraph = lazy(() => import('./ui/DepGraph.js'));
 import { LayoutSwitch } from './ui/Cards.js';
 
 export function App() {
@@ -244,6 +247,11 @@ function Shell({
 
         <BulkBar ws={ws} />
         <BadgeDrawingEditor />
+        {state.graphOpen && (
+          <Suspense fallback={null}>
+            <DepGraph />
+          </Suspense>
+        )}
 
         {dialog === 'categories' && (
           <CategoriesDialog

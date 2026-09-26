@@ -21,7 +21,9 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest?.('.draw-modal')) return;
+      // Über dem Abhängigkeits-Board gehört die Tastatur ganz dem Board – auch
+      // wenn der Fokus nach dem Löschen eines Pfeils auf der Seite landet.
+      if (target?.closest?.('.draw-modal') || useStore.getState().graphOpen) return;
       const typing = isTyping(target);
       /**
        * Wie im Prototyp (`inList`) gehören die Listentasten nur der Liste: Liegt
@@ -39,8 +41,8 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
       }
       // Sonst gehören Strg und Meta dem Browser; Alt-Kombinationen kommen weiter unten.
       if (typing || e.ctrlKey || e.metaKey || !inList) return;
-      // Die gehören `useGlobalKeys`.
-      if (e.key === 'Escape' || e.key === 'n' || e.key === 'N' || e.key === '/') return;
+      // Die gehört `useGlobalKeys`.
+      if (e.key === 'Escape') return;
 
       // Umschalt plus Pfeiltaste erweitert die Auswahl, statt zu wandern.
       if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -247,7 +249,8 @@ export function useGlobalKeys(): void {
       const target = e.target as HTMLElement | null;
       // Im Zeichen-Editor gehören alle Tasten Excalidraw: Esc schlösse sonst den
       // Inspektor samt Editor, Strg+Z nähme eine Änderung an den Tasks zurück.
-      if (target?.closest?.('.draw-modal')) return;
+      // Das Abhängigkeits-Board kümmert sich selbst um Esc und Strg+Z.
+      if (target?.closest?.('.draw-modal') || store.graphOpen) return;
       const typing = isTyping(target);
 
       if (e.key === 'Escape') {
