@@ -398,7 +398,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
       { label: 'Details anzeigen', kbd: 'Doppelklick', onSelect: () => showDetail(id) },
       {
         label: 'Vom Board nehmen',
-        disabled: scope.has(id),
+        disabled: scope.has(id) || !onBoard.has(id),
         onSelect: () => takeOff([id]),
       },
       { sep: true },
@@ -473,7 +473,18 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         </button>
       </div>
       <div className={`graph-body ${detail && selected ? 'with-detail' : ''}`}>
-        <ItemList ws={ws} projectId={projectId} items={items} onBoard={onBoard} onShow={showNode} />
+        <ItemList
+          ws={ws}
+          projectId={projectId}
+          items={items}
+          onBoard={onBoard}
+          onShow={showNode}
+          onOpen={showDetail}
+          onMenu={(e, id) => {
+            e.preventDefault();
+            menu.openAtPoint(e.clientX, e.clientY, nodeMenu(id));
+          }}
+        />
         <div
           className="graph-board"
           onDragOver={(e) => {
@@ -643,12 +654,17 @@ function ItemList({
   items,
   onBoard,
   onShow,
+  onOpen,
+  onMenu,
 }: {
   ws: Workspace;
   projectId: string;
   items: Map<string, Item>;
   onBoard: Set<string>;
   onShow: (id: string) => void;
+  /** Doppelklick: den Inspektor rechts einblenden – wie auf dem Board. */
+  onOpen: (id: string) => void;
+  onMenu: (e: React.MouseEvent, id: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const sections = useMemo(() => listRows(ws, projectId), [ws, projectId]);
@@ -700,7 +716,13 @@ function ItemList({
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
                     onClick={() => on && onShow(item.id)}
-                    title={on ? 'Liegt auf dem Board – klicken zum Hinspringen' : 'Aufs Board ziehen'}
+                    onDoubleClick={() => onOpen(item.id)}
+                    onContextMenu={(e) => onMenu(e, item.id)}
+                    title={
+                      on
+                        ? 'Liegt auf dem Board – klicken zum Hinspringen, Doppelklick zeigt Details'
+                        : 'Aufs Board ziehen · Doppelklick zeigt Details'
+                    }
                   >
                     <Glyph ws={ws} item={item} />
                     <span className="graph-row-t">{item.title || 'Ohne Titel'}</span>

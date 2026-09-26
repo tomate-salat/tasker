@@ -60,6 +60,7 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
 
   return [
     { label: 'Details öffnen', onSelect: () => store.select(t.id) },
+    { label: 'Graph anzeigen', onSelect: () => store.openGraph({ projectId: t.projectId, focusId: t.id }) },
     { label: 'Umbenennen', kbd: 'F2', onSelect: () => store.edit(t.id) },
     {
       // Ohne Tastenkürzel: die Leertaste schaltet durch, sie setzt nichts direkt.
@@ -147,6 +148,7 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
 
   return [
     { label: 'Details öffnen', onSelect: () => store.select(m.id) },
+    { label: 'Graph anzeigen', onSelect: () => store.openGraph({ projectId: m.projectId, focusId: m.id }) },
     { label: 'Umbenennen', kbd: 'F2', onSelect: () => store.edit(m.id) },
     {
       label: 'Neuer Task darin',
