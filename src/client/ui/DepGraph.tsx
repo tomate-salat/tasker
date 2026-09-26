@@ -734,16 +734,23 @@ type ListRow = { item: Item; depth: number };
  * Alle aktiven Einträge des Projekts als Baum: die Milestones mit ihren Tasks,
  * danach die Tasks ohne Milestone – je mit ihren Unteraufgaben eingerückt.
  */
-function listRows(ws: Workspace, projectId: string): { head: string; rows: ListRow[] }[] {
-  const tree = (roots: Task[], depth: number, out: ListRow[]): ListRow[] => {
-    for (const t of roots) {
+/** Ein Eintrag mit allem darunter: ein Milestone mit seinen Tasks, ein Task mit seinen Unteraufgaben. */
+function subtree(ws: Workspace, item: Item): ListRow[] {
+  const out: ListRow[] = [{ item, depth: 0 }];
+  const walk = (list: Task[], depth: number): void => {
+    for (const t of list) {
       out.push({ item: t, depth });
-      tree(ws.kids(t.id), depth + 1, out);
+      walk(ws.kids(t.id), depth + 1);
     }
-    return out;
   };
-  const milestones = (list: Milestone[]): ListRow[] =>
-    list.flatMap((m) => [{ item: m, depth: 0 }, ...tree(ws.msRoots(m), 1, [])]);
+  walk(isMs(item) ? ws.msRoots(item) : ws.kids(item.id), 1);
+  return out;
+}
+
+function listRows(ws: Workspace, projectId: string): { head: string; rows: ListRow[] }[] {
+  const tree = (roots: Task[]): ListRow[] =>
+    roots.flatMap((t) => subtree(ws, t));
+  const milestones = (list: Milestone[]): ListRow[] => list.flatMap((m) => subtree(ws, m));
   const loose = ws.tasks
     .filter((t) => t.projectId === projectId && !t.parentId && !t.milestoneId && !t.doc && ws.isActive(t))
     .sort((a, b) => Number(b.ready) - Number(a.ready) || a.order - b.order);
@@ -751,7 +758,7 @@ function listRows(ws: Workspace, projectId: string): { head: string; rows: ListR
   return [
     { head: 'Milestones im Plan', rows: milestones(plannedMilestones(ws, projectId)) },
     { head: 'Vorbereitete Milestones', rows: milestones(draftMilestones(ws, projectId)) },
-    { head: 'Ready & Backlog', rows: tree(loose, 0, []) },
+    { head: 'Ready & Backlog', rows: tree(loose) },
   ].filter((s) => s.rows.length);
 }
 
@@ -769,7 +776,7 @@ function ItemList({
 }: {
   ws: Workspace;
   projectId: string;
-  /** Wovon aus das Board offen ist – steht immer ganz oben, auch beim Suchen. */
+  /** Wovon aus das Board offen ist – steht samt allem darunter immer ganz oben, auch beim Suchen. */
   focusId: string;
   items: Map<string, Item>;
   onBoard: Set<string>;
@@ -781,7 +788,7 @@ function ItemList({
   const [query, setQuery] = useState('');
   const sections = useMemo(() => {
     const focus = items.get(focusId);
-    const pinned = focus ? [{ head: 'Geöffnet', rows: [{ item: focus, depth: 0 }], pinned: true }] : [];
+    const pinned = focus ? [{ head: 'Geöffnet', rows: subtree(ws, focus), pinned: true }] : [];
     return [...pinned, ...listRows(ws, projectId)];
   }, [ws, projectId, items, focusId]);
 
