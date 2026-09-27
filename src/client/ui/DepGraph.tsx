@@ -4,10 +4,11 @@
  * Milestones des Projekts als Baum, von dort kommen sie per Drag & Drop aufs
  * Board; rechts werden sie verbunden.
  *
- * Das Board zeigt einen Ausschnitt: von einem Task aus alles, was er in jeder
- * Tiefe benötigt und was auf ihn wartet; von einem Milestone aus dasselbe für
- * ihn und seine Tasks – die der obersten Ebene immer, auch ohne Pfeile. Was
- * nur daneben hängt, fehlt.
+ * Das Board zeigt einen Ausschnitt: von einem Task aus alles, was er und seine
+ * direkten Unteraufgaben in jeder Tiefe benötigen und was auf sie wartet; von
+ * einem Milestone aus dasselbe für ihn und seine Tasks. Die direkten
+ * Unteraufgaben bzw. die Tasks der obersten Ebene stehen immer da, auch ohne
+ * Pfeile. Was nur daneben hängt, fehlt.
  *
  * Die Pfeile sind die `deps` selbst – ein Pfeil von A nach B heißt „B benötigt
  * A“. Gespeichert wird zusätzlich, wo die Knoten liegen und wie die Pfeile aus
@@ -190,13 +191,15 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     [flow],
   );
 
-  // Der Ausschnitt: ein Task allein; ein Milestone mit all seinen Tasks der
-  // obersten Ebene (auch ohne Abhängigkeiten) und den Unteraufgaben, die welche
-  // haben – dazu alles, was sie benötigen und was auf sie wartet.
+  // Der Ausschnitt: ein Task mit seinen direkten Unteraufgaben; ein Milestone
+  // mit all seinen Tasks der obersten Ebene und den tieferen, die Abhängigkeiten
+  // haben – die direkten jeweils auch ohne Pfeile. Dazu alles, was sie
+  // benötigen und was auf sie wartet.
   const scope = useMemo(() => {
     const seeds = [focusId];
     const m = ws.milestone(focusId);
-    if (m) {
+    if (!m) seeds.push(...ws.kids(focusId).map((k) => k.id));
+    else {
       const linked = new Set(links.flatMap((l) => [l.source, l.target]));
       for (const r of ws.msRoots(m)) {
         seeds.push(r.id);
