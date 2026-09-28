@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">
+  <style>path { fill: #2a6b5a } @media (prefers-color-scheme: dark) { path { fill: #63b69d } }</style>
+  <clipPath id="c"><rect width="18" height="18" rx="5" /></clipPath>
+  <path clip-path="url(#c)" d="M0 0h18v5H0zM6 7h12v4H6zM6 13h8v4H6z" />
+</svg>

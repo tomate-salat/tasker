@@ -1604,6 +1604,13 @@ export function applyTheme(theme: Settings['theme']): void {
   const root = document.documentElement;
   if (theme === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', theme);
+  // Statusleiste der installierten App: bei `system` gelten die Vorgaben aus
+  // index.html je nach Betriebssystem, sonst beide Einträge in der festen Farbe.
+  const bg = getComputedStyle(root).getPropertyValue('--bg').trim();
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+    meta.dataset.system ??= meta.content;
+    meta.content = theme === 'system' ? meta.dataset.system : bg;
+  });
 }
 
 /* ------------------------------------------------------------------ Intern */
