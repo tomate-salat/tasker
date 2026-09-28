@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ApiError, api, type Drawing, type Scene } from '../api.js';
 import { useStore } from '../store.js';
 
@@ -104,7 +105,9 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
     await removeDrawing(drawing.id, drawing.name);
   }
 
-  return (
+  // Direkt an body: im Inspektor wäre der Editor in dessen Ebene gefangen,
+  // und Karten oder Leisten der Seite lägen darüber.
+  return createPortal(
     <div className="draw-modal" role="dialog" aria-label="Zeichnung bearbeiten">
       <header className="draw-head">
         <input
@@ -143,6 +146,7 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
           />
         </Suspense>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
