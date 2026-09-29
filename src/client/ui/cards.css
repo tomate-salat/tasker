@@ -337,6 +337,16 @@
   box-shadow: 0 -8px 16px -12px rgba(0, 0, 0, 0.35);
 }
 
+/* Die Abhängigkeiten rücken mit nach unten und stehen direkt über dem Baum;
+   der freie Platz liegt dann über ihnen statt dazwischen. */
+.detail > .deps-sec:has(+ .hier-sec) {
+  margin-top: auto;
+}
+
+.detail > .deps-sec + .hier-sec {
+  margin-top: 0;
+}
+
 .hier-toggle {
   display: flex;
   align-items: center;
