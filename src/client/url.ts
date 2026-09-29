@@ -1,4 +1,5 @@
 import type { OutlineFilter } from '@shared/outline.js';
+import { pushEntry, replaceEntry } from './back.js';
 import { ambiguousView, archiveWorkspace, homeView, useStore, VIEWS, type View } from './store.js';
 
 /**
@@ -163,8 +164,8 @@ export function syncUrl(): void {
     const url = format(s);
     if (url === last) return;
     last = url;
-    if (replace) history.replaceState(null, '', url + location.hash);
-    else history.pushState(null, '', url + location.hash);
+    if (replace) replaceEntry(url + location.hash);
+    else pushEntry(url + location.hash);
   };
 
   /**
@@ -177,6 +178,8 @@ export function syncUrl(): void {
   apply();
   window.addEventListener('popstate', () => {
     lastSelectAt = 0;
+    // Nur eine Überlagerung geschlossen (`back.ts`) – der Ort ist derselbe.
+    if (here() === last) return;
     apply();
   });
   useStore.subscribe((s, prev) => {

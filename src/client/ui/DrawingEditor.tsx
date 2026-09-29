@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ApiError, api, type Drawing, type Scene } from '../api.js';
+import { useBackClose } from '../back.js';
 import { useStore } from '../store.js';
 
 /**
@@ -85,6 +86,8 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
 
   // Beim Schließen darf nichts verloren gehen, auch nicht der letzte Strich.
   useEffect(() => () => void flush(), []);
+  // Zurück schließt wie „Fertig“.
+  useBackClose(() => void close());
 
   async function close(): Promise<void> {
     await flush();

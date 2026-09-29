@@ -4,6 +4,7 @@ import type { Settings } from '@shared/model.js';
 import { categoriesOf, categoryColorIndex, marksOf } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, type Account, type ApiToken } from '../api.js';
+import { useBackClose } from '../back.js';
 import { useStore } from '../store.js';
 import { CoverSlot } from './Cards.js';
 import { categoryHue } from './colors.js';
@@ -30,6 +31,7 @@ function Modal({
   /** Die Hilfe schließt im Prototyp mit „Schließen“, die übrigen Dialoge mit „Fertig“. */
   closeLabel?: string;
 }) {
+  useBackClose(onClose);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {

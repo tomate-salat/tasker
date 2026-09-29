@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackClose } from '../back.js';
 import { useStore } from '../store.js';
 
 /**
@@ -107,6 +108,7 @@ function Panel({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useBackClose(onClose);
   // Abonniert den Arbeitsstand, damit ein offenes Menü neu gebaut wird.
   useStore((s) => s.ws);
   const items = typeof source === 'function' ? source() : source;

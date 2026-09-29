@@ -50,6 +50,7 @@ import { draftMilestones, plannedMilestones } from '@shared/outline.js';
 import { milestoneDone, milestoneProgressPct } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
+import { useBackClose } from '../back.js';
 import { useStore } from '../store.js';
 import { CardFace, coverOf } from './Cards.js';
 import { edgeKey, elkLayout, fitRoute, roundedPath, type Layout } from './graphElk.js';
@@ -495,6 +496,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => root.current?.focus(), []);
   const close = (): void => openGraph(null);
+  useBackClose(close);
 
   // Am Fenster statt am Board: nach dem Löschen eines Pfeils liegt der Fokus
   // auf der Seite, Esc und Strg+Z sollen trotzdem hier ankommen.
