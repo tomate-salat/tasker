@@ -17,7 +17,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
-import { CoverRow, Hierarchy, hierarchyRoot, InspectorCover } from './Cards.js';
+import { CoverRow, Hierarchy, InspectorCover } from './Cards.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dropTarget, useDrag, useZone } from './dnd.js';
 import { DrawingEmbed, useDrawings } from './Drawings.js';
@@ -54,16 +54,13 @@ const MS_KEYS: Status[] = ['open', 'progress', 'done'];
 /**
  * Der Inspektor, Aufbau wie im Prototyp: oben der Pfad, darunter ein Raster
  * aus beschrifteten Werten, dann der Inhalt (Titel und Markdown in einem
- * Feld), die Unteraufgaben und die Abhängigkeiten.
+ * Feld), die Abhängigkeiten und die Hierarchie.
  */
 export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
   const task = ws.task(id);
   const milestone = ws.milestone(id);
   const select = useStore((s) => s.select);
   const menu = useMenu();
-  // Ein Inspektor für Liste und Karten: hat die Wurzel Unteraufgaben, steht ihr
-  // ganzer Baum am Ende, sonst die Unteraufgaben wie gewohnt.
-  const hier = !!hierarchyRoot(ws, id);
 
   // Der Inhalt wird als Ganzes bearbeitet – beim Wechsel des Objekts zurück.
   const [editing, setEditing] = useState(false);
@@ -109,15 +106,15 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
         placeholder={task ? 'Ohne Titel' : 'Neuer Milestone'}
       />
 
-      {task && !hier && <TaskChildren ws={ws} task={task} />}
       {milestone && <Burnup ws={ws} milestone={milestone} />}
       {milestone && <MilestoneChildren ws={ws} milestone={milestone} />}
 
       {/* Doku-Seiten haben wie im Prototyp keine Abhängigkeiten. */}
       {!(task && ws.isDoc(task)) && <Deps ws={ws} kind={kind} item={item} />}
 
-      {/* Der ganze Baum ab der Wurzel am Ende, auch bei einer Unteraufgabe. */}
-      {hier && <Hierarchy ws={ws} id={id} menu={menu} />}
+      {/* Der ganze Baum ab der Wurzel am Ende, auch bei einer Unteraufgabe –
+          und ohne Unteraufgaben nur mit dem Knopf zum Anlegen. */}
+      {task && <Hierarchy ws={ws} id={id} menu={menu} />}
 
       {menu.node}
     </aside>
@@ -761,29 +758,6 @@ function Content({
 }
 
 /* -------------------------------------------------------- Unteraufgaben */
-
-function TaskChildren({ ws, task }: { ws: Workspace; task: Task }) {
-  const doc = ws.isDoc(task);
-  // Erledigt Archiviertes bleibt unter seinem Ort stehen (siehe `countedKids`).
-  const kids = doc ? ws.kids(task.id) : ws.countedKids(task.id);
-  const add = useAddChild();
-
-  return (
-    <section className="d-section">
-      <div className="h3row">
-        <h3>
-          {doc
-            ? `Unterseiten ${kids.length ? `· ${kids.length}` : ''}`
-            : `Unteraufgaben ${kids.length ? `· ${kids.filter((k) => isDone(k)).length}/${kids.length}` : ''}`}
-        </h3>
-        <button className="linkish" onClick={() => void add({ projectId: task.projectId, parentId: task.id, ...(doc ? { doc: true } : {}) }, task.id)}>
-          {doc ? '+ Unterseite' : '+ Unteraufgabe'}
-        </button>
-      </div>
-      <ChildList ws={ws} tasks={kids} doc={doc} />
-    </section>
-  );
-}
 
 function MilestoneChildren({ ws, milestone }: { ws: Workspace; milestone: Milestone }) {
   const roots = ws.msCounted(milestone);

@@ -702,8 +702,12 @@ export function CardFace({
  */
 export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; menu: Menu }) {
   const state = useStore();
-  const root = hierarchyRoot(ws, id);
+  // Ohne Unteraufgaben steht der Abschnitt trotzdem da – nur mit dem Knopf zum
+  // Anlegen, damit er nicht beim ersten Kind von „Unteraufgaben“ umspringt.
+  const task = ws.task(id);
+  const root = hierarchyRoot(ws, id) ?? (task ? ws.root(task) : null);
   if (!root) return null;
+  const empty = !ws.kids(root.id).length;
   const rows = treeRows(ws, root, state.collapsed);
   const current = ws.task(state.selected);
   const open = !state.collapsed[HIER_KEY];
@@ -714,7 +718,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   const listEdits = isLayoutView(state.view) && !cardsOn(state);
 
   return (
-    <section className={`d-section hier-sec ${open ? '' : 'shut'}`}>
+    <section className={`d-section hier-sec ${open && !empty ? '' : 'shut'}`}>
       <div className="h3row">
         <button
           className="hier-toggle"
@@ -723,7 +727,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
           title={open ? 'Hierarchie zuklappen' : 'Hierarchie aufklappen'}
         >
           {open ? CHEVRON_DOWN : CHEVRON_RIGHT}
-          <h3>{doc ? 'Hierarchie' : `Hierarchie · ${doneCount(ws, root)}/${total(ws, root)}`}</h3>
+          <h3>{doc || empty ? 'Hierarchie' : `Hierarchie · ${doneCount(ws, root)}/${total(ws, root)}`}</h3>
         </button>
         {open && current && !state.multi.size && (
           <button className="linkish" onClick={() => void addChild(current)}>
@@ -731,7 +735,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
           </button>
         )}
       </div>
-      {open && (
+      {open && !empty && (
       <div
         className={`list hier ${state.multi.size ? 'has-multi' : ''}`}
         onContextMenu={(e) => {

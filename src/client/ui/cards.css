@@ -317,12 +317,12 @@
    lang der Inhalt darüber ist. Dafür wird der Inspektor zur Spalte: der
    Abschnitt rückt mit `margin-top: auto` nach unten, `sticky` hält ihn dort
    auch beim Scrollen. Nichts darüber darf dabei schrumpfen. */
-.detail:has(> .hier-sec) {
+.detail:has(> .hier-sec, > .deps-sec) {
   display: flex;
   flex-direction: column;
 }
 
-.detail:has(> .hier-sec) > * {
+.detail:has(> .hier-sec, > .deps-sec) > * {
   flex-shrink: 0;
 }
 
@@ -337,9 +337,9 @@
   box-shadow: 0 -8px 16px -12px rgba(0, 0, 0, 0.35);
 }
 
-/* Die Abhängigkeiten rücken mit nach unten und stehen direkt über dem Baum;
-   der freie Platz liegt dann über ihnen statt dazwischen. */
-.detail > .deps-sec:has(+ .hier-sec) {
+/* Die Abhängigkeiten stehen ebenfalls unten – direkt über dem Baum, oder bei
+   Milestones allein am Ende; der freie Platz liegt über ihnen. */
+.detail > .deps-sec {
   margin-top: auto;
 }
 
