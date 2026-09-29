@@ -1914,6 +1914,11 @@ button.prop:hover {
   color: var(--faint);
 }
 
+/* Das Emoji der Markierung wächst mit der Überschrift mit. */
+.d-h .mk-emoji {
+  font-size: 1em;
+}
+
 .d-content {
   display: block;
   width: 100%;
@@ -2020,6 +2025,21 @@ button.prop:hover {
   padding-left: 12px;
   border-left: 2px solid var(--line);
   color: var(--muted);
+}
+
+/* Trennlinie wie bei Codecks: dünn und gedämpft. */
+.md hr {
+  height: 0;
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+}
+
+/* Im Inspektor über die Textbreite hinaus bis zum Polster rechts – die
+   Beschreibung beginnt genau am linken Polster, 100cqw ist also die Breite
+   dazwischen. */
+.d-card .md hr {
+  width: 100cqw;
 }
 
 .md-cb {
