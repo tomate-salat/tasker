@@ -720,16 +720,21 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   return (
     <section className={`d-section hier-sec ${open && !empty ? '' : 'shut'}`}>
       <div className="h3row">
-        <button
-          className="hier-toggle"
-          onClick={() => state.setCollapsed(HIER_KEY, open)}
-          aria-expanded={open}
-          title={open ? 'Hierarchie zuklappen' : 'Hierarchie aufklappen'}
-        >
-          {open ? CHEVRON_DOWN : CHEVRON_RIGHT}
-          <h3>{doc || empty ? 'Hierarchie' : `Hierarchie · ${doneCount(ws, root)}/${total(ws, root)}`}</h3>
-        </button>
-        {open && current && !state.multi.size && (
+        {/* Ohne Unteraufgaben gibt es nichts zu klappen – nur die Überschrift. */}
+        {empty ? (
+          <h3>Hierarchie</h3>
+        ) : (
+          <button
+            className="hier-toggle"
+            onClick={() => state.setCollapsed(HIER_KEY, open)}
+            aria-expanded={open}
+            title={open ? 'Hierarchie zuklappen' : 'Hierarchie aufklappen'}
+          >
+            {open ? CHEVRON_DOWN : CHEVRON_RIGHT}
+            <h3>{doc ? 'Hierarchie' : `Hierarchie · ${doneCount(ws, root)}/${total(ws, root)}`}</h3>
+          </button>
+        )}
+        {(open || empty) && current && !state.multi.size && (
           <button className="linkish" onClick={() => void addChild(current)}>
             {doc ? '+ Unterseite' : '+ Unteraufgabe'}
           </button>
