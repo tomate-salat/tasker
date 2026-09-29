@@ -1701,6 +1701,15 @@ button.caret:hover {
   display: inline;
 }
 
+.status-seg button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.status-seg button:disabled:hover {
+  background: none;
+}
+
 .status-seg button.on.st-progress {
   background: var(--accent);
   color: var(--accent-ink);

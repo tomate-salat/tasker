@@ -277,13 +277,25 @@ function TaskHead({
   // keine Priorität – nur Kategorie, Markierung und Labels.
   const doc = ws.isDoc(task);
 
+  // Erledigt geht erst, wenn alle Unteraufgaben und Checklisten-Punkte erledigt sind.
+  const open = kids.filter((k) => !isDone(k)).length + cl.total - cl.done;
+  const locked: Partial<Record<Status, string>> = open
+    ? { done: `Erst erledigt, wenn alles darunter erledigt ist – noch ${open} offen` }
+    : {};
+
   return (
     <>
       {!doc && (
         // Rechts neben dem Status steht das Titelbild.
         <div className="status-line">
           <MetaRow k="status" label="Status">
-            <StatusGroups kind="task" item={task} groups={[PROGRESS_CHAIN, SPECIAL]} labels={STATUS_LABEL} />
+            <StatusGroups
+              kind="task"
+              item={task}
+              groups={[PROGRESS_CHAIN, SPECIAL]}
+              labels={STATUS_LABEL}
+              locked={locked}
+            />
           </MetaRow>
           <CoverRow ws={ws} task={task} />
         </div>
@@ -1179,11 +1191,14 @@ function StatusGroups({
   item,
   groups,
   labels,
+  locked = {},
 }: {
   kind: 'task' | 'milestone';
   item: Task | Milestone;
   groups: Status[][];
   labels: Record<string, string>;
+  /** Gesperrte Status, mit dem Grund als Tooltip. */
+  locked?: Partial<Record<Status, string>>;
 }) {
   const patch = useStore((s) => s.patch);
   const setMilestoneStatus = useStore((s) => s.setMilestoneStatus);
@@ -1202,8 +1217,9 @@ function StatusGroups({
               className={`st-${s} ${item.status === s ? 'on' : ''}`}
               role="radio"
               aria-checked={item.status === s}
-              title={labels[s]}
+              title={locked[s] ?? labels[s]}
               aria-label={labels[s]}
+              disabled={!!locked[s]}
               onClick={() => choose(s)}
             >
               <StatusIcon status={s} />
