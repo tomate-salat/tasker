@@ -12,7 +12,7 @@ import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { addChild, indent, outdent } from './actions.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
-import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, LOCK_ICON, PrioIcon, statusMark, STATUS_LABEL } from './icons.js';
+import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, GRAPH_ICON, LOCK_ICON, PrioIcon, statusMark, STATUS_LABEL } from './icons.js';
 import type { Menu } from './Menu.js';
 
 /**
@@ -233,6 +233,17 @@ export function MilestoneRow({
         </span>
       )}
       <ChecklistBadge desc={milestone.desc} />
+      <button
+        className="draw-badge"
+        title="Graph anzeigen"
+        aria-label="Graph anzeigen"
+        onClick={(e) => {
+          e.stopPropagation();
+          useStore.getState().openGraph({ projectId: milestone.projectId, focusId: milestone.id });
+        }}
+      >
+        {GRAPH_ICON}
+      </button>
       <DrawingBadge ownerId={milestone.id} />
       <span className="ms-spacer" />
 

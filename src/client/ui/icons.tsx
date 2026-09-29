@@ -230,6 +230,16 @@ export const DRAW_ICON = (
   </svg>
 );
 
+/** Öffnet den Abhängigkeits-Graph eines Milestones. */
+export const GRAPH_ICON = (
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <circle cx="3.5" cy="4" r="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="3.5" cy="12" r="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="12.5" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M5.4 4.9 10.6 7.1M5.4 11.1l5.2-2.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
 /** Seitensymbol in der Doku-Ansicht. */
 export const DOC_ICON = (
   <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
