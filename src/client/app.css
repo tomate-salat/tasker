@@ -357,8 +357,14 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Titelzeile: Menü, Titel (gekürzt), Aktionen als Icons rechts. */
 .mhead h1 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font: 700 24px/1.1 var(--display);
   letter-spacing: -0.015em;
 }
@@ -380,22 +386,26 @@
   border-color: var(--accent);
 }
 
-.tab-row {
+/* Die Reiter stehen in einer eigenen Zeile und lassen sich seitlich
+   verschieben, wenn sie nicht hineinpassen. */
+.tabs {
   display: flex;
   align-items: center;
   gap: 18px;
   flex-basis: 100%;
   min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
 
-.tabs {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  min-width: 0;
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
+  flex: none;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -424,22 +434,15 @@
 }
 
 .tab-actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 4px;
+  gap: 6px;
 }
 
-.tab-actions .btn {
-  padding: 4px 10px;
-  font-size: 13px;
-}
-
-/* Icon-Knöpfe für den schmalen Kopf – am Desktop nicht zu sehen. */
+/* Icon-Knöpfe rechts in der Titelzeile. */
 .head-icon {
   position: relative;
-  display: none;
+  display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
@@ -456,9 +459,18 @@
   border-color: var(--accent);
 }
 
-.archive-done .head-icon-glyph,
-.archive-done .count {
-  display: none;
+/* Die Zahl der Erledigten als Plakette am Archiv-Icon. */
+.head-icon .count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font: 600 10px/16px var(--body);
+  text-align: center;
 }
 
 .seg {
@@ -3803,90 +3815,14 @@ body:has(.bulk) .toast {
     gap: 10px;
   }
 
-  /* Titelzeile: Menü, Titel (gekürzt), Aktionen als Icons rechts. */
-  .mhead h1 {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .tab-row {
-    display: contents;
-  }
-
-  .tab-actions {
-    margin-left: 0;
-    padding-bottom: 0;
-    gap: 6px;
-  }
-
-  .head-icon {
-    display: grid;
-  }
-
-  .archive-done {
-    position: relative;
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    padding: 0 !important;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--muted);
-  }
-
-  .archive-done:hover {
-    color: var(--ink);
-    border-color: var(--accent);
-  }
-
-  .archive-done .long {
-    display: none;
-  }
-
-  .archive-done .head-icon-glyph {
-    display: grid;
-  }
-
-  .archive-done .count {
-    display: block;
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    min-width: 16px;
-    padding: 0 4px;
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--surface);
-    font: 600 10px/16px var(--body);
-    text-align: center;
-  }
-
-  /* Reiter: eine eigene Zeile über die volle Breite, seitlich wischbar. Die
-     Ränder blenden aus, damit man sieht, dass es weitergeht. */
+  /* Die Reiter reichen bis an den Rand, die Ränder blenden aus, damit man
+     sieht, dass es beim Wischen weitergeht. */
   .tabs {
-    order: 1;
     flex: 0 0 calc(100% + 32px);
     margin: 0 -16px;
     padding: 0 16px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
     -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 28px), transparent);
-  }
-
-  .tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tab {
-    flex: none;
-    white-space: nowrap;
   }
 
   .toolbar {

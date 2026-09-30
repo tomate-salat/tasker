@@ -792,32 +792,19 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   );
 }
 
-/** Umschalter Liste/Karten in der Reiterleiste. */
+/**
+ * Umschalter Liste/Karten rechts in der Titelzeile: ein Icon-Knopf, der auf
+ * die jeweils andere Darstellung wechselt.
+ */
 export function LayoutSwitch() {
   const state = useStore();
   const { view, layouts, setLayout } = state;
   if (!isLayoutView(view)) return null;
-  const layout = layouts[view];
-  const other: Layout = layout === 'list' ? 'cards' : 'list';
+  const other: Layout = layouts[view] === 'list' ? 'cards' : 'list';
+  const label = other === 'cards' ? 'Als Karten' : 'Als Liste';
   return (
-    <>
-      {/* Schmal ein einzelner Knopf, der auf die jeweils andere Darstellung wechselt. */}
-      <button
-        className="head-icon layout-toggle"
-        onClick={() => setLayout(view, other)}
-        title={other === 'cards' ? 'Als Karten' : 'Als Liste'}
-        aria-label={other === 'cards' ? 'Als Karten' : 'Als Liste'}
-      >
-        {other === 'cards' ? CARDS_ICON : LIST_ICON}
-      </button>
-      <span className="layout-switch" role="group" aria-label="Darstellung">
-        <button className={layout === 'list' ? 'on' : ''} onClick={() => setLayout(view, 'list')} title="Als Liste">
-          Liste
-        </button>
-        <button className={layout === 'cards' ? 'on' : ''} onClick={() => setLayout(view, 'cards')} title="Als Karten">
-          Karten
-        </button>
-      </span>
-    </>
+    <button className="head-icon" onClick={() => setLayout(view, other)} title={label} aria-label={label}>
+      {other === 'cards' ? CARDS_ICON : LIST_ICON}
+    </button>
   );
 }

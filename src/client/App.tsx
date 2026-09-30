@@ -173,16 +173,14 @@ function Shell({
               </span>
             )}
 
-            {/* Am Desktop stehen die Aktionen rechts neben den Reitern. Schmal löst
-                sich .tab-row auf: die Reiter werden eine eigene, wischbare Zeile, die
-                Aktionen rücken als Icons in die Titelzeile. */}
-            <div className="tab-row">
-              <Tabs view={view} onSelect={setView} />
-              <span className="tab-actions">
-                <LayoutSwitch />
-                <ArchiveDone ws={ws} />
-              </span>
-            </div>
+            {/* Die Aktionen stehen als Icons rechts in der Titelzeile, die Reiter
+                darunter in einer eigenen Zeile – bewusst anders als im Prototyp. */}
+            <span className="tab-actions">
+              <LayoutSwitch />
+              <ArchiveDone ws={ws} />
+            </span>
+
+            <Tabs view={view} onSelect={setView} />
           </header>
 
           <FilterBar ws={ws} />
@@ -338,14 +336,12 @@ function ArchiveDone({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
 
   return (
     <button
-      className="btn ghost archive-done"
-      title="Erledigte Milestones und Aufgaben dieser Ansicht archivieren"
+      className="head-icon"
+      title={`Erledigte Milestones und Aufgaben dieser Ansicht archivieren (${n})`}
       aria-label={`Erledigte archivieren (${n})`}
       onClick={() => void archiveDone()}
     >
-      {/* Schmal nur das Icon mit der Zahl als Plakette. */}
-      <span className="head-icon-glyph">{ARCHIVE_ICON}</span>
-      <span className="long">Erledigte archivieren ({n})</span>
+      {ARCHIVE_ICON}
       <span className="count">{n}</span>
     </button>
   );
