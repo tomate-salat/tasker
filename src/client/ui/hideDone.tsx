@@ -1,3 +1,4 @@
+import { useLayoutEffect, useReducer, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { isDone } from '@shared/model.js';
 import { outline, type OutlineRow } from '@shared/outline.js';
@@ -13,8 +14,11 @@ import { HIDE_DONE_ICON } from './icons.js';
 const DURATION = 240;
 const EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
-/** Die Zeilenfolge ohne erledigte Aufgaben – samt allem, was unter ihnen hängt. */
-export function withoutDone(rows: OutlineRow[]): OutlineRow[] {
+/**
+ * Die Zeilenfolge ohne erledigte Aufgaben – samt allem, was unter ihnen hängt.
+ * Was in `linger` steht, bleibt noch stehen, bis es fertig weggeklappt ist.
+ */
+export function withoutDone(rows: OutlineRow[], linger?: ReadonlySet<string>): OutlineRow[] {
   const out: OutlineRow[] = [];
   let below: number | null = null;
   for (const row of rows) {
@@ -25,7 +29,7 @@ export function withoutDone(rows: OutlineRow[]): OutlineRow[] {
     }
     if (below !== null && row.depth > below) continue;
     below = null;
-    if (isDone(row.task)) {
+    if (isDone(row.task) && !linger?.has(row.id)) {
       below = row.depth;
       continue;
     }
@@ -109,6 +113,62 @@ function glide(now: Map<string, HTMLElement>, before: Map<string, DOMRect>): voi
 
 const rects = (m: Map<string, HTMLElement>): Map<string, DOMRect> =>
   new Map([...m].map(([id, el]) => [id, el.getBoundingClientRect()]));
+
+/**
+ * Die Zeilen der Liste bei ausgeblendeten Erledigten. Wird eine sichtbare
+ * Aufgabe erledigt, bleibt sie kurz stehen und klappt dann weg, statt einfach
+ * zu verschwinden.
+ */
+export function useHideDone(full: OutlineRow[], on: boolean): OutlineRow[] {
+  const linger = useRef(new Set<string>());
+  const started = useRef(new Set<string>());
+  const shown = useRef(new Set<string>());
+  const wasOn = useRef(on);
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+
+  if (!on) {
+    linger.current.clear();
+    started.current.clear();
+  } else if (wasOn.current) {
+    // Nur was eben noch zu sehen war – das Umschalten animiert sich selbst.
+    for (const r of full) {
+      if (r.type === 'task' && isDone(r.task) && shown.current.has(r.id)) linger.current.add(r.id);
+    }
+  }
+  const rows = on ? withoutDone(full, linger.current) : full;
+
+  useLayoutEffect(() => {
+    shown.current = new Set(rows.map((r) => r.id));
+    wasOn.current = on;
+    const fresh = [...linger.current].filter((id) => !started.current.has(id));
+    if (!fresh.length) return;
+    const list = document.querySelector<HTMLElement>('.main .list');
+    const now = list ? items(list) : new Map<string, HTMLElement>();
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (const id of fresh) started.current.add(id);
+    void Promise.all(
+      fresh.map((id) => {
+        const el = now.get(id);
+        return el && !reduce ? fold(el, false).finished.catch(() => {}) : Promise.resolve();
+      }),
+    ).then(() => {
+      const before = list ? rects(items(list)) : new Map<string, DOMRect>();
+      for (const id of fresh) {
+        linger.current.delete(id);
+        started.current.delete(id);
+        shown.current.delete(id);
+      }
+      flushSync(rerender);
+      if (!list) return;
+      const after = items(list);
+      // Wieder offen (etwa per Rückgängig): die Zeile bleibt und kommt zurück.
+      for (const id of fresh) after.get(id)?.getAnimations().forEach((a) => a.cancel());
+      if (!reduce) glide(after, before);
+    });
+  });
+
+  return rows;
+}
 
 let busy = false;
 

@@ -8,7 +8,7 @@ import { currentProjectId, scopeProjectIds, useStore } from '../store.js';
 import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { useDropFlip } from './dropFlip.js';
-import { withoutDone } from './hideDone.js';
+import { useHideDone } from './hideDone.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { listMenu, rowMenu } from './rowMenu.js';
@@ -25,7 +25,7 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const state = useStore();
   const { collapsed, settings, filter } = state;
   const full = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
-  const all = view === 'plan' && state.hideDone ? withoutDone(full) : full;
+  const all = useHideDone(full, view === 'plan' && state.hideDone);
   // Karten: nur die Wurzeln; die Tastatur läuft zusätzlich durch den offenen Baum.
   const cards = cardsOn(state) ? cardRows(ws, all, state.selected, collapsed) : null;
   const rows = cards ? cards.keys : all;
