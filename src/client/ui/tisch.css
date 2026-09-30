@@ -138,6 +138,19 @@
   border-color: color-mix(in srgb, var(--info) 30%, var(--line));
 }
 
+/* Im Spiel bleibt eine Reihe und scrollt seitlich, statt umzubrechen
+   (Wunsch des Nutzers) – wie die Reiter oben auf schmalen Bildschirmen. */
+.tzone-play .tzone-cards {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.tzone-play .tzone-cards > * {
+  flex: none;
+}
+
 /* Beim Ziehen zeigen die Zonen, dass sie etwas annehmen. */
 .tzone.dz-live,
 .tpile-zone.dz-live {
@@ -163,6 +176,12 @@
 
 .tcell > .tcard {
   cursor: grab;
+}
+
+/* Markiert (ein Klick, Pfeiltasten) – der Inspektor öffnet erst der Doppelklick. */
+.tisch .tcard.focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .tcard-crumb {

@@ -73,6 +73,16 @@ describe('Tisch', () => {
     assert.deepEqual(ids(tischLayout(ws, ws.milestone('m')!).pile), ['neu', 'alt']);
   });
 
+  it('gerade erst erledigt (noch ohne Zeitpunkt) liegt obenauf', () => {
+    const ws = new Builder()
+      .project('p')
+      .milestone('m', 'p', { status: 'progress' })
+      .task('alt', 'p', { milestoneId: 'm', status: 'done', doneAt: '2026-09-01T00:00:00Z' })
+      .task('eben', 'p', { milestoneId: 'm', status: 'done', doneAt: null })
+      .build();
+    assert.deepEqual(ids(tischLayout(ws, ws.milestone('m')!).pile), ['eben', 'alt']);
+  });
+
   it('gesperrte und Stapel dürfen nicht ins Spiel', () => {
     const ws = new Builder()
       .project('p')

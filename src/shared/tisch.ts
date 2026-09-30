@@ -64,7 +64,10 @@ export function tischLayout(ws: Workspace, m: Milestone): TischLayout {
     if (isDone(root) || (root.status === 'progress' && !ws.kids(root.id).length)) continue;
     (isBlocked(ws, root) ? out.locked : out.open).push(root);
   }
-  out.pile.sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''));
+  // Ohne Zeitpunkt ist es gerade eben erledigt worden (die Oberfläche setzt den
+  // Status vor der Antwort des Servers) – das gehört obenauf, nicht ans Ende.
+  const at = (t: Task): string => t.doneAt ?? '￿';
+  out.pile.sort((a, b) => at(b).localeCompare(at(a)));
   return out;
 }
 

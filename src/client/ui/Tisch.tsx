@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { create } from 'zustand';
 import type { Step } from '@shared/api.js';
 import { blockers, isBlocked } from '@shared/blocking.js';
 import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
@@ -20,7 +21,7 @@ import { LOCK_ICON } from './icons.js';
 import { dragSource, useDrag, useDragging } from './dnd.js';
 import { useMenu, type Menu } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
-import { burst, float, glide, land, pop, reduced, refuse, thump, unlock } from './tischFx.js';
+import { burst, float, glide, land, pop, reduced, refuse, shake, thump, unlock } from './tischFx.js';
 import './tisch.css';
 
 /**
@@ -63,6 +64,14 @@ function writeOpen(open: Record<string, boolean>): void {
     // Privates Fenster – dann eben nur für diese Sitzung.
   }
 }
+
+/**
+ * Die markierte Karte (Wunsch des Nutzers): ein Klick markiert nur, erst ein
+ * Doppelklick öffnet den Inspektor. Pfeiltasten wandern, die Leertaste schaltet
+ * den Status der markierten Karte weiter. Bewusst nicht `selected` – das ist
+ * in der ganzen App der offene Inspektor.
+ */
+const useFocus = create<{ id: string | null }>(() => ({ id: null }));
 
 /* ------------------------------------------------------ Laufendes Ablegen */
 
@@ -140,6 +149,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   const pileRef = useRef<HTMLDivElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
   const selected = useStore((s) => s.selected);
+  const focus = useFocus((s) => s.id);
 
   const toggle = (id: string, value?: boolean): void => {
     setOpen((cur) => {
@@ -163,6 +173,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   };
 
   useTableMotion(root, ws, open, { pile: pileRef, count: countRef });
+  useTischKeys(root, ws);
 
   const drop = (zone: DropZone) => (e: React.DragEvent) => void onDrop(zone, e, root.current, reveal);
 
@@ -243,9 +254,15 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
                     data-tkey={`pile:${t.id}`}
                     data-zone="pile"
                     style={{ rotate: `${pileTilt(t.id)}deg` }}
-                    onClick={() => useStore.getState().select(t.id)}
+                    onClick={(e) => {
+                      useFocus.setState({ id: t.id });
+                      if (e.detail >= 2) useStore.getState().select(t.id);
+                    }}
                   >
-                    <div className={`tcard done ${selected === t.id ? 'sel' : ''}`}>
+                    <div
+                      className={`tcard done ${selected === t.id ? 'sel' : ''} ${focus === t.id ? 'focus' : ''}`}
+                      data-tcard={t.id}
+                    >
                       <CardFace ws={ws} task={t} />
                     </div>
                   </div>
@@ -357,6 +374,10 @@ function TischCard({
   const crumb = where === 'play' ? ws.ancestors(task) : [];
   const drag = dragSource('task', task.id, !done && !away);
 
+  const focused = useFocus((s) => s.id === task.id);
+
+  // Ein Klick markiert (ein Stapel klappt dabei auf oder zu), erst der zweite
+  // Klick eines Doppelklicks öffnet den Inspektor.
   const click = (e: React.MouseEvent): void => {
     const s = useStore.getState();
     if (e.ctrlKey || e.metaKey) {
@@ -364,9 +385,9 @@ function TischCard({
       return;
     }
     s.clearMulti();
-    // Ein Stapel fächert sich auf; ist er schon ausgewählt und offen, klappt er zu.
-    if (stack) toggle(task.id, !(open[task.id] && s.selected === task.id));
-    s.select(task.id);
+    useFocus.setState({ id: task.id });
+    if (e.detail >= 2) s.select(task.id);
+    else if (stack) toggle(task.id);
   };
 
   if (away) {
@@ -398,6 +419,7 @@ function TischCard({
         className={[
           'tcard',
           selected === task.id ? 'sel' : '',
+          focused ? 'focus' : '',
           multi.has(task.id) ? 'multi' : '',
           done ? 'done' : '',
           dragging ? 'dragging' : '',
@@ -640,7 +662,8 @@ async function settleBack(ghost: HTMLElement, home: DOMRect | null): Promise<voi
 
 /* ---------------------------------------------------------- Bewegung */
 
-type Spot = { x: number; y: number; zone: string };
+/** `away`: nur der Umriss einer ausgespielten Unteraufgabe in ihrer Schublade. */
+type Spot = { x: number; y: number; zone: string; away: boolean };
 
 /**
  * Nach jedem neuen Stand (und beim Auf- und Zuklappen einer Schublade): die
@@ -687,61 +710,194 @@ function useTableMotion(
         show(p.hidden);
         for (const id of p.ids) landed.add(id);
         if (from) land(target.el, from, p.to === 'pile' ? pileTilt(p.ids[0] as string) : 0);
-        if (p.to === 'pile') {
-          const pile = refs.pile.current;
-          if (pile) {
-            thump(pile, p.big);
-            float(pile, `+${p.ids.length}`);
-            if (p.big) burst(pile);
-          }
-          pop(refs.count.current);
-        }
+        if (p.to === 'pile') pileFx(p.ids.length, p.big);
       }
     }
 
+    /*
+     * Alle anderen: wer die Zone wechselt – über die Leertaste, den Inspektor,
+     * einen anderen Tab –, landet wie abgelegt; wer frei wird, dreht sich um;
+     * wer nur Platz macht, gleitet.
+     */
     const prev = spots.current;
     if (prev) {
+      // Je Karte die alte Lage – der Umriss in der Schublade zählt nur, wenn es sonst nichts gibt.
       const byId = new Map<string, Spot>();
-      for (const [key, s] of prev) byId.set(key.split(/:(.*)/s)[1] as string, s);
+      for (const [key, s] of prev) {
+        const id = key.split(/:(.*)/s)[1] as string;
+        if (!byId.has(id) || byId.get(id)?.away) byId.set(id, s);
+      }
+      const toPile: string[] = [];
       for (const [key, c] of now) {
         if (landed.has(c.id) || c.busy) continue;
         const old = prev.get(key) ?? byId.get(c.id);
         if (!old) continue;
-        const x = c.rect.left - base.left;
-        const y = c.rect.top - base.top;
-        if (old.zone === 'locked' && c.zone === 'open') {
-          unlock(c.el, new DOMRect(old.x + base.left, old.y + base.top, c.rect.width, c.rect.height));
-        } else {
-          glide(c.el, old.x - x, old.y - y);
-        }
+        const from = new DOMRect(old.x + base.left, old.y + base.top, c.rect.width, c.rect.height);
+        if (old.zone === 'locked' && c.zone === 'open') unlock(c.el, from);
+        else if (old.zone !== c.zone && !old.away && c.el.dataset['tcell']) {
+          land(c.el, from, c.zone === 'pile' ? pileTilt(c.id) : 0);
+          if (c.zone === 'pile') toPile.push(c.id);
+        } else glide(c.el, from.left - c.rect.left, from.top - c.rect.top);
       }
+      if (toPile.length) pileFx(toPile.length, toPile.some((id) => ws.kids(id).length > 0));
     }
 
+    // Gemessen vor dem Start der Animationen – danach stünden die Startpunkte drin.
     const next = new Map<string, Spot>();
     for (const [key, c] of now) {
-      next.set(key, { x: c.rect.left - base.left, y: c.rect.top - base.top, zone: c.zone });
+      next.set(key, {
+        x: c.rect.left - base.left,
+        y: c.rect.top - base.top,
+        zone: c.zone,
+        away: c.el.classList.contains('tcell-away'),
+      });
     }
     spots.current = next;
   }, [ws, open, rootRef, refs.pile, refs.count]);
 
-  // Ändert sich nur die Breite (Inspektor, Fenster), wird neu gemessen, ohne zu animieren.
+  /** Der Erledigt-Stapel gibt nach, der Zähler springt, „+n“ steigt auf – bei einem ganzen Stapel mit Funken. */
+  function pileFx(n: number, big: boolean): void {
+    const pile = refs.pile.current;
+    if (pile) {
+      thump(pile, big);
+      float(pile, `+${n}`);
+      if (big) burst(pile);
+    }
+    pop(refs.count.current);
+  }
+
+  // Ändert sich nur die Breite (Inspektor, Fenster) oder wird „Im Spiel“ seitlich
+  // gescrollt, wird neu gemessen, ohne zu animieren.
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const measure = (): void => {
-      const base = root.getBoundingClientRect();
-      const next = new Map<string, Spot>();
-      for (const el of root.querySelectorAll<HTMLElement>('[data-tkey]')) {
-        const key = el.dataset['tkey'] as string;
-        const r = el.getBoundingClientRect();
-        next.set(key, { x: r.left - base.left, y: r.top - base.top, zone: key.split(':')[0] ?? '' });
-      }
-      spots.current = next;
+    const again = (): void => {
+      spots.current = measure(root);
     };
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(again);
     ro.observe(root);
-    return () => ro.disconnect();
+    root.addEventListener('scroll', again, true);
+    return () => {
+      ro.disconnect();
+      root.removeEventListener('scroll', again, true);
+    };
   }, [rootRef]);
+}
+
+/** Wo jede Karte liegt, relativ zum Tisch. */
+function measure(root: HTMLElement): Map<string, Spot> {
+  const base = root.getBoundingClientRect();
+  const out = new Map<string, Spot>();
+  for (const el of root.querySelectorAll<HTMLElement>('[data-tkey]')) {
+    const key = el.dataset['tkey'] as string;
+    const r = el.getBoundingClientRect();
+    out.set(key, {
+      x: r.left - base.left,
+      y: r.top - base.top,
+      zone: key.split(':')[0] ?? '',
+      away: el.classList.contains('tcell-away'),
+    });
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------- Tastatur */
+
+const CYCLE: Status[] = ['open', 'progress', 'done'];
+
+/**
+ * Pfeiltasten wandern von Karte zu Karte – links und rechts in der Reihenfolge
+ * auf dem Tisch, hoch und runter zur nächsten Reihe darüber bzw. darunter. Die
+ * Leertaste schaltet den Status der markierten Karte weiter (mit Umschalt
+ * zurück), wie in der Liste: Offen → In Progress → Erledigt; aus Unklar und
+ * Blockiert geht es zurück auf Offen. Ein Stapel kommt nie ins Spiel – bei ihm
+ * springt sie von Offen direkt auf Erledigt. Die Karte wandert dann mit
+ * denselben Animationen wie beim Ziehen.
+ */
+function useTischKeys(rootRef: React.RefObject<HTMLDivElement | null>, ws: Workspace): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null;
+      const s = useStore.getState();
+      if (target?.closest?.('.draw-modal') || s.graphOpen || s.dialog !== 'none') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return;
+      // Knöpfe in Seitenleiste und Inspektor behalten ihre Tasten.
+      if (target && target !== document.body && !target.closest('.tisch')) return;
+      const root = rootRef.current;
+      if (!root) return;
+
+      const cards = [...root.querySelectorAll<HTMLElement>('.tcard[data-tcard]')].filter(
+        (c) => c.offsetParent !== null,
+      );
+      const focus = useFocus.getState().id;
+      const cur = cards.find((c) => c.dataset['tcard'] === focus) ?? null;
+
+      const go = (el: HTMLElement | undefined): void => {
+        if (!el) return;
+        useFocus.setState({ id: el.dataset['tcard'] ?? null });
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      };
+
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+        e.preventDefault();
+        if (!cur) return go(cards[0]);
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          return go(cards[cards.indexOf(cur) + (e.key === 'ArrowRight' ? 1 : -1)]);
+        }
+        return go(nearestRow(cur, cards, e.key === 'ArrowDown' ? 1 : -1));
+      }
+
+      if (e.key === ' ' && cur) {
+        e.preventDefault();
+        if (e.repeat) return;
+        const t = ws.task(focus);
+        if (!t) return;
+        void step(t, e.shiftKey ? -1 : 1, cur);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [rootRef, ws]);
+
+  async function step(t: Task, dir: 1 | -1, el: HTMLElement): Promise<void> {
+    const store = useStore.getState();
+    const stack = ws.kids(t.id).length > 0;
+    const at = CYCLE.indexOf(t.status);
+    let next: Status = at < 0 ? 'open' : (CYCLE[Math.max(0, Math.min(CYCLE.length - 1, at + dir))] ?? t.status);
+    if (stack && next === 'progress') next = dir > 0 ? 'done' : 'open';
+    if (next === t.status) return;
+
+    const refusal = next === 'progress' ? playRefusal(ws, t) : next === 'done' ? doneRefusal(ws, t) : null;
+    if (refusal) {
+      store.say(refusal);
+      shake(el.parentElement ?? el);
+      return;
+    }
+    const name = `„${t.title || 'Ohne Titel'}“`;
+    await store.runSteps(
+      [{ op: 'patch', kind: 'task', id: t.id, version: t.version, changes: { status: next } }],
+      next === 'done' ? () => `${name} erledigt` : null,
+    );
+  }
+}
+
+/** Die nächste Karte in der Reihe darüber oder darunter, möglichst senkrecht über der jetzigen. */
+function nearestRow(cur: HTMLElement, cards: HTMLElement[], dir: 1 | -1): HTMLElement | undefined {
+  const a = cur.getBoundingClientRect();
+  const cx = a.left + a.width / 2;
+  const cy = a.top + a.height / 2;
+  let best: { el: HTMLElement; dy: number; dx: number } | undefined;
+  for (const el of cards) {
+    if (el === cur) continue;
+    const r = el.getBoundingClientRect();
+    const dy = (r.top + r.height / 2 - cy) * dir;
+    // Erst ab einer halben Kartenhöhe gilt es als andere Reihe.
+    if (dy < a.height / 2) continue;
+    const dx = Math.abs(r.left + r.width / 2 - cx);
+    if (!best || dy < best.dy - 20 || (Math.abs(dy - best.dy) <= 20 && dx < best.dx)) best = { el, dy, dx };
+  }
+  return best?.el;
 }
 
 /* ------------------------------------------------------ Leerer Tisch */

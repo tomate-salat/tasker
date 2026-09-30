@@ -584,11 +584,21 @@ Festlegungen dabei, vom Nutzer bestätigt:
 
 - Unter „Alle Projekte“ zeigt der Tisch nur den Hinweis, ein Projekt zu wählen.
 - Ohne aktiven Milestone bietet der leere Tisch „◆ … starten“ für den obersten offenen im Plan an.
-- Ein Klick auf einen Stapel wählt ihn aus und fächert ihn auf; ein zweiter Klick klappt zu.
+- Ein Klick markiert eine Karte nur (ein Stapel klappt dabei auf oder zu), erst ein
+  **Doppelklick öffnet den Inspektor** (Wunsch des Nutzers).
 - Der Zähler am Erledigt-Stapel zählt Erledigtes jeder Ebene, auch Unteraufgaben.
 - Filter aus der Seitenleiste gelten auf dem Tisch nicht; die Filterleiste ist dort ausgeblendet.
 - Offene Schubladen merkt sich das Gerät (`tasker.tischOpen`).
-- Tastatur (Leertaste, Pfeile) gibt es auf dem Tisch noch nicht.
+
+Nachgezogen (Wunsch des Nutzers):
+
+- **Tastatur:** Pfeiltasten wandern zwischen den Karten, die Leertaste schaltet den Status der
+  markierten Karte weiter (Umschalt zurück). Ein Stapel springt dabei von Offen direkt auf
+  Erledigt, weil er nie ins Spiel kommt; gesperrte Karten schütteln sich.
+- **Im Spiel** bleibt eine Reihe und scrollt seitlich, statt umzubrechen.
+- **Jeder Zonenwechsel ist animiert**, auch über Leertaste, Inspektor oder andere Tabs – nicht nur
+  beim Ziehen. Gerade Erledigtes ohne Zeitpunkt (der Inspektor setzt den Status vor der Antwort
+  des Servers) liegt dabei obenauf, sonst sprang die Karte ohne Weg auf den Stapel.
 
 ### Angleichen an den Prototyp
 

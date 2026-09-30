@@ -81,6 +81,22 @@ export async function refuse(ghost: HTMLElement, home: DOMRect | null): Promise<
   }).finished;
 }
 
+/** Ungültiger Zug über die Tastatur: die Karte selbst schüttelt den Kopf. */
+export function shake(cell: HTMLElement): void {
+  if (reduced()) return;
+  cell.animate(
+    [
+      { translate: '0 0' },
+      { translate: '-10px 0' },
+      { translate: '8px 0' },
+      { translate: '-5px 0' },
+      { translate: '3px 0' },
+      { translate: '0 0' },
+    ],
+    { duration: 360, easing: 'ease-in-out' },
+  );
+}
+
 /** Der Erledigt-Stapel gibt beim Aufprall nach – ein ganzer Stapel stärker. */
 export function thump(pile: HTMLElement, big: boolean): void {
   if (reduced()) return;
