@@ -22,6 +22,7 @@ import {
   type OutlineView,
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
+import { progressLockedBy } from '@shared/tisch.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import {
@@ -168,6 +169,8 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       sub: (['open', 'progress', 'done'] as const).map((s) => ({
         label: MS_STATUS[s],
         check: m.status === s,
+        // Je Projekt ist nur einer aktiv.
+        disabled: s === 'progress' && !!progressLockedBy(ws, m),
         onSelect: () => void store.setMilestoneStatus(m.id, s),
       })),
     },

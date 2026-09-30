@@ -15,6 +15,7 @@ import {
   type OutlineFilter,
 } from '@shared/outline.js';
 import { schedule } from '@shared/schedule.js';
+import { progressLockedBy } from '@shared/tisch.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -30,6 +31,7 @@ import {
 import { MS_STATUS } from './ui/icons.js';
 
 export const VIEWS = [
+  'tisch',
   'plan',
   'ready',
   'backlog',
@@ -59,6 +61,7 @@ const LAYOUT_DEFAULT: Record<LayoutView, Layout> = {
 export const isLayoutView = (v: View): v is LayoutView => (LAYOUT_VIEWS as readonly View[]).includes(v);
 
 export const VIEW_LABEL: Record<View, string> = {
+  tisch: 'Tisch',
   plan: 'Plan',
   ready: 'Ready',
   backlog: 'Backlog',
@@ -73,8 +76,9 @@ export const VIEW_LABEL: Record<View, string> = {
  * Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste.
  * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
  * „Bilder“ ebenso: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
+ * „Tisch“ (Wunsch des Nutzers) steht als erster: der aktive Milestone als Kartenspiel.
  */
-export const TABS: View[] = ['plan', 'ready', 'backlog', 'docs', 'timeline', 'bilder', 'archive'];
+export const TABS: View[] = ['tisch', 'plan', 'ready', 'backlog', 'docs', 'timeline', 'bilder', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help';
 
@@ -1030,8 +1034,15 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setMilestoneStatus: async (id, status) => {
-    const m = get().ws?.milestone(id);
-    if (!m || m.status === status) return;
+    const ws = get().ws;
+    const m = ws?.milestone(id);
+    if (!ws || !m || m.status === status) return;
+    // Je Projekt ist nur einer aktiv – der Server lehnt es sonst auch ab.
+    const other = status === 'progress' ? progressLockedBy(ws, m) : null;
+    if (other) {
+      set({ toast: `Erst ist „${other.title || 'Ohne Titel'}“ dran – nur ein Milestone kann In Progress sein`, toastUndo: false });
+      return;
+    }
     const today = dayKey(new Date());
     const changes: Partial<Milestone> = { status };
     const autoStart = status === 'progress' && !m.startDate;

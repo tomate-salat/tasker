@@ -421,6 +421,7 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(nowIso(), id);
     }
     if (kind === 'task') adoptMarks(ctx, [id]);
+    if (kind === 'milestone' && values['status'] === 'progress') assertSingleActive(ctx, id);
     // Jedes Projekt ist für seine Markierungen selbst zuständig, fängt aber mit
     // denselben zwei an wie der Prototyp.
     if (kind === 'project') {
@@ -480,6 +481,15 @@ export function patch(
       }
     }
 
+    // Je Projekt ist höchstens ein Milestone „In Progress“ – er ist der aktive auf dem Tisch.
+    if (
+      kind === 'milestone' &&
+      ((fields['status'] === 'progress' && current['status'] !== 'progress') ||
+        (typeof fields['projectId'] === 'string' && fields['projectId'] !== current['project_id']))
+    ) {
+      assertSingleActive(ctx, id);
+    }
+
     // „Erledigt“ führt den Zeitpunkt mit, damit Burnup und Archiv ihn haben.
     if (kind === 'task' && typeof fields['status'] === 'string') {
       const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
@@ -489,6 +499,24 @@ export function patch(
 
     return read(ctx, kind, id);
   })();
+}
+
+/**
+ * Wirft, wenn neben diesem Milestone schon ein anderer im Projekt „In Progress“
+ * ist. Läuft in der Transaktion der Änderung – die fällt dann ganz zurück.
+ */
+function assertSingleActive(ctx: DbCtx, id: string): void {
+  const row = readRow(ctx, 'milestone', id);
+  if (!row || row['status'] !== 'progress' || row['archived_at']) return;
+  const other = ctx.sqlite
+    .prepare(
+      `SELECT title FROM milestone
+         WHERE project_id = ? AND id <> ? AND status = 'progress' AND archived_at IS NULL LIMIT 1`,
+    )
+    .get(row['project_id'], id) as { title: string } | undefined;
+  if (other) {
+    throw new Error(`In diesem Projekt ist schon „${other.title || 'Ohne Titel'}“ In Progress`);
+  }
 }
 
 /**

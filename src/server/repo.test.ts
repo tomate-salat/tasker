@@ -1014,6 +1014,45 @@ describe('Milestone in ein anderes Projekt', () => {
     assert.equal(project(kid.id), b.id, 'auch die Unteraufgabe wandert mit');
     assert.equal(project(other.id), a.id, 'was nicht am Milestone hängt, bleibt');
   });
+
+  it('nicht, wenn er aktiv ist und dort schon ein anderer aktiv ist', () => {
+    const a = mkProject();
+    const b = create(ctx, 'project', { name: 'Website' }) as { id: string };
+    mkMilestone({ projectId: b.id, title: 'Dort', status: 'progress' });
+    const m = mkMilestone({ projectId: a.id, title: 'Hier', status: 'progress' });
+    assert.throws(() => patch(ctx, 'milestone', m.id, m.version, { projectId: b.id }), /Dort/);
+    assert.equal(loadBootstrap(ctx).milestones.find((x) => x.id === m.id)?.projectId, a.id);
+  });
+});
+
+describe('Nur ein aktiver Milestone je Projekt', () => {
+  it('ein zweiter lässt sich nicht auf In Progress setzen', () => {
+    const p = mkProject();
+    mkMilestone({ projectId: p.id, title: 'Läuft', status: 'progress' });
+    const m = mkMilestone({ projectId: p.id, title: 'Nächster' });
+    assert.throws(() => patch(ctx, 'milestone', m.id, m.version, { status: 'progress' }), /Läuft/);
+    const now = loadBootstrap(ctx).milestones.find((x) => x.id === m.id);
+    assert.equal(now?.status, 'open');
+    assert.equal(now?.version, m.version, 'die Änderung fällt ganz zurück');
+  });
+
+  it('auch nicht beim Anlegen', () => {
+    const p = mkProject();
+    mkMilestone({ projectId: p.id, title: 'Läuft', status: 'progress' });
+    assert.throws(() => mkMilestone({ projectId: p.id, title: 'Neu', status: 'progress' }), /Läuft/);
+  });
+
+  it('in einem anderen Projekt, erledigt oder archiviert zählt nicht', () => {
+    const p = mkProject();
+    const q = create(ctx, 'project', { name: 'Website' }) as { id: string };
+    mkMilestone({ projectId: q.id, title: 'Anderes Projekt', status: 'progress' });
+    mkMilestone({ projectId: p.id, title: 'Fertig', status: 'done' });
+    const old = mkMilestone({ projectId: p.id, title: 'Alt', status: 'progress' });
+    archive(ctx, 'milestone', old.id);
+    const m = mkMilestone({ projectId: p.id, title: 'Nächster' });
+    patch(ctx, 'milestone', m.id, m.version, { status: 'progress' });
+    assert.equal(loadBootstrap(ctx).milestones.find((x) => x.id === m.id)?.status, 'progress');
+  });
 });
 
 /* ------------------------------------------------------------------ Hilfen */

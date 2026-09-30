@@ -511,6 +511,85 @@ Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `us
 - Änderungen gehen über `insertText`, damit Strg+Z sie wie Getipptes zurücknimmt.
 11. Gamification, dezent.
 
+### Tisch: der aktive Milestone (über den Prototyp hinaus)
+
+Wunsch des Nutzers (30.09.2026): eine verspielte, kartenbasierte Ansicht für die Arbeit am aktiven
+Milestone – mit dem belohnenden Gefühl, eine Karte auf den Erledigt-Stapel zu legen, wie in
+Codecks. Die Ansicht ist ein eigener Reiter **„Tisch“**. Sie **ersetzt die zuerst geplante
+„Hand“** (eine Kartenreihe oben im Plan); die ist verworfen.
+
+**Der aktive Milestone**
+
+- Aktiv ist der Milestone mit dem Status **In Progress**; ein eigenes Kennzeichen gibt es nicht.
+- **Je Projekt höchstens einer.** Ist einer aktiv, ist „In Progress“ bei allen anderen Milestones
+  des Projekts gesperrt, bis keiner mehr aktiv ist.
+- Eine bearbeitete Aufgabe gehört immer zu einem Milestone – der Nutzer führt darüber ein
+  Changelog. Auf den Tisch kommt ein Task deshalb nur über die bestehenden Wege in den Milestone;
+  einen eigenen Weg aus Ready oder Backlog auf den Tisch gibt es nicht.
+
+**Aufbau (Entwurf „Spieltisch hochkant“)**, von oben nach unten – oben, was noch kommt, unten, was
+man gerade in der Hand hat:
+
+- **Kopf:** Name des Milestones, Fortschritt in Punkten als Balken, verbleibende Tage laut
+  Zeitplan.
+- **Gesperrt:** Tasks mit offenen Voraussetzungen, angekettet, mit der Zahl der offenen
+  Voraussetzungen. Lassen sich nicht ausspielen.
+- **Offen / frei:** die große Fläche in der Mitte.
+- **Im Spiel:** entspricht In Progress. Sieben leere Plätze zeigen einen Richtwert (wie in
+  Codecks), begrenzt wird aber nicht – es dürfen mehr Karten ins Spiel.
+- **Erledigt-Stapel** unten rechts, schief aufeinanderliegende Karten mit Zähler.
+
+Verschieben zwischen den Zonen setzt den Status (Offen, In Progress, Erledigt). Status
+**Blockiert** liegt in „Gesperrt“, **Unklar** in der mittleren Fläche mit einer Markierung.
+
+**Kein aktiver Milestone:** eine eigene, gern verspielte leere Ansicht („kein aktiver
+Milestone“), etwa ein leerer Tisch. **Milestone fertig:** vorerst passiert nichts Besonderes; der
+Nutzer will das erst beim Verwenden entscheiden.
+
+**Unteraufgaben**
+
+- Ein Task mit Unteraufgaben ist eine **Stapelkarte**: Zähler („2/5“) und je Unteraufgabe ein Punkt
+  im Status. Ein Stapel belegt keinen Platz in „Im Spiel“ und bleibt in der mittleren Fläche.
+- **Auffächern:** Klick auf den Stapel öffnet darunter eine Schublade über die ganze Breite mit den
+  Unteraufgaben. Unter-Unteraufgaben sind darin wieder Stapel mit einer eingerückten Schublade;
+  jede trägt eine Brotkrume („Icons › App-Icons“). Mehrere Schubladen dürfen offen sein.
+- Unteraufgaben lassen sich aus der Schublade ausspielen; auf dem Spielfeld tragen sie die
+  Brotkrume, in der Schublade bleibt ein blasser Umriss. Gesperrte Unteraufgaben liegen
+  angekettet in ihrer Schublade (nicht zusätzlich oben in „Gesperrt“). Erledigte bleiben blass mit
+  Häkchen liegen.
+- Sind alle Unteraufgaben erledigt, wird der Stapel **nicht** von selbst erledigt (bestehende
+  Regel, `parentStatus.ts`); er zeigt „fertig“ und wartet darauf, abgelegt zu werden.
+
+**Animationen** – ausdrücklicher Wunsch, sie sind der Kern der Ansicht:
+
+- Ausspielen: Die Karte hebt sich, kippt beim Ziehen (`cardTilt.ts`) und landet mit leichtem
+  Nachfedern auf ihrem Platz.
+- Ablegen: Die Karte fliegt auf den Stapel und bleibt leicht verdreht liegen; der Zähler springt,
+  „+n Pkt“ steigt auf, der Balken im Kopf füllt sich sichtbar.
+- Stapel ablegen: ein größerer Moment als eine einzelne Karte.
+- Freischalten: Wird die letzte Voraussetzung erledigt, springt die Kette auf, die Karte dreht
+  sich um und gleitet von „Gesperrt“ nach „Offen“.
+- Ungültiger Zug (gesperrte Karte ausspielen): Die Karte schüttelt sich und gleitet
+  zurück.
+- Schublade: fährt auf, die Karten fächern leicht versetzt heraus.
+- Bei `prefers-reduced-motion` nur kurze Überblendungen.
+
+Der Reiter „Tisch“ steht als **erster**, vor Plan.
+
+**Umgesetzt (01.10.2026):** Logik in `src/shared/tisch.ts` (Zonen, Sperren, aktiver Milestone,
+mit Tests), Ansicht in `src/client/ui/Tisch.tsx` und `tisch.css`, Animationen in `tischFx.ts`. Die
+Sperre „nur ein aktiver Milestone“ prüft der Server beim Ändern und Anlegen (`assertSingleActive`
+in `repo.ts`); Inspektor und Kontextmenü sperren „In Progress“, die Leertaste meldet es. Kleinere
+Festlegungen dabei, vom Nutzer bestätigt:
+
+- Unter „Alle Projekte“ zeigt der Tisch nur den Hinweis, ein Projekt zu wählen.
+- Ohne aktiven Milestone bietet der leere Tisch „◆ … starten“ für den obersten offenen im Plan an.
+- Ein Klick auf einen Stapel wählt ihn aus und fächert ihn auf; ein zweiter Klick klappt zu.
+- Der Zähler am Erledigt-Stapel zählt Erledigtes jeder Ebene, auch Unteraufgaben.
+- Filter aus der Seitenleiste gelten auf dem Tisch nicht; die Filterleiste ist dort ausgeblendet.
+- Offene Schubladen merkt sich das Gerät (`tasker.tischOpen`).
+- Tastatur (Leertaste, Pfeile) gibt es auf dem Tisch noch nicht.
+
 ### Angleichen an den Prototyp
 
 Beim ersten eigenen Durchklicken stellte sich heraus: die Logik ist portiert, die Oberfläche war

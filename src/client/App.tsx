@@ -20,6 +20,7 @@ import { Timeline } from './ui/Timeline.js';
 import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
 import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
+import { Tisch } from './ui/Tisch.js';
 import { HideDoneSwitch } from './ui/hideDone.js';
 
 /** Das Abhängigkeits-Board bringt React Flow mit – erst laden, wenn es aufgeht. */
@@ -187,6 +188,7 @@ function Shell({
 
           <FilterBar ws={ws} />
 
+          {view === 'tisch' && <Tisch ws={ws} />}
           {(view === 'plan' || view === 'ready' || view === 'backlog' || view === 'docs') && (
             <Outline ws={ws} view={view} />
           )}
@@ -358,6 +360,8 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
 
   if (view === 'archive') return <ArchiveBar />;
   if (view === 'trash') return <TrashBar ws={ws} />;
+  // Der Tisch zeigt immer den ganzen aktiven Milestone – Filter gelten dort nicht.
+  if (view === 'tisch') return null;
 
   // Wie im Prototyp: über dem Zeitplan steht allein das Tempo, sonst die Filter.
   if (view === 'timeline') {

@@ -13,6 +13,7 @@ import {
   total,
 } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
+import { progressLockedBy } from '@shared/tisch.js';
 import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
@@ -437,6 +438,12 @@ function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
 
 /* ------------------------------------------------------- Kopf: Milestone */
 
+/** Je Projekt ist nur ein Milestone „In Progress“ – bei allen anderen ist der Knopf gesperrt. */
+function activeLock(ws: Workspace, m: Milestone): Partial<Record<Status, string>> {
+  const other = progressLockedBy(ws, m);
+  return other ? { progress: `„${other.title || 'Ohne Titel'}“ ist schon In Progress – nur einer kann aktiv sein` } : {};
+}
+
 function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone }) {
   const { patch, settings, setMilestoneStatus } = useStore();
   const stats = milestoneStats(ws, milestone);
@@ -459,7 +466,13 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
   return (
     <>
       <MetaRow k="status" label="Status">
-        <StatusGroups kind="milestone" item={milestone} groups={[MS_KEYS]} labels={MS_STATUS} />
+        <StatusGroups
+          kind="milestone"
+          item={milestone}
+          groups={[MS_KEYS]}
+          labels={MS_STATUS}
+          locked={activeLock(ws, milestone)}
+        />
         {stats.tasksDone && !stats.isDone && (
           <span className="hint ms-hint">
             Alle Tasks erledigt –{' '}
