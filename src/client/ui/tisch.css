@@ -188,22 +188,6 @@
   outline-offset: 3px;
 }
 
-.tcard-crumb {
-  position: relative;
-  z-index: 1;
-  padding: 7px 12px 0;
-  font: 500 11px/1.3 var(--body);
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tcard.has-cover .tcard-crumb,
-.tcard:has(.tcard-cover) .tcard-crumb {
-  color: #fff;
-}
-
 /* Angekettet: grau, und die Kette obenauf. */
 .tcell.is-locked > .tcard {
   filter: grayscale(0.85);

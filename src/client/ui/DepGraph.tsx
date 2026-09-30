@@ -733,7 +733,8 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
           </div>
         </>
       ) : (
-        <CardFace ws={ws} task={item} />
+        // Unteraufgaben zeigen ihre Eltern-Tasks – sonst sind sie auf dem Board nicht zu erkennen.
+        <CardFace ws={ws} task={item} crumb />
       )}
       <Handle type="source" position={Position.Right} />
     </div>

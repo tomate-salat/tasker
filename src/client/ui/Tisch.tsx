@@ -401,8 +401,6 @@ function TischCard({
   const away = where === 'drawer' && !stack && task.status === 'progress';
   const locked = !done && task.status !== 'progress' && isBlocked(ws, task);
   const ready = stack && stackReady(ws, task);
-  // Im Spiel steht über einer Unteraufgabe, wozu sie gehört.
-  const crumb = where === 'play' ? ws.ancestors(task) : [];
   const drag = dragSource('task', task.id, !done && !away);
 
   const focused = useFocus((s) => s.id === task.id);
@@ -471,12 +469,8 @@ function TischCard({
           startTilt(e);
         }}
       >
-        {crumb.length > 0 && (
-          <div className="tcard-crumb" title={crumb.map((a) => a.title).join(' › ')}>
-            {crumb.map((a) => a.title || 'Ohne Titel').join(' › ')} ›
-          </div>
-        )}
-        <CardFace ws={ws} task={task} />
+        {/* Im Spiel steht über einer Unteraufgabe, wozu sie gehört. */}
+        <CardFace ws={ws} task={task} crumb={where === 'play'} />
         {locked && (
           <span className="tchain" title={lockTitle(ws, task)}>
             {LOCK_ICON}

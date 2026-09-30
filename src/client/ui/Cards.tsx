@@ -608,6 +608,10 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
  * Das Innere einer Karte: Titelbild, Titel und Fuß – in der Kartenansicht und
  * auf dem Abhängigkeits-Board gleich (Wunsch des Nutzers). Ohne `onCell` lässt
  * sich darin nichts anklicken – so zeigt das Board seine Tasks.
+ *
+ * `crumb`: über dem Titel steht, zu welchen Eltern-Tasks eine Unteraufgabe
+ * gehört („Icons › App-Icons ›“) – auf dem Tisch im Spiel und auf dem Board,
+ * wo Unteraufgaben sonst nicht als solche zu erkennen sind.
  */
 export function CardFace({
   ws,
@@ -615,9 +619,11 @@ export function CardFace({
   titleEdit,
   onTitleDoubleClick,
   onCell,
+  crumb = false,
 }: {
   ws: Workspace;
   task: Task;
+  crumb?: boolean;
   /** Steht statt des Titels da, solange er bearbeitet wird. */
   titleEdit?: React.ReactNode;
   onTitleDoubleClick?: () => void;
@@ -638,6 +644,7 @@ export function CardFace({
   return (
     <>
       {cover && <div className="tcard-cover" style={{ backgroundImage: `url(${cover})` }} />}
+      {crumb && <Crumb ws={ws} task={task} />}
 
       {/* Die Markierung steht als Zeichen vor dem Titel und bricht mit ihm um
           (Wunsch des Nutzers) – anklickbar wie die Zellen im Fuß. */}
@@ -703,6 +710,17 @@ export function CardFace({
         {!doc && (counted > 0 || cl.total > 0) && <SegBar segments={segments} />}
       </div>
     </>
+  );
+}
+
+function Crumb({ ws, task }: { ws: Workspace; task: Task }) {
+  const up = ws.ancestors(task);
+  if (!up.length) return null;
+  const path = up.map((a) => a.title || 'Ohne Titel').join(' › ');
+  return (
+    <div className="tcard-crumb" title={path}>
+      {path} ›
+    </div>
   );
 }
 
