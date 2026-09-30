@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { checklist, toggleChecklistItem } from './checklist.js';
+import { checklist, convertibleItems, replaceItems, toggleChecklistItem } from './checklist.js';
 
 describe('Checklisten in Markdown', () => {
   it('erkennt die üblichen Schreibweisen', () => {
@@ -41,5 +41,85 @@ describe('Checklisten in Markdown', () => {
 
   it('behält die Einrückung beim Umschalten', () => {
     assert.equal(toggleChecklistItem('  - [ ] tief', 0), '  - [x] tief');
+  });
+});
+
+describe('Checkboxen zu Unteraufgaben', () => {
+  const codecks = [
+    'Quest Generator',
+    '',
+    '- [ ] test',
+    '    abc',
+    '    def',
+    '      ',
+    '    gehört noch zu test',
+    '- [ ] test 2',
+    '      ',
+    '    abc',
+    '      ',
+    '    def',
+    '    ',
+    '    gehört zu test2',
+    '',
+    'Danach',
+  ].join('\n');
+
+  it('nimmt alles Eingerückte mit, auch über Leerzeilen', () => {
+    const items = convertibleItems(codecks);
+    assert.deepEqual(
+      items.map((i) => [i.title, i.desc]),
+      [
+        ['test', 'abc\ndef\n\ngehört noch zu test'],
+        ['test 2', 'abc\n\ndef\n\ngehört zu test2'],
+      ],
+    );
+  });
+
+  it('ersetzt die Punkte durch Verweise und lässt den Rest stehen', () => {
+    const items = convertibleItems(codecks);
+    const out = replaceItems(codecks, items.map((item, i) => ({ item, ref: 123 + i })));
+    assert.equal(out, 'Quest Generator\n\n- $123\n- $124\n\nDanach');
+  });
+
+  it('nimmt eingerückte Checkboxen als Inhalt mit', () => {
+    const text = '- [ ] a\n  - [ ] b\n  - [x] c\n- [ ] d';
+    const items = convertibleItems(text);
+    assert.deepEqual(
+      items.map((i) => [i.n, i.title, i.desc]),
+      [
+        [0, 'a', '- [ ] b\n- [x] c'],
+        [3, 'd', ''],
+      ],
+    );
+  });
+
+  it('lässt abgehakte Punkte samt Inhalt stehen', () => {
+    const text = '- [x] fertig\n  - [ ] drin\n- [ ] offen';
+    assert.deepEqual(convertibleItems(text).map((i) => i.title), ['offen']);
+  });
+
+  it('wandelt einzelne Punkte um, auch eingerückte', () => {
+    const text = '- [ ] a\n  - [ ] b\n    mehr\n- [ ] c';
+    const items = convertibleItems(text, [1]);
+    assert.deepEqual(items.map((i) => [i.title, i.desc]), [['b', 'mehr']]);
+    assert.equal(replaceItems(text, [{ item: items[0]!, ref: 7 }]), '- [ ] a\n  - $7\n- [ ] c');
+  });
+
+  it('behält das Listenzeichen und überspringt leere Punkte', () => {
+    const text = '1. [ ] eins\n2. [ ] \n* [ ] drei';
+    const items = convertibleItems(text);
+    assert.deepEqual(items.map((i) => i.title), ['eins', 'drei']);
+    assert.equal(
+      replaceItems(text, items.map((item, i) => ({ item, ref: i + 1 }))),
+      '1. $1\n2. [ ] \n* $2',
+    );
+  });
+
+  it('hält Code-Blöcke im Punkt zusammen', () => {
+    const text = '- [ ] a\n  ```\nnicht eingerückt\n  ```\n- [ ] b';
+    assert.deepEqual(convertibleItems(text).map((i) => [i.title, i.desc]), [
+      ['a', '```\nnicht eingerückt\n```'],
+      ['b', ''],
+    ]);
   });
 });

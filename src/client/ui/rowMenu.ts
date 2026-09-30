@@ -1,3 +1,4 @@
+import { convertibleItems } from '@shared/checklist.js';
 import {
   isDone,
   TASK_STATUS,
@@ -93,6 +94,12 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
       label: 'In Milestone umwandeln',
       disabled: ws.kids(t.id).length === 0,
       onSelect: () => void store.convertToMilestone(t.id),
+    },
+    {
+      // Wie in Codecks: jede offene Checkbox der Beschreibung wird eine Unteraufgabe.
+      label: 'Checkboxen zu Unteraufgaben',
+      disabled: convertibleItems(t.desc).length === 0,
+      onSelect: () => void store.checklistToSubtasks(t.id),
     },
     { label: 'Archivieren', kbd: 'A', onSelect: () => void store.archiveItem('task', t.id) },
     { sep: true },

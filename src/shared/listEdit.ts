@@ -7,6 +7,8 @@
  *   nächsten Punkt gleicher Art; eine Checkbox kommt immer leer mit.
  * - Enter in einem leeren Punkt beendet die Liste: eingerückt geht es eine
  *   Ebene hinauf, ganz außen verschwindet das Zeichen.
+ * - Umschalt+Enter bricht im Punkt die Zeile um und rückt die neue so weit
+ *   ein, dass sie noch zum Punkt gehört – wie in Codecks.
  * - Tab / Umschalt+Tab rücken Listenpunkte ein und aus – alle markierten
  *   Zeilen, die Listenpunkte sind.
  * - Alt und Pfeil hoch/runter schieben die Zeile der Schreibmarke (oder alle
@@ -85,6 +87,42 @@ export function enterInList(value: string, selStart: number, selEnd: number): Te
   const text = `\n${it.indent}${marker}${it.gap}${it.box ? '[ ] ' : ''}`;
   const at = selStart + text.length;
   return { from: selStart, to: selStart, text, selStart: at, selEnd: at };
+}
+
+/**
+ * Umschalt+Enter: neue Zeile, die noch zum Listenpunkt gehört – eingerückt bis
+ * unter seinen Inhalt. In einer Zeile, die schon zu einem Punkt gehört, bleibt
+ * ihre Einrückung. `null` heißt: normaler Umbruch.
+ */
+export function breakInItem(value: string, selStart: number, selEnd: number): TextEdit | null {
+  const start = lineStartAt(value, selStart);
+  const line = value.slice(start, lineEndAt(value, selStart));
+  const it = item(line);
+  let indent: number;
+  if (it) {
+    if (selStart - start < it.prefix) return null;
+    indent = it.indent.length + contentWidth(it);
+  } else {
+    indent = /^ */.exec(line)?.[0].length ?? 0;
+    if (!indent || selStart - start < indent || !insideItem(value.slice(0, start).split('\n'), indent)) {
+      return null;
+    }
+  }
+  const text = `\n${' '.repeat(indent)}`;
+  const at = selStart + text.length;
+  return { from: selStart, to: selEnd, text, selStart: at, selEnd: at };
+}
+
+/** Steht eine Zeile mit dieser Einrückung noch in einem Listenpunkt darüber? */
+function insideItem(above: string[], width: number): boolean {
+  for (let i = above.length - 1; i >= 0; i--) {
+    const line = above[i] as string;
+    if (!line.trim()) continue;
+    const it = item(line);
+    if (it && it.indent.length < width) return true;
+    if ((/^ */.exec(line)?.[0].length ?? 0) < width) return false;
+  }
+  return false;
 }
 
 /**

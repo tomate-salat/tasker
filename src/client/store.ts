@@ -276,6 +276,8 @@ type State = {
    * die Unteraufgaben werden seine Wurzelaufgaben.
    */
   convertToMilestone: (id: string) => Promise<void>;
+  /** Checkboxen der Beschreibung zu Unteraufgaben – ohne `items` alle offenen. */
+  checklistToSubtasks: (id: string, items?: number[]) => Promise<void>;
   /**
    * Ohne `message` still (nur Rückgängig auf dem Stapel). Mit `message` gibt es
    * eine Meldung mit „Rückgängig“; sie bekommt die Aufgabe am neuen Ort.
@@ -916,6 +918,19 @@ export const useStore = create<State>((set, get) => ({
         }`,
         undo,
       );
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Umwandeln fehlgeschlagen' });
+    }
+  },
+
+  checklistToSubtasks: async (id, items) => {
+    const task = get().ws?.task(id);
+    if (!task) return;
+    try {
+      const { count, undo } = await api.checklist(id, task.version, items);
+      get().setCollapsed(id, false);
+      await get().load();
+      remember(count === 1 ? 'Eine Unteraufgabe angelegt' : `${count} Unteraufgaben angelegt`, undo);
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Umwandeln fehlgeschlagen' });
     }

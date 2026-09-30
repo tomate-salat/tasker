@@ -1,4 +1,4 @@
-import { enterInList, moveLines, tabInList, type TextEdit } from '@shared/listEdit.js';
+import { breakInItem, enterInList, moveLines, tabInList, type TextEdit } from '@shared/listEdit.js';
 import type { Workspace } from '@shared/workspace.js';
 import { replaceText, useCaretMenu } from './caretMenu.js';
 import { useRefPicker } from './refs.js';
@@ -10,7 +10,8 @@ import { useRefPicker } from './refs.js';
  * - `$` sucht Aufgaben und Milestones für einen Verweis (`refs.tsx`),
  * - `/` bietet Befehle an (`SLASH_COMMANDS`),
  * - Enter setzt Listen fort, Tab / Umschalt+Tab rücken Listenpunkte ein und
- *   aus (`listEdit.ts`). Umschalt+Enter bricht die Zeile ohne neuen Punkt um.
+ *   aus (`listEdit.ts`). Umschalt+Enter bricht die Zeile ohne neuen Punkt um –
+ *   in einem Punkt so eingerückt, dass die neue Zeile noch zu ihm gehört.
  * - Alt und Pfeil hoch/runter verschieben die Zeile im Text.
  */
 
@@ -139,8 +140,8 @@ export function useSmartEditor(
     }
     if (e.altKey || e.ctrlKey || e.metaKey) return false;
     const edit =
-      e.key === 'Enter' && !e.shiftKey
-        ? enterInList(el.value, el.selectionStart, el.selectionEnd)
+      e.key === 'Enter'
+        ? (e.shiftKey ? breakInItem : enterInList)(el.value, el.selectionStart, el.selectionEnd)
         : e.key === 'Tab'
           ? tabInList(el.value, el.selectionStart, el.selectionEnd, e.shiftKey ? -1 : 1)
           : null;

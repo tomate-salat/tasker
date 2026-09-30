@@ -5,6 +5,7 @@ import {
   bulkBody,
   codecksImportBody,
   codecksRefsBody,
+  checklistBody,
   convertBody,
   createSchemas,
   drawingCreate,
@@ -53,6 +54,7 @@ import {
   applySteps,
   archive,
   bulk,
+  checklistToSubtasks,
   convertToMilestone,
   create,
   duplicate,
@@ -346,6 +348,17 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     return run(c, bus, () => convertToMilestone(ctx, body.data.id, body.data.version), {
       status: 201,
       event: () => ({ type: 'reload', reason: 'In Milestone umgewandelt' }),
+    });
+  });
+
+  app.post('/checklist', async (c) => {
+    const body = checklistBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    const { id, version, items } = body.data;
+    // Neue Unteraufgaben und eine geänderte Beschreibung – neu laden.
+    return run(c, bus, () => checklistToSubtasks(ctx, id, version, items), {
+      status: 201,
+      event: () => ({ type: 'reload', reason: 'Checkboxen umgewandelt' }),
     });
   });
 

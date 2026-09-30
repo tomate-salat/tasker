@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dependsOn, inheritedBlock } from '@shared/blocking.js';
-import { checklist } from '@shared/checklist.js';
+import { checklist, checklistItems, convertibleItems } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags, projectTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
@@ -40,7 +40,7 @@ import {
   useUpload,
 } from './imageDrop.js';
 import { imagesIn } from './imageFile.js';
-import { markdownParts, checkboxClick } from './markdown.js';
+import { markdownParts, checkboxClick, subtaskClick } from './markdown.js';
 import { focusAtEnd, useSmartEditor } from './editor.js';
 import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
@@ -626,7 +626,20 @@ function Content({
     },
   };
 
-  const { parts, embedded } = markdownParts(item.desc, drawings.list, resolve);
+  /**
+   * Offene Checkboxen einer Aufgabe lassen sich zu Unteraufgaben machen – eine
+   * einzeln per Knopf neben ihr, alle unter der Beschreibung.
+   */
+  const toSubtasks = useStore((s) => s.checklistToSubtasks);
+  const canSubtask = kind === 'task' && !(item as Task).doc;
+  const open = canSubtask ? checklistItems(item.desc).filter((it) => !it.done && (it.title || it.desc)) : [];
+  const convertible = canSubtask ? convertibleItems(item.desc).length : 0;
+  const { parts, embedded } = markdownParts(
+    item.desc,
+    drawings.list,
+    resolve,
+    new Set(open.map((it) => it.n)),
+  );
   const loose = drawings.list.filter((d) => !embedded.has(d.id));
 
   useEffect(() => {
@@ -693,6 +706,11 @@ function Content({
         {...imageEvents}
         onClick={(e) => {
           if (refClick(e)) return;
+          const sub = subtaskClick(e);
+          if (sub !== null) {
+            void toSubtasks(item.id, [sub]);
+            return;
+          }
           // Ein gewöhnlicher Link öffnet sein Ziel, nicht den Editor.
           if ((e.target as HTMLElement).closest('a[href]')) return;
           const next = checkboxClick(e, item.desc);
@@ -742,6 +760,15 @@ function Content({
       )}
 
       <div className="d-actions">
+        {convertible > 0 && (
+          <button
+            className="linkish"
+            title="Jede offene Checkbox der Beschreibung wird eine Unteraufgabe"
+            onClick={() => void toSubtasks(item.id)}
+          >
+            Checkboxen zu Unteraufgaben
+          </button>
+        )}
         <button
           className="linkish"
           disabled={drawings.busy}

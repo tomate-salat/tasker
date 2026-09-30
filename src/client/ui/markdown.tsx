@@ -17,10 +17,14 @@ const PLACEHOLDER = /<p>DRAWEMBED([A-Za-z0-9_-]+)END<\/p>/;
 
 /**
  * Markdown zu bereinigtem HTML; Checkboxen bekommen ihre laufende Nummer, und
- * mit `resolve` werden Verweise ($142) zu Links.
+ * mit `resolve` werden Verweise ($142) zu Links. Jeder Zeilenumbruch bleibt
+ * einer – wie in Codecks (Wunsch des Nutzers).
+ *
+ * `subtasks` sind die Nummern der Checkboxen, die neben sich einen Knopf zum
+ * Umwandeln in eine Unteraufgabe bekommen.
  */
-export function markdownHtml(src: string, resolve?: RefResolver): string {
-  const raw = marked.parse(src ?? '', { async: false, gfm: true }) as string;
+export function markdownHtml(src: string, resolve?: RefResolver, subtasks?: ReadonlySet<number>): string {
+  const raw = marked.parse(src ?? '', { async: false, gfm: true, breaks: true }) as string;
   // Links nach draußen öffnen einen neuen Tab – sonst verlässt ein Klick die Anwendung.
   const sanitized = DOMPurify.sanitize(raw).replace(
     /<a href="(https?:[^"]*)"/g,
@@ -28,11 +32,13 @@ export function markdownHtml(src: string, resolve?: RefResolver): string {
   );
   const clean = resolve ? linkRefs(sanitized, resolve) : sanitized;
   let n = 0;
-  return clean.replace(
-    /<input[^>]*type="checkbox"[^>]*>/g,
-    (m) =>
-      `<input type="checkbox" class="md-cb" data-cb="${n++}"${/checked/.test(m) ? ' checked' : ''} aria-label="Checklisten-Punkt umschalten">`,
-  );
+  return clean.replace(/<input[^>]*type="checkbox"[^>]*>/g, (m) => {
+    const i = n++;
+    const box = `<input type="checkbox" class="md-cb" data-cb="${i}"${/checked/.test(m) ? ' checked' : ''} aria-label="Checklisten-Punkt umschalten">`;
+    return subtasks?.has(i)
+      ? `${box}<button type="button" class="md-cb-sub" data-sub="${i}" title="In Unteraufgabe umwandeln">↳ Unteraufgabe</button>`
+      : box;
+  });
 }
 
 export type MarkdownPart =
@@ -44,6 +50,7 @@ export function markdownParts(
   desc: string,
   drawings: Drawing[],
   resolve?: RefResolver,
+  subtasks?: ReadonlySet<number>,
 ): { parts: MarkdownPart[]; embedded: Set<string> } {
   const embedded = new Set<string>();
   const src = (desc || '').replace(TOKEN, (m, name: string) => {
@@ -53,7 +60,7 @@ export function markdownParts(
     return `\n\nDRAWEMBED${d.id}END\n\n`;
   });
 
-  const pieces = markdownHtml(src, resolve).split(new RegExp(PLACEHOLDER.source, 'g'));
+  const pieces = markdownHtml(src, resolve, subtasks).split(new RegExp(PLACEHOLDER.source, 'g'));
   const parts: MarkdownPart[] = [];
   pieces.forEach((piece, i) => {
     if (i % 2 === 1) {
@@ -64,6 +71,15 @@ export function markdownParts(
     if (piece.trim()) parts.push({ kind: 'html', html: piece });
   });
   return { parts, embedded };
+}
+
+/** Klick auf den Umwandeln-Knopf einer Checkbox: ihre Nummer, sonst `null`. */
+export function subtaskClick(e: React.MouseEvent): number | null {
+  const button = (e.target as HTMLElement).closest?.('button.md-cb-sub') as HTMLElement | null;
+  if (!button) return null;
+  e.stopPropagation();
+  const n = Number(button.dataset.sub);
+  return Number.isNaN(n) ? null : n;
 }
 
 /**

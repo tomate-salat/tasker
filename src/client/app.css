@@ -2044,6 +2044,13 @@ button.prop:hover {
 .md li:has(> p:first-child > input:first-child) {
   list-style: none;
   margin-left: -18px;
+  /* Folgezeilen stehen unter dem Text, nicht unter der Checkbox – wie in Codecks. */
+  padding-left: 24px;
+}
+
+.md li > input.md-cb:first-child,
+.md li > p:first-child > input.md-cb:first-child {
+  margin-left: -20px;
 }
 
 .md code {
@@ -2089,6 +2096,47 @@ button.prop:hover {
 
 .md-cb {
   cursor: pointer;
+}
+
+/* Neben einer offenen Checkbox: in eine Unteraufgabe umwandeln – erst beim Überfahren. */
+.md li:has(> .md-cb-sub),
+.md li:has(> p > .md-cb-sub) {
+  position: relative;
+}
+
+.md-cb-sub {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 0 6px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.md li:hover:not(:has(li:hover)) > .md-cb-sub,
+.md li:hover:not(:has(li:hover)) > p > .md-cb-sub,
+.md-cb-sub:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.md-cb-sub:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (hover: none) {
+  .md-cb-sub {
+    display: none;
+  }
 }
 
 /* ---- Galerie ---- */

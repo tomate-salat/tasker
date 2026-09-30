@@ -18,6 +18,7 @@ import type {
   TrashRow as TrashRowData,
   Undoable,
 } from '../shared/api.js';
+import { convertibleItems, replaceItems } from '../shared/checklist.js';
 import { parentStatusAfter } from '../shared/parentStatus.js';
 import { refsIn, type RefStub } from '../shared/refs.js';
 import type { DbCtx } from './db.js';
@@ -916,6 +917,43 @@ export function convertToMilestone(
       { op: 'purge', kind: 'milestone', id: ms.id },
     ];
     return { id: ms.id, count: kids.length, undo: stampVersions(ctx, back) };
+  })();
+}
+
+/**
+ * Checkboxen der Beschreibung werden Unteraufgaben – wie in Codecks (Wunsch
+ * des Nutzers): der Text hinter der Checkbox wird der Titel, alles Eingerückte
+ * darunter die Beschreibung, und in der Beschreibung bleibt ein Verweis stehen.
+ */
+export function checklistToSubtasks(
+  ctx: DbCtx,
+  id: string,
+  version: number,
+  which?: number[],
+): { count: number; undo: Step[] } {
+  return ctx.sqlite.transaction(() => {
+    const row = readRow(ctx, 'task', id);
+    if (!row) throw new NotFound();
+    if (row['version'] !== version) throw new Conflict(read(ctx, 'task', id));
+    if (row['doc']) throw new Error('Eine Doku-Seite hat keine Unteraufgaben');
+    const desc = (row['desc'] as string | null) ?? '';
+    const items = convertibleItems(desc, which);
+    if (!items.length) throw new Error('Keine offene Checkbox zum Umwandeln');
+
+    const made = items.map((item) => {
+      const kid = create(ctx, 'task', {
+        projectId: row['project_id'],
+        parentId: id,
+        title: item.title.slice(0, 500),
+        desc: item.desc,
+      }) as Task;
+      return { item, id: kid.id, ref: kid.ref as number };
+    });
+    const back: Step[] = [
+      patchBack(ctx, 'task', id, version, { desc: replaceItems(desc, made) }),
+      ...made.map((m): Step => ({ op: 'purge', kind: 'task', id: m.id })),
+    ];
+    return { count: made.length, undo: stampVersions(ctx, back) };
   })();
 }
 

@@ -482,7 +482,17 @@ Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `us
 
 - **Enter** in einem Listenpunkt (`- `, `* `, `1. `, mit oder ohne `[ ]`/`[x]`) beginnt den
   nächsten; eine Checkbox kommt immer offen mit, Nummern zählen weiter. Enter im leeren Punkt
-  beendet die Liste (eingerückt: eine Ebene hinauf). **Shift+Enter** bricht ohne neuen Punkt um.
+  beendet die Liste (eingerückt: eine Ebene hinauf). **Shift+Enter** bricht ohne neuen Punkt um
+  und rückt die neue Zeile – wie in Codecks – so weit ein, dass sie noch zum Punkt gehört; in
+  einer solchen Folgezeile bleibt deren Einrückung (`breakInItem`).
+- Jeder Zeilenumbruch wird auch angezeigt (`breaks` in `marked`), Folgezeilen eines
+  Checklisten-Punkts stehen unter dessen Text – wie in Codecks.
+- **Checkboxen zu Unteraufgaben** (wie in Codecks): der Text hinter `[ ]` wird der Titel, alles
+  tiefer Eingerückte (auch über Leerzeilen, samt eingerückter Checkboxen) die Beschreibung; in der
+  Beschreibung bleibt `- $123` stehen. Alle offenen Punkte der obersten Ebene über das
+  Kontextmenü oder „Checkboxen zu Unteraufgaben“ unter der Beschreibung, einzelne über den Knopf,
+  der beim Überfahren neben der Checkbox erscheint. Abgehakte bleiben stehen. Zerlegung in
+  `src/shared/checklist.ts` (`checklistItems`), serverseitig `POST /api/checklist`, rücknehmbar.
 - **Tab / Shift+Tab** rücken Listenpunkte ein und aus (alle markierten), unter den Inhalt des
   Punktes darüber; nummerierte zählen auf der neuen Ebene neu. Außerhalb von Listen bleibt Tab,
   was es war. Die Textlogik steht rein in `src/shared/listEdit.ts`.

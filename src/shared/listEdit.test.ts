@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { enterInList, moveLines, tabInList, type TextEdit } from './listEdit.js';
+import { breakInItem, enterInList, moveLines, tabInList, type TextEdit } from './listEdit.js';
 
 /** Text mit `|` als Schreibmarke (oder zwei `|` als Auswahl) → Ergebnis im selben Format. */
 function run(src: string, f: (v: string, s: number, e: number) => TextEdit | null): string | null {
@@ -111,5 +111,33 @@ describe('Zeilen verschieben', () => {
   it('kommt mit leeren Zeilen zurecht', () => {
     assert.equal(up('a\n\nb|'), 'a\nb|\n');
     assert.equal(down('|\na'), 'a\n|');
+  });
+});
+
+describe('Umschalt+Enter in Listen', () => {
+  const brk = (src: string) => run(src, breakInItem);
+
+  it('rückt die neue Zeile unter den Inhalt des Punktes', () => {
+    assert.equal(brk('- [ ] test|'), '- [ ] test\n  |');
+    assert.equal(brk('- abc|'), '- abc\n  |');
+    assert.equal(brk('1. abc|'), '1. abc\n   |');
+    assert.equal(brk('- a\n  - b|'), '- a\n  - b\n    |');
+  });
+
+  it('behält in einer Folgezeile deren Einrückung', () => {
+    assert.equal(brk('- [ ] test\n  abc|'), '- [ ] test\n  abc\n  |');
+    assert.equal(brk('- [ ] test\n    abc\n\n    def|'), '- [ ] test\n    abc\n\n    def\n    |');
+    assert.equal(brk('- [ ] test\n  |'), '- [ ] test\n  \n  |');
+  });
+
+  it('nimmt den Text hinter der Schreibmarke mit', () => {
+    assert.equal(brk('- abc|def'), '- abc\n  |def');
+  });
+
+  it('lässt normalen Text in Ruhe', () => {
+    assert.equal(brk('Abc|'), null);
+    assert.equal(brk('  eingerückt|'), null);
+    assert.equal(brk('|- abc'), null);
+    assert.equal(brk('Absatz\n  abc|'), null);
   });
 });

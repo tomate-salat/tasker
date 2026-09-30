@@ -172,6 +172,14 @@ export const duplicateBody = z.object({ id });
 /** „In Milestone umwandeln“: aus dem Task wird ein vorbereiteter Milestone. */
 export const convertBody = z.object({ id, version: z.number().int().positive() });
 
+/**
+ * Checkboxen der Beschreibung zu Unteraufgaben machen. Ohne `items` alle
+ * offenen der obersten Ebene, sonst die Checkboxen mit diesen Nummern.
+ */
+export const checklistBody = convertBody.extend({
+  items: z.array(z.number().int().min(0)).min(1).max(1000).optional(),
+});
+
 /** Verschieben innerhalb des Baums: neuer Platz plus neue Reihenfolge. */
 export const moveBody = moveTarget.extend({
   id,
