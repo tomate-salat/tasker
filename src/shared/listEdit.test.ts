@@ -48,7 +48,15 @@ describe('Enter in Listen', () => {
     assert.equal(enter('- a\n  - |'), '- a\n- |');
   });
 
+  it('beginnt auch in einer Folgezeile den nächsten Punkt', () => {
+    assert.equal(enter('- [ ] Abc\n- [ ] Def\n  ghi|'), '- [ ] Abc\n- [ ] Def\n  ghi\n- [ ] |');
+    assert.equal(enter('- a\n  - b\n\n    mehr|'), '- a\n  - b\n\n    mehr\n  - |');
+    assert.equal(enter('1. a\n   text|'), '1. a\n   text\n2. |');
+  });
+
   it('lässt normalen Text und Stellen vor der Marke in Ruhe', () => {
+    assert.equal(enter('Absatz\n  eingerückt|'), null);
+    assert.equal(enter('- a\n  |'), null);
     assert.equal(enter('Abc|'), null);
     assert.equal(enter('-Abc|'), null);
     assert.equal(enter('|- Abc'), null);

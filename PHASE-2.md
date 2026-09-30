@@ -481,7 +481,8 @@ Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `us
 `src/client/ui/editor.tsx`):
 
 - **Enter** in einem Listenpunkt (`- `, `* `, `1. `, mit oder ohne `[ ]`/`[x]`) beginnt den
-  nächsten; eine Checkbox kommt immer offen mit, Nummern zählen weiter. Enter im leeren Punkt
+  nächsten; eine Checkbox kommt immer offen mit, Nummern zählen weiter. Das gilt auch in einer
+  eingerückten Folgezeile eines Punktes – der neue Punkt steht auf dessen Ebene. Enter im leeren Punkt
   beendet die Liste (eingerückt: eine Ebene hinauf). **Shift+Enter** bricht ohne neuen Punkt um
   und rückt die neue Zeile – wie in Codecks – so weit ein, dass sie noch zum Punkt gehört; in
   einer solchen Folgezeile bleibt deren Einrückung (`breakInItem`).

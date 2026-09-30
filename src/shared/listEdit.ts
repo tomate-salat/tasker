@@ -71,8 +71,9 @@ export function enterInList(value: string, selStart: number, selEnd: number): Te
   const end = lineEndAt(value, selStart);
   const line = value.slice(start, end);
   const it = item(line);
+  if (!it) return nextAfterBody(value, start, line, selStart);
   // Vor oder im Listenzeichen gilt das normale Enter.
-  if (!it || selStart - start < it.prefix) return null;
+  if (selStart - start < it.prefix) return null;
 
   if (!line.slice(it.prefix).trim()) {
     if (it.indent) {
@@ -83,10 +84,26 @@ export function enterInList(value: string, selStart: number, selEnd: number): Te
     return { from: start, to: end, text: '', selStart: start, selEnd: start };
   }
 
+  return nextItem(it, selStart);
+}
+
+/** Der Punkt nach `it`, eingefügt bei `at`. */
+function nextItem(it: Item, at: number): TextEdit {
   const marker = it.num === null ? it.marker : `${it.num + 1}${it.delim}`;
   const text = `\n${it.indent}${marker}${it.gap}${it.box ? '[ ] ' : ''}`;
-  const at = selStart + text.length;
-  return { from: selStart, to: selStart, text, selStart: at, selEnd: at };
+  return { from: at, to: at, text, selStart: at + text.length, selEnd: at + text.length };
+}
+
+/**
+ * Enter in einer Folgezeile eines Punktes (eingerückter Text darunter): auch
+ * hier beginnt der nächste Punkt – auf der Ebene des Punktes, zu dem die Zeile
+ * gehört.
+ */
+function nextAfterBody(value: string, start: number, line: string, at: number): TextEdit | null {
+  const width = /^ */.exec(line)?.[0].length ?? 0;
+  if (!line.trim() || at - start < width) return null;
+  const owner = ownerItem(value.slice(0, start).split('\n'), width);
+  return owner ? nextItem(owner, at) : null;
 }
 
 /**
@@ -104,7 +121,7 @@ export function breakInItem(value: string, selStart: number, selEnd: number): Te
     indent = it.indent.length + contentWidth(it);
   } else {
     indent = /^ */.exec(line)?.[0].length ?? 0;
-    if (!indent || selStart - start < indent || !insideItem(value.slice(0, start).split('\n'), indent)) {
+    if (!indent || selStart - start < indent || !ownerItem(value.slice(0, start).split('\n'), indent)) {
       return null;
     }
   }
@@ -113,16 +130,16 @@ export function breakInItem(value: string, selStart: number, selEnd: number): Te
   return { from: selStart, to: selEnd, text, selStart: at, selEnd: at };
 }
 
-/** Steht eine Zeile mit dieser Einrückung noch in einem Listenpunkt darüber? */
-function insideItem(above: string[], width: number): boolean {
+/** Der Listenpunkt darüber, zu dem eine Zeile mit dieser Einrückung noch gehört. */
+function ownerItem(above: string[], width: number): Item | null {
   for (let i = above.length - 1; i >= 0; i--) {
     const line = above[i] as string;
     if (!line.trim()) continue;
     const it = item(line);
-    if (it && it.indent.length < width) return true;
-    if ((/^ */.exec(line)?.[0].length ?? 0) < width) return false;
+    if (it && it.indent.length < width) return it;
+    if ((/^ */.exec(line)?.[0].length ?? 0) < width) return null;
   }
-  return false;
+  return null;
 }
 
 /**
