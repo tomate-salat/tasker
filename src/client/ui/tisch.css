@@ -424,6 +424,11 @@
   box-shadow: 0 2px 6px rgba(22, 34, 29, 0.14);
 }
 
+/* Die oberste Karte lässt sich wieder herausziehen. */
+.tpile .tcard.tpile-top {
+  cursor: grab;
+}
+
 /* Auf dem Stapel wird nicht durchgestrichen und nicht verblasst – er soll sich lohnen. */
 .tpile .tcard.done {
   opacity: 1;

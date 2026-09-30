@@ -22,6 +22,7 @@ import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
 import { Tisch } from './ui/Tisch.js';
 import { HideDoneSwitch } from './ui/hideDone.js';
+import { useWheelScrollX } from './ui/wheelX.js';
 
 /** Das Abhängigkeits-Board bringt React Flow mit – erst laden, wenn es aufgeht. */
 const DepGraph = lazy(() => import('./ui/DepGraph.js'));
@@ -285,6 +286,7 @@ const TAB_DROP_TITLE: Partial<Record<View, string>> = {
  */
 function Tabs({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
   const nav = useRef<HTMLElement>(null);
+  useWheelScrollX(nav);
   useEffect(() => {
     const el = nav.current;
     const on = el?.querySelector<HTMLElement>('.tab.on');

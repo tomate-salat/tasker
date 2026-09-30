@@ -595,7 +595,12 @@ Nachgezogen (Wunsch des Nutzers):
 - **Tastatur:** Pfeiltasten wandern zwischen den Karten, die Leertaste schaltet den Status der
   markierten Karte weiter (Umschalt zurück). Ein Stapel springt dabei von Offen direkt auf
   Erledigt, weil er nie ins Spiel kommt; gesperrte Karten schütteln sich.
-- **Im Spiel** bleibt eine Reihe und scrollt seitlich, statt umzubrechen.
+- **Im Spiel** bleibt eine Reihe und scrollt seitlich, statt umzubrechen – ohne Scrollleiste; das
+  Mausrad scrollt dort seitlich, ebenso in den Reitern oben (`wheelX.ts`).
+- Die **oberste Karte des Erledigt-Stapels** lässt sich wieder herausziehen (auf Offen oder ins
+  Spiel).
+- Erst **entsperren, dann umräumen:** Eine freigeschaltete Karte wird an ihrem alten Platz
+  entsperrt; erst danach bewegen sich die Karten.
 - **Jeder Zonenwechsel ist animiert**, auch über Leertaste, Inspektor oder andere Tabs – nicht nur
   beim Ziehen. Gerade Erledigtes ohne Zeitpunkt (der Inspektor setzt den Status vor der Antwort
   des Servers) liegt dabei obenauf, sonst sprang die Karte ohne Weg auf den Stapel.

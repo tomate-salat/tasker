@@ -20,6 +20,7 @@ import { holdGhost, startTilt } from './cardTilt.js';
 import { LOCK_ICON } from './icons.js';
 import { dragSource, useDrag, useDragging } from './dnd.js';
 import { useMenu, type Menu } from './Menu.js';
+import { useWheelScrollX } from './wheelX.js';
 import { rowMenu } from './rowMenu.js';
 import { burst, float, glide, land, pop, reduced, refuse, shake, thump, unlock, UNLOCK_HOLD } from './tischFx.js';
 import './tisch.css';
@@ -148,6 +149,8 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   const root = useRef<HTMLDivElement>(null);
   const pileRef = useRef<HTMLDivElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
+  const playRow = useRef<HTMLDivElement>(null);
+  useWheelScrollX(playRow);
   const selected = useStore((s) => s.selected);
   const focus = useFocus((s) => s.id);
 
@@ -228,7 +231,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
           <h2 className="tzone-head">
             Im Spiel <span className="tzone-n">{layout.play.length}</span>
           </h2>
-          <div className="tzone-cards">
+          <div className="tzone-cards" ref={playRow}>
             {layout.play.map((t) => (
               <TischCard key={t.id} ws={ws} task={t} where="play" menu={menu} open={open} toggle={toggle} />
             ))}
@@ -247,25 +250,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
                 .slice(0, 3)
                 .reverse()
                 .map((t) => (
-                  <div
-                    key={t.id}
-                    className="tcell tpile-card"
-                    data-tcell={t.id}
-                    data-tkey={`pile:${t.id}`}
-                    data-zone="pile"
-                    style={{ rotate: `${pileTilt(t.id)}deg` }}
-                    onClick={(e) => {
-                      useFocus.setState({ id: t.id });
-                      if (e.detail >= 2) useStore.getState().select(t.id);
-                    }}
-                  >
-                    <div
-                      className={`tcard done ${selected === t.id ? 'sel' : ''} ${focus === t.id ? 'focus' : ''}`}
-                      data-tcard={t.id}
-                    >
-                      <CardFace ws={ws} task={t} />
-                    </div>
-                  </div>
+                  <PileCard key={t.id} ws={ws} task={t} top={t.id === layout.pile[0]?.id} selected={selected === t.id} focused={focus === t.id} />
                 ))
             ) : (
               <div className="tpile-empty" aria-hidden>
@@ -280,6 +265,52 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
             erledigt
           </p>
         </DropArea>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Eine Karte auf dem Erledigt-Stapel. Die oberste lässt sich wieder
+ * herausziehen (Wunsch des Nutzers) – auf „Offen“ oder ins Spiel.
+ */
+function PileCard({
+  ws,
+  task: t,
+  top,
+  selected,
+  focused,
+}: {
+  ws: Workspace;
+  task: Task;
+  top: boolean;
+  selected: boolean;
+  focused: boolean;
+}) {
+  const dragging = useDragging(t.id);
+  const drag = dragSource('task', t.id, top);
+  return (
+    <div
+      className="tcell tpile-card"
+      data-tcell={t.id}
+      data-tkey={`pile:${t.id}`}
+      data-zone="pile"
+      style={{ rotate: `${pileTilt(t.id)}deg` }}
+      onClick={(e) => {
+        useFocus.setState({ id: t.id });
+        if (e.detail >= 2) useStore.getState().select(t.id);
+      }}
+    >
+      <div
+        className={`tcard done ${selected ? 'sel' : ''} ${focused ? 'focus' : ''} ${top ? 'tpile-top' : ''} ${dragging ? 'dragging' : ''}`}
+        data-tcard={t.id}
+        {...drag}
+        onDragStart={(e) => {
+          drag.onDragStart(e);
+          startTilt(e);
+        }}
+      >
+        <CardFace ws={ws} task={t} />
       </div>
     </div>
   );
