@@ -43,12 +43,18 @@ export function land(cell: HTMLElement, from: DOMRect, rotate = 0): Animation | 
   return a;
 }
 
-/** Gleiten von der alten Lage an die neue – für alle, die dabei nur Platz machen. */
-export function glide(cell: HTMLElement, dx: number, dy: number): void {
+/**
+ * Gleiten von der alten Lage an die neue – für alle, die dabei nur Platz machen.
+ * `delay`: so lange bleibt die Karte an der alten Stelle stehen (während eine
+ * andere freigeschaltet wird, siehe `UNLOCK_HOLD`).
+ */
+export function glide(cell: HTMLElement, dx: number, dy: number, delay = 0): void {
   if (reduced() || (Math.abs(dx) < 1 && Math.abs(dy) < 1)) return;
   cell.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], {
     duration: 300,
     easing: GLIDE,
+    delay,
+    fill: 'backwards',
   });
 }
 
@@ -180,9 +186,15 @@ const BODY =
   '<svg width="22" height="22" viewBox="0 0 12 12"><rect x="2" y="5.5" width="8" height="5.5" rx="1.2" fill="currentColor"/></svg>';
 
 /**
+ * So lange spielt das Freischalten an der alten Stelle, bevor sich irgendeine
+ * Karte bewegt (Wunsch des Nutzers: erst entsperren, dann umräumen).
+ */
+export const UNLOCK_HOLD = 650;
+
+/**
  * Freigeschaltet: an der alten Stelle springt das Schloss auf – der Bügel fliegt
- * nach oben weg, der Körper fällt –, die Karte dreht sich um und gleitet aus
- * „Gesperrt“ in die Mitte.
+ * nach oben weg, der Körper fällt –, die Karte wird farbig und hüpft kurz. Erst
+ * danach gleitet sie aus „Gesperrt“ in die Mitte.
  */
 export function unlock(cell: HTMLElement, from: DOMRect): void {
   if (reduced()) {
@@ -214,26 +226,31 @@ export function unlock(cell: HTMLElement, from: DOMRect): void {
     ).onfinish = () => part.remove();
   }
 
+  // Erst an der alten Stelle stehen bleiben, dann an den neuen Platz federn.
   const to = cell.getBoundingClientRect();
-  const dx = from.left - to.left;
-  const dy = from.top - to.top;
+  const at = `translate(${from.left - to.left}px, ${from.top - to.top}px)`;
+  const MOVE = 480;
   cell.style.zIndex = '40';
-  cell.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], {
-    duration: 620,
-    easing: SPRING,
-    delay: 180,
-    fill: 'backwards',
-  }).onfinish = () => {
+  cell.animate(
+    [
+      { transform: at },
+      { transform: at, offset: UNLOCK_HOLD / (UNLOCK_HOLD + MOVE), easing: SPRING },
+      { transform: 'none' },
+    ],
+    { duration: UNLOCK_HOLD + MOVE },
+  ).onfinish = () => {
     cell.style.zIndex = '';
   };
+  // Die Karte sieht erst noch gesperrt aus und wird mit dem Aufspringen des Schlosses farbig.
   const card = cell.firstElementChild as HTMLElement | null;
   card?.animate(
-    // Von der Kante her aufgedreht – eine ganze Drehung zeigte die Karte spiegelverkehrt.
     [
-      { transform: 'perspective(700px) rotateY(-90deg)', filter: 'grayscale(1)' },
-      { transform: 'perspective(700px) rotateY(12deg)', filter: 'grayscale(0.2)', offset: 0.7 },
-      { transform: 'none', filter: 'none' },
+      { transform: 'none', filter: 'grayscale(0.85)', opacity: 0.7 },
+      { transform: 'none', filter: 'grayscale(0.85)', opacity: 0.7, offset: 0.2 },
+      { transform: 'scale(1.1) rotate(-3deg)', filter: 'grayscale(0.3)', opacity: 1, offset: 0.45 },
+      { transform: 'scale(0.97) rotate(1.5deg)', filter: 'none', offset: 0.7 },
+      { transform: 'none', filter: 'none', opacity: 1 },
     ],
-    { duration: 620, easing: 'ease-out', delay: 180, fill: 'backwards' },
+    { duration: UNLOCK_HOLD, easing: 'ease-out' },
   );
 }

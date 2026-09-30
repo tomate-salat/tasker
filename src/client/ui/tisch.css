@@ -144,7 +144,11 @@
   flex-wrap: nowrap;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.tzone-play .tzone-cards::-webkit-scrollbar {
+  display: none;
 }
 
 .tzone-play .tzone-cards > * {

@@ -21,7 +21,7 @@ import { LOCK_ICON } from './icons.js';
 import { dragSource, useDrag, useDragging } from './dnd.js';
 import { useMenu, type Menu } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
-import { burst, float, glide, land, pop, reduced, refuse, shake, thump, unlock } from './tischFx.js';
+import { burst, float, glide, land, pop, reduced, refuse, shake, thump, unlock, UNLOCK_HOLD } from './tischFx.js';
 import './tisch.css';
 
 /**
@@ -662,6 +662,9 @@ async function settleBack(ghost: HTMLElement, home: DOMRect | null): Promise<voi
 
 /* ---------------------------------------------------------- Bewegung */
 
+/** Eine Karte im neuen Stand; `busy`: sie landet oder dreht sich gerade noch. */
+type Cell = { el: HTMLElement; rect: DOMRect; zone: string; id: string; busy: boolean };
+
 /** `away`: nur der Umriss einer ausgespielten Unteraufgabe in ihrer Schublade. */
 type Spot = { x: number; y: number; zone: string; away: boolean };
 
@@ -684,7 +687,7 @@ function useTableMotion(
     if (!root) return;
     const base = root.getBoundingClientRect();
     const cells = [...root.querySelectorAll<HTMLElement>('[data-tkey]')];
-    const now = new Map<string, { el: HTMLElement; rect: DOMRect; zone: string; id: string; busy: boolean }>();
+    const now = new Map<string, Cell>();
     for (const el of cells) {
       const key = el.dataset['tkey'] as string;
       const [zone = '', id = ''] = key.split(/:(.*)/s);
@@ -728,16 +731,21 @@ function useTableMotion(
         if (!byId.has(id) || byId.get(id)?.away) byId.set(id, s);
       }
       const toPile: string[] = [];
+      const moves: { c: Cell; old: Spot; from: DOMRect }[] = [];
       for (const [key, c] of now) {
         if (landed.has(c.id) || c.busy) continue;
         const old = prev.get(key) ?? byId.get(c.id);
         if (!old) continue;
-        const from = new DOMRect(old.x + base.left, old.y + base.top, c.rect.width, c.rect.height);
+        moves.push({ c, old, from: new DOMRect(old.x + base.left, old.y + base.top, c.rect.width, c.rect.height) });
+      }
+      // Wird etwas freigeschaltet, spielt das zuerst – alle anderen warten so lange an ihrem Platz.
+      const hold = moves.some((m) => m.old.zone === 'locked' && m.c.zone === 'open') && !reduced() ? UNLOCK_HOLD : 0;
+      for (const { c, old, from } of moves) {
         if (old.zone === 'locked' && c.zone === 'open') unlock(c.el, from);
         else if (old.zone !== c.zone && !old.away && c.el.dataset['tcell']) {
           land(c.el, from, c.zone === 'pile' ? pileTilt(c.id) : 0);
           if (c.zone === 'pile') toPile.push(c.id);
-        } else glide(c.el, from.left - c.rect.left, from.top - c.rect.top);
+        } else glide(c.el, from.left - c.rect.left, from.top - c.rect.top, hold);
       }
       if (toPile.length) pileFx(toPile.length, toPile.some((id) => ws.kids(id).length > 0));
     }
