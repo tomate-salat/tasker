@@ -1,21 +1,13 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { api, type Account } from './api.js';
 import { connectEvents } from './events.js';
 import { Login } from './Login.js';
 import { doneCandidates } from '@shared/outline.js';
-import {
-  archiveWorkspace,
-  currentProjectId,
-  scopeProjectIds,
-  TABS,
-  useStore,
-  VIEW_LABEL,
-  type View,
-} from './store.js';
+import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL, type View } from './store.js';
 import { dropTarget, useZone } from './ui/dnd.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { categoryHue } from './ui/colors.js';
-import { SIDE_ICON } from './ui/icons.js';
+import { ARCHIVE_ICON, SIDE_ICON } from './ui/icons.js';
 import { tagStyle } from './ui/rows.js';
 import { Inspector } from './ui/Inspector.js';
 import { NewThing } from './ui/NewThing.js';
@@ -60,8 +52,7 @@ function Shell({
   onLogout: () => void;
 }) {
   const state = useStore();
-  const { ws, view, setView, selected, loading, error, toast, load, say, addTask, live, scope, multi } =
-    state;
+  const { ws, view, setView, selected, loading, error, toast, load, say, live, scope, multi } = state;
   const projectId = currentProjectId(state);
   // Der Dialog liegt im Speicher, weil ihn auch die Kontextmenüs öffnen.
   const { dialog, setDialog } = state;
@@ -182,46 +173,16 @@ function Shell({
               </span>
             )}
 
-            <nav className="tabs" aria-label="Ansicht">
-              {TABS.map((v) => (
-                <Tab key={v} view={v} on={view === v} onClick={() => setView(v)} />
-              ))}
-
+            {/* Am Desktop stehen die Aktionen rechts neben den Reitern. Schmal löst
+                sich .tab-row auf: die Reiter werden eine eigene, wischbare Zeile, die
+                Aktionen rücken als Icons in die Titelzeile. */}
+            <div className="tab-row">
+              <Tabs view={view} onSelect={setView} />
               <span className="tab-actions">
                 <LayoutSwitch />
                 <ArchiveDone ws={ws} />
-                {/* Aufgaben entstehen in der Liste, der Kopf legt nur Milestones und
-                    Seiten an – sofort,
-                    mit dem Titel zum Eintippen in der neuen Zeile. */}
-                {view === 'plan' && (
-                  <button
-                    className="btn"
-                    title="Neuen Milestone im Plan anlegen"
-                    onClick={() =>
-                      void useStore
-                        .getState()
-                        .addMilestone('')
-                        .then((id) => id && useStore.getState().edit(id, true))
-                    }
-                  >
-                    + Milestone
-                  </button>
-                )}
-                {view === 'docs' && (
-                  <button
-                    className="btn"
-                    title="Neue Seite anlegen"
-                    onClick={() =>
-                      void addTask({ projectId, title: '', doc: true }).then(
-                        (id) => id && useStore.getState().edit(id, true),
-                      )
-                    }
-                  >
-                    + Seite
-                  </button>
-                )}
               </span>
-            </nav>
+            </div>
           </header>
 
           <FilterBar ws={ws} />
@@ -315,6 +276,34 @@ const TAB_DROP_TITLE: Partial<Record<View, string>> = {
   archive: 'Hierher ziehen = archivieren',
 };
 
+/**
+ * Die Reiterleiste. Schmal lässt sie sich seitlich wischen; der aktive Reiter
+ * wird dabei in den sichtbaren Bereich geschoben, auch wenn er von außen (Adresse,
+ * Tastatur) gewechselt wird.
+ */
+function Tabs({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = nav.current;
+    const on = el?.querySelector<HTMLElement>('.tab.on');
+    if (!el || !on || el.scrollWidth <= el.clientWidth) return;
+    const left = on.offsetLeft - el.offsetLeft;
+    if (left < el.scrollLeft || left + on.offsetWidth > el.scrollLeft + el.clientWidth) {
+      el.scrollTo({
+        left: left - (el.clientWidth - on.offsetWidth) / 2,
+        behavior: 'smooth',
+      });
+    }
+  }, [view]);
+  return (
+    <nav className="tabs" aria-label="Ansicht" ref={nav}>
+      {TABS.map((v) => (
+        <Tab key={v} view={v} on={view === v} onClick={() => onSelect(v)} />
+      ))}
+    </nav>
+  );
+}
+
 function Tab({ view, on, onClick }: { view: View; on: boolean; onClick: () => void }) {
   const target = { type: 'tab', view } as const;
   const zone = useZone(target);
@@ -340,17 +329,24 @@ function ArchiveDone({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   const { view, archiveDone } = state;
   if (view !== 'plan' && view !== 'ready' && view !== 'backlog') return null;
 
-  const found = doneCandidates(ws, { view, projectIds: scopeProjectIds(state) });
+  const found = doneCandidates(ws, {
+    view,
+    projectIds: scopeProjectIds(state),
+  });
   const n = found.milestones.length + found.tasks.length;
   if (!n) return null;
 
   return (
     <button
-      className="btn ghost"
+      className="btn ghost archive-done"
       title="Erledigte Milestones und Aufgaben dieser Ansicht archivieren"
+      aria-label={`Erledigte archivieren (${n})`}
       onClick={() => void archiveDone()}
     >
-      Erledigte archivieren ({n})
+      {/* Schmal nur das Icon mit der Zahl als Plakette. */}
+      <span className="head-icon-glyph">{ARCHIVE_ICON}</span>
+      <span className="long">Erledigte archivieren ({n})</span>
+      <span className="count">{n}</span>
     </button>
   );
 }
@@ -412,21 +408,12 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
         </button>
       )}
       {category && (
-        <button
-          className="tag filter-mark"
-          onClick={() => setFilter({ categoryId: null })}
-          title="Filter entfernen"
-        >
-          <span className="cat-sw" style={{ '--h': categoryHue(catIndex) } as React.CSSProperties} />{' '}
-          {category.name} ×
+        <button className="tag filter-mark" onClick={() => setFilter({ categoryId: null })} title="Filter entfernen">
+          <span className="cat-sw" style={{ '--h': categoryHue(catIndex) } as React.CSSProperties} /> {category.name} ×
         </button>
       )}
       {mark && (
-        <button
-          className="tag filter-mark"
-          onClick={() => setFilter({ markId: null })}
-          title="Filter entfernen"
-        >
+        <button className="tag filter-mark" onClick={() => setFilter({ markId: null })} title="Filter entfernen">
           {mark.emoji} {mark.name} ×
         </button>
       )}

@@ -106,9 +106,7 @@ export function StatusIcon({ status }: { status: Status }) {
           <circle cx="7" cy="10" r=".85" fill="currentColor" />
         </>
       )}
-      {status === 'blocked' && (
-        <path d="M4.6 7h4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      )}
+      {status === 'blocked' && <path d="M4.6 7h4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
       {status === 'done' && (
         <path
           d="M4.5 7.1l1.8 1.8 3.2-3.7"
@@ -136,7 +134,14 @@ const SEG_CLASS: Record<Status, string> = {
 };
 
 /** Reihenfolge der Segmente: erledigt, in Arbeit, eigene Checkliste, dann der Rest. */
-const RANK: Record<string, number> = { done: 0, prog: 1, cl: 2, blocked: 3, unclear: 4, open: 5 };
+const RANK: Record<string, number> = {
+  done: 0,
+  prog: 1,
+  cl: 2,
+  blocked: 3,
+  unclear: 4,
+  open: 5,
+};
 
 /** Ein durchgehender Balken, ein Abschnitt je Checklisten-Punkt und Blatt-Aufgabe. */
 export function SegBar({ segments }: { segments: Segment[] }) {
@@ -236,25 +241,56 @@ export const GRAPH_ICON = (
     <circle cx="3.5" cy="4" r="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
     <circle cx="3.5" cy="12" r="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
     <circle cx="12.5" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
-    <path d="M5.4 4.9 10.6 7.1M5.4 11.1l5.2-2.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <path
+      d="M5.4 4.9 10.6 7.1M5.4 11.1l5.2-2.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
 /** Seitensymbol in der Doku-Ansicht. */
 export const DOC_ICON = (
   <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
-    <path
-      d="M4 1.8h5.2L12.5 5v9.2H4z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinejoin="round"
-    />
+    <path d="M4 1.8h5.2L12.5 5v9.2H4z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
     <path
       d="M9 2v3.2h3.3M6 8.5h4.5M6 11h3.5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+/** Darstellung „Liste“ – der Umschalter im schmalen Kopf. */
+export const LIST_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+/** Darstellung „Karten“ – der Umschalter im schmalen Kopf. */
+export const CARDS_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="2" y="2" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="9" y="2" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="2" y="9" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="9" y="9" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+/** „Erledigte archivieren“ im schmalen Kopf. */
+export const ARCHIVE_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="1.8" y="2.5" width="12.4" height="3.3" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path
+      d="M3 5.8v6.7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.8M6.3 8.7h3.4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
       strokeLinecap="round"
     />
   </svg>

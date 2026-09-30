@@ -33,6 +33,13 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
+/* Schmal ersetzt ein einzelner Icon-Knopf (.head-icon.layout-toggle) den Umschalter. */
+@media (max-width: 900px) {
+  .layout-switch {
+    display: none;
+  }
+}
+
 /* ---------------------------------------------------------------- Raster */
 
 /* Schmale Karten mit fester Breite, wie bei Codecks. Den Abstand machen die
@@ -169,7 +176,6 @@
     transition: none;
   }
 }
-
 
 /* Titelbild füllt die Karte, der Titel liegt oben darauf. */
 .tcard-cover {

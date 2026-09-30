@@ -13,7 +13,7 @@ import { addChild } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
 import { dragSource, dropTarget, type Target, useDrag, useDragging, useZone } from './dnd.js';
-import { CHEVRON_DOWN, CHEVRON_RIGHT, PrioIcon, SegBar } from './icons.js';
+import { CARDS_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, LIST_ICON, PrioIcon, SegBar } from './icons.js';
 import type { Menu, MenuItem } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { ChecklistBadge, DrawingBadge, LockBadge, StatusDot, TaskRow, TitleEdit } from './rows.js';
@@ -139,7 +139,12 @@ export function CardGrid({
       className={`card-grid ${zone ? `dz-${zone}` : ''}`}
       data-view={view}
       data-area={id}
-      {...(drop ? { onDragOver: tasksOnly(drop.onDragOver), onDrop: tasksOnly(drop.onDrop) } : {})}
+      {...(drop
+        ? {
+            onDragOver: tasksOnly(drop.onDragOver),
+            onDrop: tasksOnly(drop.onDrop),
+          }
+        : {})}
     >
       {tasks.map((t) => (
         <TaskCard key={t.id} ws={ws} task={t} menu={menu} />
@@ -279,14 +284,16 @@ export async function setCover(owner: CoverOwner, imageId: string | null): Promi
 /** Der Ordner „Cardimages“ oben im Projekt – legt ihn an, wenn es ihn nicht gibt. */
 async function coverFolder(projectId: string | null): Promise<string> {
   const find = (): string | undefined =>
-    useStore
-      .getState()
-      .folders.find((f) => f.projectId === projectId && !f.parentId && f.name === COVER_FOLDER)?.id;
+    useStore.getState().folders.find((f) => f.projectId === projectId && !f.parentId && f.name === COVER_FOLDER)?.id;
   // Ohne geladene Galerie kennt der Speicher die Ordner noch nicht.
   if (!useStore.getState().imagesLoaded) await useStore.getState().loadImages();
   const known = find();
   if (known) return known;
-  const folder = await api.addFolder({ projectId, parentId: null, name: COVER_FOLDER });
+  const folder = await api.addFolder({
+    projectId,
+    parentId: null,
+    name: COVER_FOLDER,
+  });
   await useStore.getState().loadImages();
   return folder.id;
 }
@@ -302,7 +309,10 @@ export async function uploadCover(owner: CoverOwner, list: FileList | File[] | n
   store.say('Titelbild wird vorbereitet …');
   try {
     const { imageMaxKb, imageMaxEdge } = store.settings;
-    const prepared = await prepareImage(file, { maxKb: imageMaxKb, maxEdge: imageMaxEdge });
+    const prepared = await prepareImage(file, {
+      maxKb: imageMaxKb,
+      maxEdge: imageMaxEdge,
+    });
     const projectId = coverProject(owner);
     const folderId = await coverFolder(projectId);
     const meta = await api.addImage({ ...prepared, projectId, folderId });
@@ -349,7 +359,10 @@ function useFileDrop(owner: CoverOwner): {
 function mergeDrop(
   files: ReturnType<typeof useFileDrop>['events'],
   gallery: ReturnType<typeof dropTarget>,
-): { onDragOver: (e: React.DragEvent<HTMLElement>) => void; onDrop: (e: React.DragEvent<HTMLElement>) => void } {
+): {
+  onDragOver: (e: React.DragEvent<HTMLElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLElement>) => void;
+} {
   return {
     onDragOver: (e) => {
       if (hasFiles(e.dataTransfer)) files.onDragOver?.(e);
@@ -455,7 +468,9 @@ export function CoverSlot({ owner }: { owner: Exclude<CoverOwner, { kind: 'task'
         style={id ? { backgroundImage: `url(${imageUrl(id, 'klein')})` } : undefined}
         title={
           `Titelbild-Vorgabe für ${coverOwnerLabel(owner)} – gilt für alle Karten darunter ohne eigenes.\n` +
-          (id ? 'Klicken, ein Bild hierher ziehen oder Strg+V ersetzt es.' : 'Klicken, ein Bild hierher ziehen oder Strg+V.')
+          (id
+            ? 'Klicken, ein Bild hierher ziehen oder Strg+V ersetzt es.'
+            : 'Klicken, ein Bild hierher ziehen oder Strg+V.')
         }
         aria-label={`Titelbild für ${coverOwnerLabel(owner)}`}
         onClick={pick}
@@ -547,46 +562,44 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
       onDragLeave={files.events.onDragLeave}
       {...mergeDrop(files.events, dropTarget(target))}
     >
-    <div
-      data-row={task.id}
-      className={[
-        'tcard',
-        cover ? 'has-cover' : '',
-        multi.has(task.id) ? 'multi' : '',
-        sel ? 'sel' : '',
-        holds ? 'holds' : '',
-        isDone(task) ? 'done' : '',
-        dragging ? 'dragging' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      onClick={(e) => {
-        if (e.ctrlKey || e.metaKey) toggleMulti(task.id);
-        else if (e.shiftKey) rangeMulti(task.id);
-        else {
-          clearMulti();
-          select(task.id);
-        }
-      }}
-      {...drag}
-      onDragStart={(e) => {
-        drag.onDragStart(e);
-        startTilt(e);
-      }}
-    >
-      <CardFace
-        ws={ws}
-        task={task}
-        onCell={cell}
-        onTitleDoubleClick={() => useStore.getState().edit(task.id)}
-        // Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet.
-        titleEdit={
-          editing === task.id && !kids.length ? (
-            <TitleEdit kind="task" id={task.id} title={task.title} />
-          ) : undefined
-        }
-      />
-    </div>
+      <div
+        data-row={task.id}
+        className={[
+          'tcard',
+          cover ? 'has-cover' : '',
+          multi.has(task.id) ? 'multi' : '',
+          sel ? 'sel' : '',
+          holds ? 'holds' : '',
+          isDone(task) ? 'done' : '',
+          dragging ? 'dragging' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) toggleMulti(task.id);
+          else if (e.shiftKey) rangeMulti(task.id);
+          else {
+            clearMulti();
+            select(task.id);
+          }
+        }}
+        {...drag}
+        onDragStart={(e) => {
+          drag.onDragStart(e);
+          startTilt(e);
+        }}
+      >
+        <CardFace
+          ws={ws}
+          task={task}
+          onCell={cell}
+          onTitleDoubleClick={() => useStore.getState().edit(task.id)}
+          // Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet.
+          titleEdit={
+            editing === task.id && !kids.length ? <TitleEdit kind="task" id={task.id} title={task.title} /> : undefined
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -619,12 +632,8 @@ export function CardFace({
   const segments = statusSegments(ws, task);
   const cl = checklist(task.desc);
   const implicit =
-    !isDone(task) &&
-    task.status === 'open' &&
-    kids.length > 0 &&
-    ws.desc(task).some((d) => d.status === 'progress');
-  const cellProps = (kind: CellKind) =>
-    onCell ? { role: 'button', tabIndex: -1, onClick: onCell(kind) } : {};
+    !isDone(task) && task.status === 'open' && kids.length > 0 && ws.desc(task).some((d) => d.status === 'progress');
+  const cellProps = (kind: CellKind) => (onCell ? { role: 'button', tabIndex: -1, onClick: onCell(kind) } : {});
 
   return (
     <>
@@ -670,7 +679,10 @@ export function CardFace({
             <DrawingBadge ownerId={task.id} />
             {doc
               ? kids.length > 0 && (
-                  <span className="tcard-count" title={`${kids.length} ${kids.length === 1 ? 'Unterseite' : 'Unterseiten'}`}>
+                  <span
+                    className="tcard-count"
+                    title={`${kids.length} ${kids.length === 1 ? 'Unterseite' : 'Unterseiten'}`}
+                  >
                     {kids.length}
                   </span>
                 )
@@ -741,40 +753,40 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
         )}
       </div>
       {open && !empty && (
-      <div
-        className={`list hier ${state.multi.size ? 'has-multi' : ''}`}
-        onContextMenu={(e) => {
-          const el = e.target as HTMLElement;
-          const rid = el.closest('[data-row]')?.getAttribute('data-row');
-          if (!rid || el.closest('input, textarea')) return;
-          e.preventDefault();
-          if (state.multi.has(rid)) {
-            menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ws));
-            return;
-          }
-          const row = rows.find((r) => r.id === rid);
-          if (!row) return;
-          state.clearMulti();
-          menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
-        }}
-      >
-        {rows.map(
-          (r) =>
-            r.type === 'task' && (
-              <TaskRow
-                key={r.id}
-                ws={ws}
-                task={r.task}
-                depth={r.depth}
-                doc={doc}
-                menu={menu}
-                fixed={r.id === root.id}
-                compact
-                noEdit={listEdits}
-              />
-            ),
-        )}
-      </div>
+        <div
+          className={`list hier ${state.multi.size ? 'has-multi' : ''}`}
+          onContextMenu={(e) => {
+            const el = e.target as HTMLElement;
+            const rid = el.closest('[data-row]')?.getAttribute('data-row');
+            if (!rid || el.closest('input, textarea')) return;
+            e.preventDefault();
+            if (state.multi.has(rid)) {
+              menu.openAtPoint(e.clientX, e.clientY, bulkMenu(ws));
+              return;
+            }
+            const row = rows.find((r) => r.id === rid);
+            if (!row) return;
+            state.clearMulti();
+            menu.openAtPoint(e.clientX, e.clientY, rowMenu(ws, row));
+          }}
+        >
+          {rows.map(
+            (r) =>
+              r.type === 'task' && (
+                <TaskRow
+                  key={r.id}
+                  ws={ws}
+                  task={r.task}
+                  depth={r.depth}
+                  doc={doc}
+                  menu={menu}
+                  fixed={r.id === root.id}
+                  compact
+                  noEdit={listEdits}
+                />
+              ),
+          )}
+        </div>
       )}
     </section>
   );
@@ -786,14 +798,26 @@ export function LayoutSwitch() {
   const { view, layouts, setLayout } = state;
   if (!isLayoutView(view)) return null;
   const layout = layouts[view];
+  const other: Layout = layout === 'list' ? 'cards' : 'list';
   return (
-    <span className="layout-switch" role="group" aria-label="Darstellung">
-      <button className={layout === 'list' ? 'on' : ''} onClick={() => setLayout(view, 'list')} title="Als Liste">
-        Liste
+    <>
+      {/* Schmal ein einzelner Knopf, der auf die jeweils andere Darstellung wechselt. */}
+      <button
+        className="head-icon layout-toggle"
+        onClick={() => setLayout(view, other)}
+        title={other === 'cards' ? 'Als Karten' : 'Als Liste'}
+        aria-label={other === 'cards' ? 'Als Karten' : 'Als Liste'}
+      >
+        {other === 'cards' ? CARDS_ICON : LIST_ICON}
       </button>
-      <button className={layout === 'cards' ? 'on' : ''} onClick={() => setLayout(view, 'cards')} title="Als Karten">
-        Karten
-      </button>
-    </span>
+      <span className="layout-switch" role="group" aria-label="Darstellung">
+        <button className={layout === 'list' ? 'on' : ''} onClick={() => setLayout(view, 'list')} title="Als Liste">
+          Liste
+        </button>
+        <button className={layout === 'cards' ? 'on' : ''} onClick={() => setLayout(view, 'cards')} title="Als Karten">
+          Karten
+        </button>
+      </span>
+    </>
   );
 }
