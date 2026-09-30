@@ -491,9 +491,14 @@ Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `us
 - **Checkboxen zu Unteraufgaben** (wie in Codecks): der Text hinter `[ ]` wird der Titel, alles
   tiefer Eingerückte (auch über Leerzeilen, samt eingerückter Checkboxen) die Beschreibung; in der
   Beschreibung bleibt `- $123` stehen. Alle offenen Punkte der obersten Ebene über das
-  Kontextmenü oder „Checkboxen zu Unteraufgaben“ unter der Beschreibung, einzelne über den Knopf,
-  der beim Überfahren neben der Checkbox erscheint. Abgehakte bleiben stehen. Zerlegung in
-  `src/shared/checklist.ts` (`checklistItems`), serverseitig `POST /api/checklist`, rücknehmbar.
+  Kontextmenü oder die Werkzeugleiste, einzelne über den Knopf, der beim Überfahren neben der
+  Checkbox erscheint. Abgehakte bleiben stehen. Zerlegung in `src/shared/checklist.ts`
+  (`checklistItems`), serverseitig `POST /api/checklist`, rücknehmbar.
+- **Werkzeugleiste** (bewusste Abweichung vom Prototyp, dort „+ Zeichnung“ als Link darunter): in
+  der Ansicht oben rechts in der Beschreibung, sichtbar beim Überfahren – Bild, Zeichnung,
+  Checkboxen zu Unteraufgaben (mit Anzahl, nur wenn es offene gibt). Im Editor steht sie immer
+  über dem Feld, zusätzlich mit Checkliste, Liste und Verweis (`$`); eingefügt wird an der
+  Schreibmarke, Umwandeln übernimmt vorher den ungespeicherten Text.
 - **Tab / Shift+Tab** rücken Listenpunkte ein und aus (alle markierten), unter den Inhalt des
   Punktes darüber; nummerierte zählen auf der neuen Ebene neu. Außerhalb von Listen bleibt Tab,
   was es war. Die Textlogik steht rein in `src/shared/listEdit.ts`.

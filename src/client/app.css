@@ -2786,15 +2786,78 @@ button.prop:hover {
   max-width: 45%;
 }
 
-.d-actions {
+/*
+ * Werkzeugleiste der Beschreibung (Wunsch des Nutzers, statt „+ Zeichnung“
+ * darunter wie im Prototyp). In der Ansicht schwebt sie oben rechts und zeigt
+ * sich erst beim Überfahren – der Titel fließt um sie herum, damit er beim
+ * Erscheinen nicht springt. Im Editor steht sie immer über dem Feld.
+ */
+.d-tools {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 2px;
 }
 
-.d-actions .linkish {
-  font-size: 14px;
+.d-card > .d-tools {
+  float: right;
+  margin: -6px -10px 4px 12px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.d-card:hover > .d-tools,
+.d-card:focus-within > .d-tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .d-card > .d-tools {
+    opacity: 1;
+  }
+}
+
+.d-tools.in-editor {
+  margin: 0 0 6px -4px;
+}
+
+.d-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.d-tool:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.d-tool:disabled {
+  color: var(--faint);
+  cursor: default;
+  background: none;
+}
+
+.d-tool-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.d-tool-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--line);
 }
 
 /* Mittelbreit: der Inspektor schwebt rechts über der Liste. */

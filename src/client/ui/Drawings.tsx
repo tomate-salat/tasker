@@ -12,8 +12,12 @@ export type DrawingsApi = {
   list: Drawing[];
   busy: boolean;
   open: (d: Drawing) => void;
-  /** Legt eine Zeichnung an, bindet sie in die Beschreibung ein und öffnet sie. */
-  add: () => Promise<void>;
+  /**
+   * Legt eine Zeichnung an, bindet sie in die Beschreibung ein und öffnet sie.
+   * Mit `place` kommt der Verweis nicht ans gespeicherte Ende, sondern dorthin,
+   * wo `place` ihn einsetzt – im offenen Editor an die Schreibmarke.
+   */
+  add: (place?: (token: string) => void) => Promise<void>;
   /** Der Editor – gehört an eine Stelle, die nicht mitscrollt. */
   editor: React.ReactNode;
 };
@@ -53,15 +57,18 @@ export function useDrawings(owner: DrawingOwner, desc: string): DrawingsApi {
     };
   }, [kind, id, stamp, say]);
 
-  async function add(): Promise<void> {
+  async function add(place?: (token: string) => void): Promise<void> {
     setBusy(true);
     try {
       const created = await api.addDrawing({ kind, id });
       // Wie im Prototyp: die neue Zeichnung hängt gleich in der Beschreibung.
       const token = `![[zeichnung:${created.name}]]`;
-      await patch(kind, id, {
-        desc: desc.trim() ? `${desc.replace(/\s+$/, '')}\n\n${token}` : token,
-      });
+      if (place) place(token);
+      else {
+        await patch(kind, id, {
+          desc: desc.trim() ? `${desc.replace(/\s+$/, '')}\n\n${token}` : token,
+        });
+      }
       await load();
       setOpen(created);
     } catch (e) {

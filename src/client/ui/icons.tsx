@@ -298,3 +298,49 @@ export const ARCHIVE_ICON = (
 
 /** Ohne eigene Markierung gilt die Standard-Markierung „Aufgabe“. */
 export const DEFAULT_MARK = { emoji: '📋', name: 'Aufgabe' };
+
+/** Werkzeugleiste der Beschreibung – alle gleich groß, Strich wie die übrigen. */
+const tool = (children: React.ReactNode) => (
+  <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+
+export const TOOL_ICON = {
+  todo: tool(
+    <>
+      <rect x="1.8" y="1.8" width="12.4" height="12.4" rx="3" />
+      <path d="M5 8.2l2 2 4-4.4" />
+    </>,
+  ),
+  list: tool(
+    <>
+      <path d="M6 4h8M6 8h8M6 12h8" />
+      <circle cx="2.6" cy="4" r="0.6" fill="currentColor" />
+      <circle cx="2.6" cy="8" r="0.6" fill="currentColor" />
+      <circle cx="2.6" cy="12" r="0.6" fill="currentColor" />
+    </>,
+  ),
+  ref: tool(<path d="M11 4.6C10.4 3.6 9.3 3 8 3 6.3 3 5 4 5 5.4c0 3.1 6 1.9 6 5 0 1.5-1.3 2.6-3 2.6-1.4 0-2.6-.7-3.1-1.8M8 1.5v13" />),
+  image: tool(
+    <>
+      <rect x="1.8" y="2.5" width="12.4" height="11" rx="2" />
+      <circle cx="5.6" cy="6.2" r="1.2" />
+      <path d="M2.5 12.2 6.4 8.6l2.8 2.6 2-1.7 2.6 2.4" />
+    </>,
+  ),
+  draw: tool(
+    <>
+      <rect x="1.5" y="3" width="6" height="5" rx="1.2" />
+      <circle cx="12" cy="11.5" r="2.6" />
+      <path d="M8 6.5c2 0 3.5 1 3.8 2.6" />
+    </>,
+  ),
+  subtasks: tool(
+    <>
+      <rect x="1.8" y="1.8" width="5" height="4" rx="1.2" />
+      <rect x="8.5" y="10.2" width="5.7" height="4" rx="1.2" />
+      <path d="M4.3 5.8v4.4a2 2 0 0 0 2 2h2.2" />
+    </>,
+  ),
+};

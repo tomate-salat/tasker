@@ -30,6 +30,7 @@ import {
   SegBar,
   STATUS_LABEL,
   StatusIcon,
+  TOOL_ICON,
 } from './icons.js';
 import {
   appendMarkdown,
@@ -41,7 +42,8 @@ import {
 } from './imageDrop.js';
 import { imagesIn } from './imageFile.js';
 import { markdownParts, checkboxClick, subtaskClick } from './markdown.js';
-import { focusAtEnd, useSmartEditor } from './editor.js';
+import { focusAtEnd, insertCommand, useSmartEditor } from './editor.js';
+import { replaceText } from './caretMenu.js';
 import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
@@ -628,9 +630,12 @@ function Content({
 
   /**
    * Offene Checkboxen einer Aufgabe lassen sich zu Unteraufgaben machen – eine
-   * einzeln per Knopf neben ihr, alle unter der Beschreibung.
+   * einzeln per Knopf neben ihr, alle über die Werkzeugleiste.
    */
   const toSubtasks = useStore((s) => s.checklistToSubtasks);
+  const fileInput = useRef<HTMLInputElement>(null);
+  // Im Editor zählt der ungespeicherte Text: so viele Punkte würden umgewandelt.
+  const [draftCount, setDraftCount] = useState(0);
   const canSubtask = kind === 'task' && !(item as Task).doc;
   const open = canSubtask ? checklistItems(item.desc).filter((it) => !it.done && (it.title || it.desc)) : [];
   const convertible = canSubtask ? convertibleItems(item.desc).length : 0;
@@ -643,27 +648,125 @@ function Content({
   const loose = drawings.list.filter((d) => !embedded.has(d.id));
 
   useEffect(() => {
-    if (editing) focusAtEnd(ref.current);
+    if (!editing) return;
+    focusAtEnd(ref.current);
+    setDraftCount(convertibleItems(item.desc).length);
+    // Nur beim Öffnen – danach zählt, was getippt wird.
   }, [editing]);
 
-  const commit = (text: string): void => {
+  const commit = async (text: string): Promise<void> => {
     const [first = '', ...rest] = text.split('\n');
     const title = first.trim();
     const desc = rest.join('\n').replace(/^\n+/, '');
     setEditing(false);
-    if (title !== item.title || desc !== item.desc) void patch(kind, item.id, { title, desc });
+    if (title !== item.title || desc !== item.desc) await patch(kind, item.id, { title, desc });
+  };
+
+  /**
+   * Die Werkzeugleiste der Beschreibung (Wunsch des Nutzers, anstelle von
+   * „+ Zeichnung“ darunter wie im Prototyp): in der Ansicht oben rechts beim
+   * Überfahren, im Editor immer über dem Feld – dort zusätzlich mit dem, was
+   * nur beim Schreiben Sinn ergibt. Im Editor wird der ungespeicherte Text vor
+   * dem Umwandeln übernommen.
+   */
+  const toolbar = (inEditor: boolean) => {
+    const area = (): HTMLTextAreaElement | null => ref.current;
+    const count = inEditor ? draftCount : convertible;
+    const button = (label: string, icon: React.ReactNode, run: () => void, extra?: React.ReactNode, disabled = false) => (
+      <button type="button" className="d-tool" title={label} aria-label={label} disabled={disabled} onClick={run}>
+        {icon}
+        {extra}
+      </button>
+    );
+    const write = (f: (el: HTMLTextAreaElement) => void) => () => {
+      const el = area();
+      if (el) f(el);
+    };
+    return (
+      <div
+        className={`d-tools ${inEditor ? 'in-editor' : ''}`}
+        role="toolbar"
+        aria-label="Werkzeuge der Beschreibung"
+        onClick={(e) => e.stopPropagation()}
+        // Im Editor bleibt die Schreibmarke im Feld stehen.
+        onMouseDown={(e) => inEditor && e.preventDefault()}
+      >
+        {inEditor && (
+          <>
+            {button('Checkliste', TOOL_ICON.todo, write((el) => insertCommand(el, 'todo')))}
+            {button('Liste', TOOL_ICON.list, write((el) => insertCommand(el, 'list')))}
+            {button(
+              'Verweis auf Task oder Milestone ($)',
+              TOOL_ICON.ref,
+              write((el) => {
+                const before = el.value.slice(0, el.selectionStart);
+                replaceText(el, el.selectionStart, el.selectionEnd, before && !/\s$/.test(before) ? ' $' : '$');
+              }),
+            )}
+          </>
+        )}
+        {button('Bild hochladen', TOOL_ICON.image, () => fileInput.current?.click())}
+        {button(
+          'Neue Zeichnung einbinden',
+          TOOL_ICON.draw,
+          () =>
+            void drawings.add(
+              inEditor
+                ? (token) => {
+                    const el = area();
+                    if (el) insertAtCursor(el, token);
+                  }
+                : undefined,
+            ),
+          undefined,
+          drawings.busy,
+        )}
+        {canSubtask && count > 0 && (
+          <>
+            <span className="d-tool-sep" />
+            {button(
+              `${count === 1 ? 'Offene Checkbox' : `${count} offene Checkboxen`} zu Unteraufgaben`,
+              TOOL_ICON.subtasks,
+              () =>
+                void (async () => {
+                  if (inEditor) await commit(area()?.value ?? '');
+                  await toSubtasks(item.id);
+                })(),
+              <span className="d-tool-count">{count}</span>,
+            )}
+          </>
+        )}
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            void take(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </div>
+    );
   };
 
   if (editing) {
     return (
       <>
+        {toolbar(true)}
         <textarea
           ref={ref}
           className={`d-content ${fileOver.over ? 'dz-on' : ''}`}
           spellCheck
           aria-label="Inhalt: erste Zeile ist der Titel"
           defaultValue={item.title + (item.desc ? `\n\n${item.desc}` : '')}
-          onInput={picker.onInput}
+          onInput={(e) => {
+            picker.onInput();
+            const v = e.currentTarget.value;
+            // Die erste Zeile ist der Titel und zählt nicht mit.
+            setDraftCount(canSubtask ? convertibleItems(v.slice(v.indexOf('\n') + 1 || v.length)).length : 0);
+          }}
           onSelect={picker.onSelect}
           onBlur={picker.onBlur}
           {...imageEvents}
@@ -671,7 +774,7 @@ function Content({
             if (picker.onKeyDown(e)) return;
             if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
               e.preventDefault();
-              commit(e.currentTarget.value);
+              void commit(e.currentTarget.value);
             }
           }}
         />
@@ -683,7 +786,7 @@ function Content({
           <button
             className="btn tiny"
             title="Übernehmen – auch mit Esc oder Strg+Enter"
-            onClick={() => commit(ref.current?.value ?? '')}
+            onClick={() => void commit(ref.current?.value ?? '')}
           >
             Fertig
           </button>
@@ -727,6 +830,7 @@ function Content({
           if (e.key === 'Enter' && e.target === e.currentTarget) setEditing(true);
         }}
       >
+        {toolbar(false)}
         <h2 className="d-h">
           {mark && (
             <span className="mk-emoji" title={mark.name}>
@@ -758,26 +862,6 @@ function Content({
           ))}
         </div>
       )}
-
-      <div className="d-actions">
-        {convertible > 0 && (
-          <button
-            className="linkish"
-            title="Jede offene Checkbox der Beschreibung wird eine Unteraufgabe"
-            onClick={() => void toSubtasks(item.id)}
-          >
-            Checkboxen zu Unteraufgaben
-          </button>
-        )}
-        <button
-          className="linkish"
-          disabled={drawings.busy}
-          title="Neue Zeichnung anlegen und in die Beschreibung einbinden"
-          onClick={() => void drawings.add()}
-        >
-          + Zeichnung
-        </button>
-      </div>
 
       {drawings.editor}
     </>

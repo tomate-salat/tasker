@@ -83,6 +83,18 @@ function applySlash(el: HTMLTextAreaElement, start: number, end: number, cmd: Sl
   replaceText(el, from, end, `\n${indent}${cmd.line}`);
 }
 
+/**
+ * Ein Befehl aus der Werkzeugleiste – wie aus dem `/`-Menü, nur ohne `/`. In
+ * einer Zeile mit Text beginnt er eine neue darunter, der Rest der Zeile bleibt.
+ */
+export function insertCommand(el: HTMLTextAreaElement, id: SlashCommand['id']): void {
+  const cmd = SLASH_COMMANDS.find((c) => c.id === id);
+  if (!cmd) return;
+  const end = el.value.indexOf('\n', el.selectionEnd);
+  const at = end < 0 ? el.value.length : end;
+  applySlash(el, at, at, cmd);
+}
+
 /** Beim Öffnen steht die Schreibmarke am Ende, nicht am Anfang (Wunsch des Nutzers). */
 export function focusAtEnd(el: HTMLTextAreaElement | null): void {
   if (!el) return;
