@@ -459,6 +459,13 @@
   border-color: var(--accent);
 }
 
+/* Eingeschaltet, etwa „Erledigte ausblenden“. */
+.head-icon.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 /* Die Zahl der Erledigten als Plakette am Archiv-Icon. */
 .head-icon .count {
   position: absolute;

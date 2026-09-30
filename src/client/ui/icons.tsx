@@ -226,6 +226,21 @@ export const CHECK_ICON = (
   </svg>
 );
 
+/** Erledigte aus- und einblenden: ein Haken im Kreis. */
+export const HIDE_DONE_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path
+      d="M5.3 8.2l1.8 1.8 3.6-3.8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 /** Hinweis auf eine Zeichnung an der Aufgabe. */
 export const DRAW_ICON = (
   <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">

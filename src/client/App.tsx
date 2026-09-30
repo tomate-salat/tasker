@@ -20,6 +20,7 @@ import { Timeline } from './ui/Timeline.js';
 import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
 import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
+import { HideDoneSwitch } from './ui/hideDone.js';
 
 /** Das Abhängigkeits-Board bringt React Flow mit – erst laden, wenn es aufgeht. */
 const DepGraph = lazy(() => import('./ui/DepGraph.js'));
@@ -177,6 +178,7 @@ function Shell({
                 darunter in einer eigenen Zeile – bewusst anders als im Prototyp. */}
             <span className="tab-actions">
               <LayoutSwitch />
+              <HideDoneSwitch />
               <ArchiveDone ws={ws} />
             </span>
 

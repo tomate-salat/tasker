@@ -110,6 +110,9 @@ type State = {
   /** Liste oder Karten, je Ansicht gewählt und pro Gerät gemerkt. */
   layouts: Record<LayoutView, Layout>;
   setLayout: (view: LayoutView, layout: Layout) => void;
+  /** Erledigte Aufgaben im Plan ausgeblendet – pro Gerät gemerkt. */
+  hideDone: boolean;
+  setHideDone: (hide: boolean) => void;
   /** Auf schmalen Bildschirmen liegt die Seitenleiste als Overlay über allem. */
   sideOpen: boolean;
   view: View;
@@ -332,6 +335,7 @@ const SCOPE_KEY = 'tasker.scope';
 const SIDE_KEY = 'tasker.side';
 const LAYOUT_KEY = 'tasker.layouts';
 const ARCH_OPEN_KEY = 'tasker.archOpen';
+const HIDE_DONE_KEY = 'tasker.hideDone';
 
 const readLocal = <T>(key: string, fallback: T): T => {
   try {
@@ -378,6 +382,11 @@ export const useStore = create<State>((set, get) => ({
     const layouts = { ...get().layouts, [view]: layout };
     writeLocal(LAYOUT_KEY, layouts);
     set({ layouts });
+  },
+  hideDone: readLocal<boolean>(HIDE_DONE_KEY, false),
+  setHideDone: (hideDone) => {
+    writeLocal(HIDE_DONE_KEY, hideDone);
+    set({ hideDone });
   },
   sideOpen: false,
   view: 'plan',
