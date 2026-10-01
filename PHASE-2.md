@@ -604,6 +604,13 @@ Nachgezogen (Wunsch des Nutzers):
 - **Jeder Zonenwechsel ist animiert**, auch über Leertaste, Inspektor oder andere Tabs – nicht nur
   beim Ziehen. Gerade Erledigtes ohne Zeitpunkt (der Inspektor setzt den Status vor der Antwort
   des Servers) liegt dabei obenauf, sonst sprang die Karte ohne Weg auf den Stapel.
+- **Von Hand sortieren** in „Offen“ und „Im Spiel“: zwischen zwei Karten abgelegt (Einfügemarke wie
+  im Kartenraster) wird sortiert. „Offen“ ist dabei die Reihenfolge im Plan – dort sortiert, steht
+  es auch im Plan so; der Status bleibt. „Im Spiel“ hat eine eigene Reihenfolge quer über alle
+  Stapel (`playOrder` am Task, Migration 0015): wer ins Spiel kommt, reiht sich hinten ein
+  (Server, `nextPlayOrder`), und eine Karte lässt sich gleich an einen Platz ausspielen. Offen:
+  „Gesperrt“ und die Schubladen sortieren nicht, und eine Karte aus einer anderen Zone landet in
+  „Offen“ an ihrem Platz im Plan, nicht an der Ablagestelle.
 
 ### Angleichen an den Prototyp
 

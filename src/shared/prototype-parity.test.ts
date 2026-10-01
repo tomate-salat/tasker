@@ -111,6 +111,7 @@ function toData(d: Dump['data']): Data {
       // hier heißt das: ready (die smarten Gruppen stehen im Reiter „Ready“).
       ready: String(t['group'] ?? '').startsWith('k:'),
       coverImageId: null,
+      playOrder: 0,
       archivedAt: (t['archived'] as string | null) ?? null,
       tags: t['tags'] as string[],
       deps: t['deps'] as string[],

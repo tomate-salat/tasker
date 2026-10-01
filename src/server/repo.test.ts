@@ -1171,3 +1171,35 @@ describe('Status der Eltern-Aufgabe', () => {
     assert.equal(statusOf(a.id), 'done');
   });
 });
+
+describe('Platz im Spiel (Tisch)', () => {
+  const one = (id: string) => loadBootstrap(ctx).tasks.find((t) => t.id === id) as Task;
+
+  it('wer ins Spiel kommt, reiht sich hinten ein – ein mitgeschickter Platz gilt', () => {
+    const p = mkProject();
+    const [a, b, c] = ['A', 'B', 'C'].map((title) => mkTask({ projectId: p.id, title })) as [Task, Task, Task];
+    patch(ctx, 'task', b.id, b.version, { status: 'progress' });
+    patch(ctx, 'task', a.id, a.version, { status: 'progress' });
+    assert.deepEqual([one(b.id).playOrder, one(a.id).playOrder], [1, 2]);
+
+    patch(ctx, 'task', c.id, c.version, { status: 'progress', playOrder: 0 });
+    assert.equal(one(c.id).playOrder, 0);
+
+    // Schon im Spiel: ein weiteres „In Progress“ lässt den Platz stehen.
+    patch(ctx, 'task', b.id, one(b.id).version, { status: 'progress', title: 'B2' });
+    assert.equal(one(b.id).playOrder, 1);
+
+    assert.equal(mkTask({ projectId: p.id, title: 'D', status: 'progress' }).playOrder, 3);
+  });
+
+  it('Rückgängig legt die Karte wieder an ihren Platz', () => {
+    const p = mkProject();
+    const [a, b] = ['A', 'B'].map((title) => mkTask({ projectId: p.id, title, status: 'progress' })) as [Task, Task];
+    const { undo } = applySteps(ctx, [
+      { op: 'patch', kind: 'task', id: a.id, version: a.version, changes: { status: 'done' } },
+    ]);
+    applySteps(ctx, undo);
+    assert.equal(one(a.id).status, 'progress');
+    assert.deepEqual([one(a.id).playOrder, one(b.id).playOrder], [1, 2]);
+  });
+});

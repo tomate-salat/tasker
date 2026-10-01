@@ -101,6 +101,8 @@ export type Task = {
   ready: boolean;
   /** Titelbild der Karte (Kartenansicht, Versuch) – ID eines Galeriebildes. */
   coverImageId: string | null;
+  /** Platz in „Im Spiel“ auf dem Tisch; bei Gleichstand gilt die Baumreihenfolge. */
+  playOrder: number;
   archivedAt: string | null;
   tags: string[];
   /** IDs anderer Tasks, von denen dieser abhängt. */

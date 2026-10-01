@@ -167,6 +167,17 @@
   background: var(--accent-soft);
 }
 
+/* Die Einfügemarke beim Sortieren – mitten im Abstand zweier Karten, wie im Kartenraster. */
+.tins {
+  position: absolute;
+  z-index: 5;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
 /* ---------------------------------------------------------------- Karten */
 
 /* Die Zelle um die Karte – dieselbe Größe wie im Kartenraster. */

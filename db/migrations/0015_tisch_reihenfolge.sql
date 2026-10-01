@@ -1,0 +1,1 @@
+ALTER TABLE `task` ADD `play_order` integer DEFAULT 0 NOT NULL;

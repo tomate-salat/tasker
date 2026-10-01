@@ -79,6 +79,7 @@ export class Builder {
       markId: null,
       ready: false,
       coverImageId: null,
+      playOrder: 0,
       archivedAt: null,
       tags: [],
       deps: [],

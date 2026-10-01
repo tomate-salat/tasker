@@ -35,7 +35,9 @@ import './tisch.css';
  * - **Im Spiel:** In Progress; sieben Plätze als Richtwert, begrenzt wird nicht.
  * - **Erledigt-Stapel** rechts daneben.
  *
- * Ziehen zwischen den Zonen setzt den Status. Ein Task mit Unteraufgaben ist ein
+ * Ziehen zwischen den Zonen setzt den Status. Zwischen zwei Karten abgelegt wird
+ * sortiert (Wunsch des Nutzers): in „Offen“ ist das die Reihenfolge im Plan, „Im
+ * Spiel“ hat seine eigene (`playOrder`). Ein Task mit Unteraufgaben ist ein
  * Stapel und fächert sich per Klick in eine Schublade auf. Welche Karte wohin
  * gehört, steht in `@shared/tisch.ts`; die Animationen in `tischFx.ts`.
  */
@@ -89,6 +91,11 @@ type Pending = {
   ghost: { el: HTMLElement; release: () => void } | null;
   hidden: HTMLElement[];
   home: DOMRect | null;
+  /**
+   * Sortiert: der Stand beim Ablegen. Bleibt die Karte in ihrer Zone, ist sie
+   * weiter dasselbe Element – gelandet wird deshalb erst mit einem neuen Stand.
+   */
+  since: Workspace | null;
 };
 let pending: Pending | null = null;
 
@@ -178,7 +185,13 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   useTableMotion(root, ws, open, { pile: pileRef, count: countRef });
   useTischKeys(root, ws);
 
-  const drop = (zone: DropZone) => (e: React.DragEvent) => void onDrop(zone, e, root.current, reveal);
+  const drop = (zone: DropZone) => (e: React.DragEvent, at: number | null) =>
+    void onDrop(zone, e, root.current, reveal, m, at);
+
+  // „Offen“ sortiert nur um, was dort schon liegt. Im Spiel bekommt auch eine
+  // Karte ihren Platz, die gerade erst hineinkommt – nur ein Stapel nie.
+  const sortsOpen = (ids: string[]): boolean => ids.every((id) => layout.open.some((t) => t.id === id));
+  const sortsPlay = (ids: string[]): boolean => ids.every((id) => !ws.kids(id).length);
 
   const drawersOf = (list: Task[]) =>
     list
@@ -207,7 +220,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
         </section>
       )}
 
-      <DropArea zone="open" className="tzone tzone-open" onDrop={drop('open')}>
+      <DropArea zone="open" className="tzone tzone-open" onDrop={drop('open')} sorts={sortsOpen}>
         <h2 className="tzone-head">
           Offen <span className="tzone-n">{layout.open.length}</span>
         </h2>
@@ -227,7 +240,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
       </DropArea>
 
       <div className="tisch-bottom">
-        <DropArea zone="play" className="tzone tzone-play" onDrop={drop('play')}>
+        <DropArea zone="play" className="tzone tzone-play" onDrop={drop('play')} sorts={sortsPlay}>
           <h2 className="tzone-head">
             Im Spiel <span className="tzone-n">{layout.play.length}</span>
           </h2>
@@ -540,20 +553,61 @@ function Drawer({
 
 /* ------------------------------------------------------------ Ablegen */
 
-/** Eine Zone, auf die man Karten zieht – hervorgehoben, solange eine darüber schwebt. */
+/**
+ * Die Lücke zwischen zwei Karten einer Zone, in die gerade sortiert würde:
+ * `index` zählt unter den Karten der Zone ohne die gezogenen, der Rest ist die
+ * Lage der Einfügemarke in der Zone.
+ */
+type Gap = { index: number; x: number; y: number; h: number };
+
+function gapAt(zone: HTMLElement, e: React.DragEvent, dragged: string[]): Gap | null {
+  // Über einer Schublade wird nicht sortiert – dort liegen die Unteraufgaben.
+  if ((e.target as HTMLElement).closest('.tdrawer')) return null;
+  const rects = [...zone.querySelectorAll<HTMLElement>(':scope > .tzone-cards > .tcell[data-tcell]')]
+    .filter((c) => !dragged.includes(c.dataset['tcell'] as string))
+    .map((c) => c.getBoundingClientRect());
+  if (!rects.length) return null;
+
+  // Vor der ersten Karte, deren Mitte rechts vom Zeiger liegt – oder die schon in der nächsten Zeile steht.
+  const found = rects.findIndex(
+    (r) => e.clientY < r.top || (e.clientY <= r.bottom && e.clientX < r.left + r.width / 2),
+  );
+  const index = found < 0 ? rects.length : found;
+  const before = rects[index - 1];
+  const after = rects[index];
+  // Am Ende einer Zeile steht die Marke hinter deren letzter Karte, nicht vor der ersten der nächsten.
+  const behind = before && (!after || (e.clientY >= before.top && e.clientY <= before.bottom));
+  const r = (behind ? before : after) as DOMRect;
+  const box = zone.getBoundingClientRect();
+  return { index, x: (behind ? r.right : r.left) - box.left, y: r.top - box.top + 10, h: r.height - 20 };
+}
+
+/**
+ * Eine Zone, auf die man Karten zieht – hervorgehoben, solange eine darüber
+ * schwebt. Mit `sorts` zeigt sie zwischen ihren Karten eine Einfügemarke und
+ * gibt beim Ablegen den Platz mit.
+ */
 function DropArea({
   zone,
   className,
   onDrop,
+  sorts,
   children,
 }: {
   zone: DropZone;
   className: string;
-  onDrop: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, at: number | null) => void;
+  /** Ob sich diese gezogenen Aufgaben hier einsortieren lassen. */
+  sorts?: (ids: string[]) => boolean;
   children: React.ReactNode;
 }) {
   const [over, setOver] = useState(false);
+  const [gap, setGap] = useState<Gap | null>(null);
   const active = useDrag((s) => s.drag?.kind === 'task');
+  const gapOf = (e: React.DragEvent<HTMLElement>): Gap | null => {
+    const drag = useDrag.getState().drag;
+    return drag?.kind === 'task' && sorts?.(drag.ids) ? gapAt(e.currentTarget, e, drag.ids) : null;
+  };
   return (
     <section
       className={`${className} ${over && active ? 'dz-over' : ''} ${active ? 'dz-live' : ''}`}
@@ -564,18 +618,71 @@ function DropArea({
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
         if (!over) setOver(true);
+        const g = gapOf(e);
+        // `dragover` kommt laufend, auch wenn der Zeiger steht.
+        setGap((cur) => (cur?.x === g?.x && cur?.y === g?.y && cur?.index === g?.index ? cur : g));
       }}
       onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setOver(false);
+        setGap(null);
       }}
       onDrop={(e) => {
+        const at = gapOf(e)?.index ?? null;
         setOver(false);
-        onDrop(e);
+        setGap(null);
+        onDrop(e, at);
       }}
     >
       {children}
+      {active && over && gap && (
+        <i className="tins" style={{ left: gap.x, top: gap.y, height: gap.h }} aria-hidden />
+      )}
     </section>
   );
+}
+
+/** Was das Ablegen zwischen zwei Karten tut – `same`: die Karte liegt dort schon. */
+type Sort = (() => Promise<void>) | 'same';
+
+function sortAt(ws: Workspace, m: Milestone, zone: DropZone, tasks: Task[], at: number): Sort | null {
+  const store = useStore.getState();
+  const layout = tischLayout(ws, m);
+  const dragged = new Set(tasks.map((t) => t.id));
+  const sameOrder = (a: Task[], b: Task[]): boolean => a.length === b.length && a.every((t, i) => t.id === b[i]?.id);
+
+  if (zone === 'play') {
+    const row = layout.play.filter((t) => !dragged.has(t.id));
+    row.splice(Math.min(at, row.length), 0, ...tasks);
+    if (sameOrder(row, layout.play)) return 'same';
+    // Die Reihe wird durchgezählt; wer dabei erst ins Spiel kommt, bekommt den Status gleich mit.
+    const steps: Step[] = row.flatMap((t, i) => {
+      const enters = t.status !== 'progress';
+      if (!enters && t.playOrder === i + 1) return [];
+      const changes = { ...(enters ? { status: 'progress' } : {}), playOrder: i + 1 };
+      return [{ op: 'patch', kind: 'task', id: t.id, version: t.version, changes }];
+    });
+    return () => store.runSteps(steps, null);
+  }
+
+  if (zone === 'open') {
+    // „Offen“ zeigt die Wurzeln des Milestones in der Reihenfolge des Plans –
+    // dazwischen liegen dort auch die gesperrten, ausgespielten und erledigten.
+    const roots = ws.msRoots(m).filter((t) => !dragged.has(t.id));
+    const open = layout.open.filter((t) => !dragged.has(t.id));
+    const next = open[at];
+    const last = open[open.length - 1];
+    const index = next ? roots.indexOf(next) : last ? roots.indexOf(last) + 1 : roots.length;
+    const after = [...roots];
+    after.splice(index, 0, ...tasks);
+    if (sameOrder(after, ws.msRoots(m))) return 'same';
+    const target = { parentId: null, milestoneId: m.id, groupId: null, projectId: m.projectId, index };
+    const first = tasks[0] as Task;
+    return tasks.length > 1
+      ? () => store.bulk({ type: 'move', target }, (n) => `${n} Tasks verschoben`)
+      : () => store.moveTask(first.id, target);
+  }
+  return null;
 }
 
 async function onDrop(
@@ -583,6 +690,9 @@ async function onDrop(
   e: React.DragEvent,
   root: HTMLElement | null,
   reveal: (t: Task) => void,
+  m: Milestone,
+  /** Der Platz zwischen den Karten der Zone – `null`: einfach in die Zone. */
+  at: number | null,
 ): Promise<void> {
   const store = useStore.getState();
   const ws = store.ws;
@@ -610,9 +720,12 @@ async function onDrop(
       : zone === 'pile'
         ? tasks.map((t) => doneRefusal(ws, t)).find(Boolean)
         : null;
-  const changing = tasks.filter((t) => t.status !== status);
+  // Zwischen zwei Karten abgelegt wird sortiert. In „Offen“ bleibt der Status
+  // dabei, wie er ist – sonst machte das Umsortieren aus „Unklar“ ein „Offen“.
+  const sort = refusal || at === null ? null : sortAt(ws, m, zone, tasks, at);
+  const changing = sort ? [] : tasks.filter((t) => t.status !== status);
 
-  if (refusal || !changing.length) {
+  if (refusal || sort === 'same' || (!sort && !changing.length)) {
     if (refusal) store.say(refusal);
     if (held) {
       for (const el of originals) el.style.visibility = 'hidden';
@@ -625,15 +738,25 @@ async function onDrop(
 
   for (const el of originals) el.style.visibility = 'hidden';
   const p: Pending = {
-    ids: changing.map((t) => t.id),
+    ids: (sort ? tasks : changing).map((t) => t.id),
     to: zone,
     big: zone === 'pile' && changing.some((t) => ws.kids(t.id).length > 0),
     ghost: held,
     hidden: originals,
     home,
+    since: sort ? ws : null,
   };
   if (pending) void cancel(pending);
   pending = p;
+
+  if (sort) {
+    await sort();
+    // Kam kein neuer Stand (Fehler), geht die Kopie zurück.
+    requestAnimationFrame(() => {
+      if (pending === p) void cancel(p);
+    });
+    return;
+  }
   if (zone === 'open') changing.forEach(reveal);
 
   const steps: Step[] = changing.map((t) => ({
@@ -728,7 +851,8 @@ function useTableMotion(
     if (p) {
       const first = p.ids[0];
       const fresh = [...now.values()].filter(
-        (c) => c.id === first && c.el.dataset['tcell'] === first && !p.hidden.includes(c.el),
+        (c) =>
+          c.id === first && c.el.dataset['tcell'] === first && (p.since ? p.since !== ws : !p.hidden.includes(c.el)),
       );
       const target = fresh.find((c) => c.zone === p.to) ?? fresh[0];
       if (target) {

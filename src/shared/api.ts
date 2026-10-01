@@ -86,6 +86,8 @@ export const patchSchemas = {
       markId: id.nullable(),
       /** Titelbild der Karte – ID eines Galeriebildes. */
       coverImageId: id.nullable(),
+      /** Platz in „Im Spiel“ auf dem Tisch. */
+      playOrder: z.number().int(),
       doc: z.boolean(),
       tags: z.array(tag),
       deps: z.array(id),

@@ -767,7 +767,14 @@ export const useStore = create<State>((set, get) => ({
       return;
     }
 
-    set(replace(boot, kind, { ...current, ...changes } as Entity));
+    // Wer ins Spiel kommt, reiht sich auf dem Tisch hinten ein – so setzt es gleich auch der Server.
+    const was = current as Task;
+    const played =
+      kind === 'task' && changes['status'] === 'progress' && was.status !== 'progress' && !('playOrder' in changes);
+    const ahead = played
+      ? { playOrder: Math.max(0, ...boot.tasks.filter((t) => t.projectId === was.projectId).map((t) => t.playOrder)) + 1 }
+      : {};
+    set(replace(boot, kind, { ...current, ...changes, ...ahead } as Entity));
 
     try {
       const updated = await api.patch<Task | Milestone>(kind, id, current.version, changes);
@@ -783,7 +790,11 @@ export const useStore = create<State>((set, get) => ({
           id,
           version: updated.version,
           changes: Object.fromEntries(
-            Object.keys(changes).map((k) => [k, (current as Record<string, unknown>)[k]]),
+            // Mit dem Status kommt auch der Platz im Spiel zurück.
+            [...Object.keys(changes), ...(kind === 'task' && 'status' in changes ? ['playOrder'] : [])].map((k) => [
+              k,
+              (current as Record<string, unknown>)[k],
+            ]),
           ),
         },
       ]);

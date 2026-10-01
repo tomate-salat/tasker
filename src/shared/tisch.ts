@@ -34,7 +34,7 @@ export type TischLayout = {
   locked: Task[];
   /** Offene und unklare Wurzelaufgaben, dazu alle nicht erledigten Stapel. */
   open: Task[];
-  /** In Arbeit: Wurzeln und Unteraufgaben ohne eigene Unteraufgaben, in Baumreihenfolge. */
+  /** In Arbeit: Wurzeln und Unteraufgaben ohne eigene Unteraufgaben, von Hand sortiert. */
   play: Task[];
   /** Erledigtes jeder Ebene, das zuletzt Erledigte zuerst. */
   pile: Task[];
@@ -64,6 +64,8 @@ export function tischLayout(ws: Workspace, m: Milestone): TischLayout {
     if (isDone(root) || (root.status === 'progress' && !ws.kids(root.id).length)) continue;
     (isBlocked(ws, root) ? out.locked : out.open).push(root);
   }
+  // Im Spiel wird von Hand sortiert (`playOrder`); bei Gleichstand bleibt die Baumreihenfolge.
+  out.play.sort((a, b) => a.playOrder - b.playOrder);
   // Ohne Zeitpunkt ist es gerade eben erledigt worden (die Oberfläche setzt den
   // Status vor der Antwort des Servers) – das gehört obenauf, nicht ans Ende.
   const at = (t: Task): string => t.doneAt ?? '￿';

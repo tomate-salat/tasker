@@ -62,6 +62,18 @@ describe('Tisch', () => {
     assert.deepEqual(ids(l.play), ['a', 'c']);
   });
 
+  it('im Spiel gilt die Reihenfolge von Hand, bei Gleichstand die des Baums', () => {
+    const ws = new Builder()
+      .project('p')
+      .milestone('m', 'p', { status: 'progress' })
+      .task('a', 'p', { milestoneId: 'm', status: 'progress', playOrder: 2 })
+      .task('stapel', 'p', { milestoneId: 'm' })
+      .task('b', 'p', { parentId: 'stapel', status: 'progress', playOrder: 1 })
+      .task('c', 'p', { milestoneId: 'm', status: 'progress', playOrder: 2 })
+      .build();
+    assert.deepEqual(ids(tischLayout(ws, ws.milestone('m')!).play), ['b', 'a', 'c']);
+  });
+
   it('der Erledigt-Stapel zeigt das zuletzt Erledigte zuerst, jeder Ebene', () => {
     const ws = new Builder()
       .project('p')

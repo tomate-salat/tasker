@@ -182,6 +182,11 @@ export const tasks = sqliteTable(
      * Fremdschlüssel: das endgültige Löschen eines Bildes leert das Feld.
      */
     coverImageId: text('cover_image_id'),
+    /**
+     * Platz in „Im Spiel“ auf dem Tisch – dort lässt sich von Hand sortieren,
+     * quer über alle Stapel. Wer ins Spiel kommt, reiht sich hinten ein.
+     */
+    playOrder: integer('play_order').notNull().default(0),
     /** Gesetzt nur beim ausdrücklich archivierten Eintrag. */
     archivedAt: text('archived_at'),
     /**

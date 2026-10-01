@@ -336,6 +336,7 @@ const COLUMN: Record<string, string> = {
   categoryId: 'category_id',
   markId: 'mark_id',
   coverImageId: 'cover_image_id',
+  playOrder: 'play_order',
   order: 'sort_order',
   qorder: 'queue_order',
   startDate: 'start_date',
@@ -404,6 +405,9 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
     if (kind === 'task' && (values['parentId'] || values['milestoneId'] || values['groupId'] || values['doc'])) {
       delete values['ready'];
     }
+    if (kind === 'task' && values['status'] === 'progress') {
+      values['playOrder'] = nextPlayOrder(ctx, String(values['projectId']));
+    }
 
     const fields = Object.keys(values).filter((k) => values[k] !== undefined);
     ctx.sqlite
@@ -445,6 +449,16 @@ export function patch(
     if (current['version'] !== version) throw new Conflict(read(ctx, kind, id));
 
     const { tags, deps, ...fields } = changes;
+
+    // Wer ins Spiel kommt, reiht sich auf dem Tisch hinten ein – außer der Platz kommt mit.
+    if (
+      kind === 'task' &&
+      fields['status'] === 'progress' &&
+      current['status'] !== 'progress' &&
+      fields['playOrder'] === undefined
+    ) {
+      fields['playOrder'] = nextPlayOrder(ctx, String(current['project_id']));
+    }
 
     if (Object.keys(fields).length) {
       const names = Object.keys(fields);
@@ -500,6 +514,14 @@ export function patch(
     return read(ctx, kind, id);
   })();
 }
+
+/** Der nächste freie Platz in „Im Spiel“ – hinter allem, was im Projekt je dort lag. */
+const nextPlayOrder = (ctx: DbCtx, projectId: string): number =>
+  (
+    ctx.sqlite
+      .prepare('SELECT COALESCE(MAX(play_order), 0) + 1 AS n FROM task WHERE project_id = ?')
+      .get(projectId) as { n: number }
+  ).n;
 
 /**
  * Wirft, wenn neben diesem Milestone schon ein anderer im Projekt „In Progress“
@@ -1225,6 +1247,8 @@ function patchBack(
   const before = read(ctx, kind, id) as Record<string, unknown> | null;
   if (!before) throw new NotFound();
   const back = Object.fromEntries(Object.keys(changes).map((k) => [k, before[k]]));
+  // Mit dem Status kommt auch der Platz im Spiel zurück – sonst läge die Karte danach hinten.
+  if (kind === 'task' && 'status' in changes) back['playOrder'] = before['playOrder'];
   patch(ctx, kind, id, version, changes);
   return { op: 'patch', kind, id, version: versionOf(ctx, kind, id), changes: back };
 }
@@ -1924,6 +1948,7 @@ type TaskRow = {
   group_id: string | null; doc: number; title: string; desc: string; prio: number; status: string;
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
   ready: number; archived_at: string | null; hidden_by: string | null; cover_image_id: string | null;
+  play_order: number;
 };
 
 const toProject = (r: ProjectRow): Project => ({
@@ -1982,6 +2007,7 @@ const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   markId: r.mark_id,
   ready: !!r.ready,
   coverImageId: r.cover_image_id ?? null,
+  playOrder: r.play_order ?? 0,
   archivedAt: r.archived_at,
   tags,
   deps,
