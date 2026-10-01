@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { checklist, convertibleItems, replaceItems, toggleChecklistItem } from './checklist.js';
+import {
+  checklist,
+  convertibleItems,
+  convertibleSections,
+  headingSections,
+  replaceItems,
+  toggleChecklistItem,
+} from './checklist.js';
 
 describe('Checklisten in Markdown', () => {
   it('erkennt die üblichen Schreibweisen', () => {
@@ -113,6 +120,50 @@ describe('Checkboxen zu Unteraufgaben', () => {
       replaceItems(text, items.map((item, i) => ({ item, ref: i + 1 }))),
       '1. $1\n2. [ ] \n* $2',
     );
+  });
+
+  describe('Überschriften', () => {
+    const text = [
+      'Vorweg',
+      '',
+      '### Implementation',
+      '- [ ] Implement Weight-Based Probability Calculation',
+      '',
+      '### Apply',
+      '- [ ] Magazines: High',
+      '#### Details',
+      'mehr',
+      '',
+      '## Danach',
+      'Ende',
+    ].join('\n');
+
+    it('nimmt alles bis zur nächsten gleichen oder höheren Überschrift mit', () => {
+      assert.deepEqual(
+        headingSections(text).map((h) => [h.n, h.level, h.title, h.desc]),
+        [
+          [0, 3, 'Implementation', '- [ ] Implement Weight-Based Probability Calculation'],
+          [1, 3, 'Apply', '- [ ] Magazines: High\n#### Details\nmehr'],
+          [2, 4, 'Details', 'mehr'],
+          [3, 2, 'Danach', 'Ende'],
+        ],
+      );
+    });
+
+    it('ersetzt den Abschnitt durch einen Verweis und lässt die Leerzeile stehen', () => {
+      const made = convertibleSections(text, [0, 1]).map((item, i) => ({ item, ref: 5 + i }));
+      assert.equal(replaceItems(text, made), 'Vorweg\n\n- $5\n\n- $6\n\n## Danach\nEnde');
+    });
+
+    it('eine tiefere Überschrift geht mit der gewählten höheren', () => {
+      assert.deepEqual(convertibleSections(text, [1, 2]).map((h) => h.title), ['Apply']);
+    });
+
+    it('zählt Überschriften in Code-Blöcken und ohne Text nicht', () => {
+      const code = '```\n# nur Beispiel\n```\n#\n# echt ##\n#kein';
+      assert.deepEqual(headingSections(code).map((h) => h.title), ['', 'echt']);
+      assert.deepEqual(convertibleSections(code, [0, 1]).map((h) => h.title), ['echt']);
+    });
   });
 
   it('hält Code-Blöcke im Punkt zusammen', () => {

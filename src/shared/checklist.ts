@@ -148,10 +148,72 @@ export function convertibleItems(s: string | null | undefined, which?: number[])
   return picked.filter((it) => !picked.some((o) => o !== it && o.from < it.from && it.from < o.to));
 }
 
-/** Ersetzt die Punkte durch Verweise auf die neuen Unteraufgaben: `- $123`. */
+/* ------------------------------------------- Überschriften zu Unteraufgaben */
+
+/**
+ * Eine Überschrift samt ihrem Abschnitt (Wunsch des Nutzers): alles bis zur
+ * nächsten Überschrift gleicher oder höherer Ebene gehört dazu – tiefere
+ * Überschriften gehen also mit.
+ */
+export type HeadingSection = {
+  /** Nummer der Überschrift, in Reihenfolge. */
+  n: number;
+  /** Zeile der Überschrift und die Zeile hinter dem letzten Inhalt. */
+  from: number;
+  to: number;
+  /** 1 für `#` bis 6 für `######`. */
+  level: number;
+  /** Was an der Stelle des Abschnitts vor dem Verweis steht. */
+  lead: string;
+  title: string;
+  desc: string;
+};
+
+const HEADING_RE = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
+
+/** Alle Überschriften außerhalb von Code-Blöcken und Checklisten-Punkten. */
+export function headingSections(s: string | null | undefined): HeadingSection[] {
+  const lines = (s ?? '').split('\n');
+  const items = checklistItems(s);
+  const heads: { from: number; level: number; title: string }[] = [];
+  let fence: string | null = null;
+
+  lines.forEach((line, i) => {
+    const f = FENCE.exec(line)?.[1];
+    if (f) {
+      fence = fence === f ? null : (fence ?? f);
+      return;
+    }
+    const m = fence ? null : HEADING_RE.exec(line);
+    if (!m || items.some((it) => it.from < i && i < it.to)) return;
+    heads.push({ from: i, level: (m[1] as string).length, title: (m[2] ?? '').trim() });
+  });
+
+  return heads.map((h, n) => {
+    const next = heads.find((o) => o.from > h.from && o.level <= h.level);
+    let to = next ? next.from : lines.length;
+    while (to > h.from + 1 && !(lines[to - 1] as string).trim()) to--;
+    const desc = lines
+      .slice(h.from + 1, to)
+      .join('\n')
+      .replace(/^\n+/, '');
+    return { n, from: h.from, to, level: h.level, lead: '- ', title: h.title, desc };
+  });
+}
+
+/**
+ * Die genannten Überschriften, soweit sie einen Titel haben; was in einem
+ * anderen gewählten Abschnitt steckt, geht mit diesem.
+ */
+export function convertibleSections(s: string | null | undefined, which: number[]): HeadingSection[] {
+  const picked = headingSections(s).filter((h) => h.title && which.includes(h.n));
+  return picked.filter((h) => !picked.some((o) => o !== h && o.from < h.from && h.from < o.to));
+}
+
+/** Ersetzt Punkte und Abschnitte durch Verweise auf die neuen Unteraufgaben: `- $123`. */
 export function replaceItems(
   s: string,
-  done: { item: ChecklistItem; ref: number }[],
+  done: { item: Pick<ChecklistItem, 'from' | 'to' | 'lead'>; ref: number }[],
 ): string {
   const lines = s.split('\n');
   for (const { item, ref } of [...done].sort((a, b) => b.item.from - a.item.from)) {

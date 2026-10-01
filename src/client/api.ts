@@ -241,9 +241,17 @@ export const api = {
   convert: (id: string, version: number) =>
     post<{ id: string; count: number; undo: Step[] }>('/api/convert', { id, version }),
 
-  /** Checkboxen der Beschreibung zu Unteraufgaben – ohne `items` alle offenen. */
-  checklist: (id: string, version: number, items?: number[]) =>
-    post<Undoable>('/api/checklist', { id, version, ...(items ? { items } : {}) }),
+  /**
+   * Checkboxen der Beschreibung zu Unteraufgaben – ohne `items` alle offenen;
+   * mit `headings` die Abschnitte unter diesen Überschriften.
+   */
+  checklist: (id: string, version: number, items?: number[], headings?: number[]) =>
+    post<Undoable>('/api/checklist', {
+      id,
+      version,
+      ...(items ? { items } : {}),
+      ...(headings ? { headings } : {}),
+    }),
 
   bulk: (items: BulkItem[], action: BulkAction) => post<Undoable>('/api/bulk', { items, action }),
 

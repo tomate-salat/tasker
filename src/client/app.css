@@ -2128,8 +2128,21 @@ button.prop:hover {
   pointer-events: none;
 }
 
+/* Dasselbe neben einer Überschrift – dort wandelt der Knopf den ganzen Abschnitt um. */
+.md :is(h1, h2, h3, h4, h5, h6):has(> .md-cb-sub) {
+  position: relative;
+}
+
+.md :is(h1, h2, h3, h4, h5, h6) > .md-cb-sub {
+  font-family: var(--body);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .md li:hover:not(:has(li:hover)) > .md-cb-sub,
 .md li:hover:not(:has(li:hover)) > p > .md-cb-sub,
+.md :is(h1, h2, h3, h4, h5, h6):hover > .md-cb-sub,
 .md-cb-sub:focus-visible {
   opacity: 1;
   pointer-events: auto;

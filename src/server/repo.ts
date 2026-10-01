@@ -18,7 +18,7 @@ import type {
   TrashRow as TrashRowData,
   Undoable,
 } from '../shared/api.js';
-import { convertibleItems, replaceItems } from '../shared/checklist.js';
+import { convertibleItems, convertibleSections, replaceItems } from '../shared/checklist.js';
 import { parentStatusAfter } from '../shared/parentStatus.js';
 import { refsIn, type RefStub } from '../shared/refs.js';
 import type { DbCtx } from './db.js';
@@ -974,12 +974,15 @@ export function convertToMilestone(
  * Checkboxen der Beschreibung werden Unteraufgaben – wie in Codecks (Wunsch
  * des Nutzers): der Text hinter der Checkbox wird der Titel, alles Eingerückte
  * darunter die Beschreibung, und in der Beschreibung bleibt ein Verweis stehen.
+ * Mit `headings` gilt dasselbe für Überschriften: die Überschrift wird der
+ * Titel, ihr Abschnitt die Beschreibung.
  */
 export function checklistToSubtasks(
   ctx: DbCtx,
   id: string,
   version: number,
   which?: number[],
+  headings?: number[],
 ): { count: number; undo: Step[] } {
   return ctx.sqlite.transaction(() => {
     const row = readRow(ctx, 'task', id);
@@ -987,8 +990,17 @@ export function checklistToSubtasks(
     if (row['version'] !== version) throw new Conflict(read(ctx, 'task', id));
     if (row['doc']) throw new Error('Eine Doku-Seite hat keine Unteraufgaben');
     const desc = (row['desc'] as string | null) ?? '';
-    const items = convertibleItems(desc, which);
-    if (!items.length) throw new Error('Keine offene Checkbox zum Umwandeln');
+    const sections = headings ? convertibleSections(desc, headings) : [];
+    // Eine Checkbox in einem gewählten Abschnitt geht mit diesem.
+    const items = [
+      ...sections,
+      ...(headings && !which ? [] : convertibleItems(desc, which)).filter(
+        (it) => !sections.some((s) => s.from < it.from && it.from < s.to),
+      ),
+    ].sort((a, b) => a.from - b.from);
+    if (!items.length) {
+      throw new Error(headings ? 'Keine Überschrift zum Umwandeln' : 'Keine offene Checkbox zum Umwandeln');
+    }
 
     const made = items.map((item) => {
       const kid = create(ctx, 'task', {

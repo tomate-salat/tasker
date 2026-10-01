@@ -354,9 +354,9 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   app.post('/checklist', async (c) => {
     const body = checklistBody.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
-    const { id, version, items } = body.data;
+    const { id, version, items, headings } = body.data;
     // Neue Unteraufgaben und eine geänderte Beschreibung – neu laden.
-    return run(c, bus, () => checklistToSubtasks(ctx, id, version, items), {
+    return run(c, bus, () => checklistToSubtasks(ctx, id, version, items, headings), {
       status: 201,
       event: () => ({ type: 'reload', reason: 'Checkboxen umgewandelt' }),
     });

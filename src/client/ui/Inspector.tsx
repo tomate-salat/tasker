@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dependsOn, inheritedBlock } from '@shared/blocking.js';
-import { checklist, checklistItems, convertibleItems } from '@shared/checklist.js';
+import { checklist, checklistItems, convertibleItems, headingSections } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags, projectTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
@@ -643,7 +643,8 @@ function Content({
 
   /**
    * Offene Checkboxen einer Aufgabe lassen sich zu Unteraufgaben machen – eine
-   * einzeln per Knopf neben ihr, alle über die Werkzeugleiste.
+   * einzeln per Knopf neben ihr, alle über die Werkzeugleiste. Dasselbe gilt
+   * für eine Überschrift samt ihrem Abschnitt, per Knopf neben ihr.
    */
   const toSubtasks = useStore((s) => s.checklistToSubtasks);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -657,6 +658,7 @@ function Content({
     drawings.list,
     resolve,
     new Set(open.map((it) => it.n)),
+    canSubtask ? headingSections(item.desc).filter((h) => h.title) : [],
   );
   const loose = drawings.list.filter((d) => !embedded.has(d.id));
 
@@ -824,7 +826,9 @@ function Content({
           if (refClick(e)) return;
           const sub = subtaskClick(e);
           if (sub !== null) {
-            void toSubtasks(item.id, [sub]);
+            void ('heading' in sub
+              ? toSubtasks(item.id, undefined, [sub.heading])
+              : toSubtasks(item.id, [sub.item]));
             return;
           }
           // Ein gewöhnlicher Link öffnet sein Ziel, nicht den Editor.
