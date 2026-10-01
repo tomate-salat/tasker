@@ -749,9 +749,16 @@ function useTableMotion(
      */
     const prev = spots.current;
     if (prev) {
-      // Je Karte die alte Lage – der Umriss in der Schublade zählt nur, wenn es sonst nichts gibt.
+      /*
+       * Je Karte die alte Lage an einem Ort, an dem sie jetzt nicht mehr liegt –
+       * nur dann ist sie gewandert. Liegt sie dort weiter (etwa oben auf dem
+       * Erledigt-Stapel, während ihre Schublade aufgeht), ist die neue Karte nur
+       * ein weiterer Anblick derselben Aufgabe und fliegt nicht von dort her.
+       * Der Umriss in der Schublade zählt nur, wenn es sonst nichts gibt.
+       */
       const byId = new Map<string, Spot>();
       for (const [key, s] of prev) {
+        if (now.has(key)) continue;
         const id = key.split(/:(.*)/s)[1] as string;
         if (!byId.has(id) || byId.get(id)?.away) byId.set(id, s);
       }
