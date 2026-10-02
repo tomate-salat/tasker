@@ -842,6 +842,13 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>Rückgängig</dd>
         <dt>
+          <kbd>/</kbd> oder <kbd>Strg</kbd>+<kbd>K</kbd>
+        </dt>
+        <dd>
+          Suchen in allen Reitern: Titel, Beschreibung, <code>$142</code> für eine Nummer,{' '}
+          <code>#bug</code> für ein Label
+        </dd>
+        <dt>
           <kbd>[</kbd>
         </dt>
         <dd>Seitenleiste ein-/ausklappen</dd>

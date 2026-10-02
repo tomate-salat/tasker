@@ -22,6 +22,7 @@ import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
 import { Tisch } from './ui/Tisch.js';
 import { HideDoneSwitch } from './ui/hideDone.js';
+import { SearchButton, SearchPalette } from './ui/Search.js';
 import { useWheelScrollX } from './ui/wheelX.js';
 
 /** Das Abhängigkeits-Board bringt React Flow mit – erst laden, wenn es aufgeht. */
@@ -88,12 +89,26 @@ function Shell({
     return () => clearTimeout(t);
   }, [toast, say]);
 
-  // Kürzel, die überall gelten: Hilfe und Seitenleiste.
+  // Kürzel, die überall gelten: Suche, Hilfe und Seitenleiste.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const el = e.target as HTMLElement | null;
+      // Zeichen-Editor und Abhängigkeits-Board haben ihre eigenen Tasten.
+      const busy = !!el?.closest?.('.draw-modal') || !!useStore.getState().graphOpen;
+      // Strg+K öffnet die Suche auch aus einem Textfeld heraus.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+        if (busy) return;
+        e.preventDefault();
+        const s = useStore.getState();
+        s.setDialog(s.dialog === 'search' ? 'none' : 'search');
+        return;
+      }
       if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === '/' && !busy) {
+        e.preventDefault();
+        useStore.getState().setDialog('search');
+      }
       if (e.key === '?') {
         const s = useStore.getState();
         s.setDialog(s.dialog === 'help' ? 'none' : 'help');
@@ -179,6 +194,7 @@ function Shell({
             {/* Die Aktionen stehen als Icons rechts in der Titelzeile, die Reiter
                 darunter in einer eigenen Zeile – bewusst anders als im Prototyp. */}
             <span className="tab-actions">
+              <SearchButton />
               <LayoutSwitch />
               <HideDoneSwitch />
               <ArchiveDone ws={ws} />
@@ -240,6 +256,7 @@ function Shell({
           />
         )}
         {dialog === 'help' && <HelpDialog onClose={() => setDialog('none')} />}
+        {dialog === 'search' && <SearchPalette ws={ws} onClose={() => setDialog('none')} />}
 
         {toast && (
           <div className="toast" role="status">

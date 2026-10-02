@@ -511,6 +511,31 @@ Wunsch des Nutzers – das Beschreibungsfeld (Inspektor und Mehrfachauswahl, `us
 - Änderungen gehen über `insertText`, damit Strg+Z sie wie Getipptes zurücknimmt.
 11. Gamification, dezent.
 
+### Suche (über den Prototyp hinaus)
+
+Wunsch des Nutzers (02.10.2026): eine Such-Palette über der Ansicht statt eines Filters in der
+Liste – der fände nur, was im offenen Reiter liegt.
+
+- **Öffnen:** Lupe links in den Aktionen der Titelzeile, `/` oder Strg+K (das auch aus einem
+  Textfeld heraus). Escape, Klick daneben und „Zurück“ schließen. Zeichen-Editor und
+  Abhängigkeits-Board behalten ihre Tasten. Die Palette ist ein Dialog (`dialog: 'search'`).
+- **Gesucht wird** in Titel und Beschreibung von Aufgaben, Dokumenten und Milestones des aktiven
+  Bestands, im Client (`shared/search.ts`) – jedes Wort muss vorkommen. `142` findet auch die
+  Nummer, `$142` nur sie; `#bug` grenzt auf ein Label ein (Anfang reicht, geerbte zählen mit) und
+  lässt sich mit Text verbinden.
+- **Bereich:** das aktuelle Projekt oder alle – Vorgabe ist, was die Seitenleiste zeigt; Tab
+  wechselt. Über alle Projekte steht das eigene zuerst.
+- **Reihenfolge** im Projekt: Erledigtes zuletzt; davor Nummer, Titelanfang, Titel, Beschreibung.
+  Höchstens 50 Treffer stehen da.
+- **Zeile:** Status bzw. ◆/Seite, Titel mit markierter Fundstelle, Labels, `$Nummer`; darunter der
+  Ort (Reiter › Behälter › Eltern) oder der Ausschnitt aus der Beschreibung.
+- **Leeres Feld:** „Zuletzt geöffnet“ – die letzten Ausgewählten, pro Gerät (`tasker.recent`).
+- **Enter** springt hin (`reveal`): Reiter, aufgeklappte Behälter, Auswahl, Inspektor.
+- **Archiv** ist ein eigener Schalter, Vorgabe aus: fragt `GET /api/archive` mit dem Suchtext und
+  findet deshalb nur Titel, und den Text am Stück. Der Sprung öffnet das Archiv mit dem Titel als
+  Suche, damit der Eintrag trotz Seiten sicher dasteht.
+- Bilder und Zeichnungen sind nicht dabei.
+
 ### Tisch: der aktive Milestone (über den Prototyp hinaus)
 
 Wunsch des Nutzers (30.09.2026): eine verspielte, kartenbasierte Ansicht für die Arbeit am aktiven

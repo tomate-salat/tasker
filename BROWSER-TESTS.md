@@ -116,7 +116,7 @@ Der Ordner ist in `.gitignore`, darf aber trotzdem nicht liegen bleiben.
   `st-done` – dafür ist `javascript_tool` mit `document.querySelector(...).className` das kürzeste
   Werkzeug.
 - Ein Teil des Zustands liegt im Browser, nicht auf dem Server: `tasker.collapsed` (Klappzustand),
-  `tasker.scope`, `tasker.side`, `tasker.layouts`, `tasker.archOpen` in `localStorage`
+  `tasker.scope`, `tasker.side`, `tasker.layouts`, `tasker.archOpen`, `tasker.recent` in `localStorage`
   ([store.ts:323](src/client/store.ts:323)). Um eine Vorgabe zu prüfen, diese Schlüssel vorher
   löschen; um Dauerhaftigkeit zu prüfen, neu laden und nachsehen.
 
