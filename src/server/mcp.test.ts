@@ -96,11 +96,27 @@ describe('Werkzeuge', () => {
     assert.equal(all.data.total, 1);
   });
 
-  it('Unteraufgaben erben das Projekt, und der Ort lässt sich ändern', async () => {
+  it('legt pauschal unter „Unsortiert“ an, was auch immer als Ort mitkommt', async () => {
     const parent = await call('create_task', { projectId, title: 'Level 1' });
-    const kid = await call('create_task', { parent: parent.data.ref, title: 'Boden' });
-    assert.equal(kid.data.projectId, projectId);
-    assert.match(kid.data.place, /^Unteraufgabe/);
+    const ms = create(ctx, 'milestone', { projectId, title: 'Alpha' }) as { id: string };
+    const group = create(ctx, 'group', { projectId, title: 'Später' }) as { id: string };
+    for (const place of [{ parent: parent.data.ref }, { milestone: ms.id }, { groupId: group.id }, { ready: true }, { doc: true }]) {
+      const made = await call('create_task', { projectId, title: 'Boden', ...place });
+      assert.equal(made.error, false, made.text);
+      assert.equal(made.data.place, 'Backlog', JSON.stringify(place));
+      assert.equal(made.data.parentId, null);
+      assert.equal(made.data.milestoneId, null);
+      assert.equal(made.data.groupId, null);
+    }
+    // Ohne Projekt geht es nicht mehr – auch nicht über eine Elternaufgabe.
+    assert.equal((await call('create_task', { parent: parent.data.ref, title: 'Boden' })).error, true);
+  });
+
+  it('der Ort lässt sich ändern', async () => {
+    const parent = await call('create_task', { projectId, title: 'Level 1' });
+    const kid = await call('create_task', { projectId, title: 'Boden' });
+    const sub = await call('update_task', { task: kid.data.id, parent: parent.data.ref });
+    assert.match(sub.data.place, /^Unteraufgabe/);
 
     const ms = create(ctx, 'milestone', { projectId, title: 'Alpha' }) as { id: string; ref: number };
     const moved = await call('update_task', { task: kid.data.id, milestone: `$${ms.ref}` });
@@ -118,9 +134,9 @@ describe('Werkzeuge', () => {
     assert.equal(made.data.place, 'Backlog');
 
     const nulls = { parent: null, milestone: null, groupId: null, status: null, prio: null, tags: null };
-    const doc = await call('create_task', { projectId: 'spiel', title: 'Notizen', doc: true, ...nulls });
-    assert.equal(doc.error, false, doc.text);
-    assert.equal(doc.data.place, 'Dokumentation', 'Projekt auch über den Namen');
+    const named = await call('create_task', { projectId: 'spiel', title: 'Notizen', ...nulls });
+    assert.equal(named.error, false, named.text);
+    assert.equal(named.data.place, 'Backlog', 'Projekt auch über den Namen');
 
     // Beim Ändern darf ein leeres Feld die Aufgabe nicht aus ihrem Ort lösen.
     const ms = create(ctx, 'milestone', { projectId, title: 'Alpha' }) as { id: string };

@@ -156,7 +156,8 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
       instructions:
         'Tasker ist die Aufgabenverwaltung des Nutzers. Aufgaben haben eine feste Nummer ($142), ' +
         'über die sie im Text verwiesen werden. Zuerst `list_projects` für den Überblick, dann ' +
-        '`list_tasks` oder `get_task`. Aufgaben lassen sich anlegen und ändern, nicht löschen.',
+        '`list_tasks` oder `get_task`. Aufgaben lassen sich anlegen und ändern, nicht löschen. ' +
+        'Neue Aufgaben landen immer im Backlog unter „Unsortiert“.',
     },
   );
 
@@ -258,19 +259,13 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
     {
       title: 'Aufgabe anlegen',
       description:
-        'Legt eine Aufgabe an. Ohne Ort landet sie im Backlog des Projekts. Mit `parent` wird sie ' +
-        'Unteraufgabe, mit `milestone` kommt sie in den Milestone. Das Projekt ergibt sich aus ' +
-        'Elternaufgabe oder Milestone, sonst muss `projectId` gesetzt sein. Nicht gebrauchte Felder ' +
-        'einfach weglassen.',
+        'Legt eine Aufgabe an. Sie landet immer im Backlog des Projekts unter „Unsortiert“ – ' +
+        'einen anderen Ort (Milestone, Gruppe, Elternaufgabe, „Ready“, Dokumentation) vergibt der ' +
+        'Nutzer selbst. Nicht gebrauchte Felder einfach weglassen.',
       inputSchema: {
         title: z.string().min(1).max(500),
         desc: opt(z.string().max(200_000)).describe('Beschreibung in Markdown.'),
-        projectId: opt(z.string()).describe('Projekt (ID oder Name).'),
-        parent: opt(key).describe('Elternaufgabe (ID oder $Nummer). Weglassen für eine lose Aufgabe.'),
-        milestone: opt(key).describe('Milestone (ID oder $Nummer). Weglassen für das Backlog.'),
-        groupId: opt(z.string()).describe('Gruppe im Backlog.'),
-        ready: opt(z.boolean()).describe('Gleich in „Ready“ statt ins Backlog (nur ohne Ort).'),
-        doc: opt(z.boolean()).describe('Als Dokumentationsseite statt als Aufgabe.'),
+        projectId: opt(z.string()).describe('Projekt (ID oder Name). Pflicht.'),
         status: opt(z.enum(TASK_STATUS)).describe(STATUS_HELP),
         prio: opt(z.number().int().min(0).max(3)).describe(PRIO_HELP),
         categoryId: opt(z.string()),
@@ -282,22 +277,19 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
     (a) =>
       safely(() => {
         const boot = loadBootstrap(ctx);
-        const parent = a.parent ? taskOf(boot, a.parent) : null;
-        const ms = !parent && a.milestone ? milestoneOf(boot, a.milestone) : null;
-        const group = !parent && !ms && a.groupId ? boot.groups.find((g) => g.id === a.groupId) : null;
-        if (a.groupId && !parent && !ms && !group) throw new Error(`Gruppe ${a.groupId} gibt es nicht.`);
-        const projectId =
-          parent?.projectId ?? ms?.projectId ?? group?.projectId ?? (a.projectId && projectOf(boot, a.projectId));
-        if (!projectId) throw new Error('projectId fehlt (oder parent/milestone angeben).');
+        if (!a.projectId) throw new Error('projectId fehlt.');
 
+        // Neues liegt pauschal lose im Backlog („Unsortiert“) – einsortiert wird in der App.
         const input: Record<string, unknown> = {
-          projectId,
+          projectId: projectOf(boot, a.projectId),
           title: a.title,
-          parentId: parent?.id ?? null,
-          milestoneId: ms?.id ?? null,
-          groupId: group?.id ?? null,
+          parentId: null,
+          milestoneId: null,
+          groupId: null,
+          ready: false,
+          doc: false,
         };
-        for (const f of ['desc', 'ready', 'doc', 'status', 'prio', 'categoryId', 'markId'] as const) {
+        for (const f of ['desc', 'status', 'prio', 'categoryId', 'markId'] as const) {
           if (a[f] !== undefined) input[f] = a[f];
         }
         input['tags'] = withLabel(a.tags ?? [], AI_CREATED);
