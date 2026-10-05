@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import type { Step } from '@shared/api.js';
 import { blockers, isBlocked } from '@shared/blocking.js';
@@ -170,6 +170,27 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   const done = doneShelf(ws, m);
   const [shelf, setShelf] = useState(false);
   const shelfOpen = shelf && done.weeks.length > 0;
+  // Beim Schließen werden die Karten erst wieder eingesammelt (Wunsch des
+  // Nutzers) – so lange bleibt die Ablage noch stehen.
+  const [collecting, setCollecting] = useState(false);
+  const closeShelf = useCallback((): void => {
+    if (reduced()) return setShelf(false);
+    setCollecting(true);
+  }, []);
+  useEffect(() => {
+    if (!collecting) return;
+    // Die eingesammelten Karten kommen auf dem Stapel an.
+    const hit = setTimeout(() => pileRef.current && thump(pileRef.current, false), SHELF_OUT - 260);
+    const end = setTimeout(() => {
+      setShelf(false);
+      setCollecting(false);
+    }, SHELF_OUT);
+    return () => {
+      clearTimeout(hit);
+      clearTimeout(end);
+    };
+  }, [collecting]);
+  const toggleShelf = (): void => (shelfOpen ? closeShelf() : setShelf(true));
   const weekRef = useRef<HTMLSpanElement>(null);
 
   // Mit der Karte, die das Wochenziel voll macht, fliegen die Funken – nicht
@@ -263,7 +284,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
         </div>
         {drawersOf(layout.open)}
       </DropArea>
-      {shelfOpen && <Shelf ws={ws} shelf={done} goal={goal} onClose={() => setShelf(false)} />}
+      {shelfOpen && <Shelf ws={ws} shelf={done} goal={goal} leaving={collecting} onClose={closeShelf} />}
       </div>
 
       <div className="tisch-bottom">
@@ -297,7 +318,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
                     top={t.id === layout.pile[0]?.id}
                     selected={selected === t.id}
                     focused={focus === t.id}
-                    onToggle={() => setShelf((v) => !v)}
+                    onToggle={toggleShelf}
                   />
                 ))
             ) : (
@@ -309,9 +330,9 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
           <button
             className="tpile-label"
             disabled={!done.weeks.length}
-            aria-expanded={shelfOpen}
+            aria-expanded={shelfOpen && !collecting}
             title={shelfOpen ? 'Stapel wieder einsammeln' : 'Stapel aufdecken – was wurde wann erledigt?'}
-            onClick={() => setShelf((v) => !v)}
+            onClick={toggleShelf}
           >
             <span>
               <span className="tpile-n" ref={countRef}>
@@ -383,6 +404,9 @@ function PileCard({
 
 /* ------------------------------------------------------------- Ablage */
 
+/** So lange dauert das Einsammeln – passt zu `.tshelf.leaving` in `tisch.css`. */
+const SHELF_OUT = 460;
+
 const dayMonth = (start: string): string => `${start.slice(8, 10)}.${start.slice(5, 7)}.`;
 
 /**
@@ -396,11 +420,14 @@ function Shelf({
   ws,
   shelf,
   goal,
+  leaving,
   onClose,
 }: {
   ws: Workspace;
   shelf: DoneShelf;
   goal: number;
+  /** Die Karten werden gerade wieder eingesammelt – gleich ist die Ablage zu. */
+  leaving: boolean;
   onClose: () => void;
 }) {
   const dragging = useDrag((s) => s.drag?.kind === 'task');
@@ -422,7 +449,7 @@ function Shelf({
   const total = shelf.weeks.reduce((n, w) => n + w.cards.length, 0);
   let dealt = 0;
   return (
-    <section className={`tshelf ${dragging ? 'aside' : ''}`} aria-label="Erledigt">
+    <section className={`tshelf ${dragging ? 'aside' : ''} ${leaving ? 'leaving' : ''}`} aria-label="Erledigt">
       <header className="tshelf-head">
         <h2>✓ Erledigt</h2>
         <span className="muted">

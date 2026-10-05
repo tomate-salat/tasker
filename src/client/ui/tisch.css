@@ -654,6 +654,32 @@
   }
 }
 
+/* Schließen: die Karten fliegen der Reihe nach zurück zum Stapel, dann sinkt
+   die Ablage weg – das Austeilen rückwärts. Die Dauer kennt `SHELF_OUT`. */
+.tshelf.leaving {
+  pointer-events: none;
+  animation: tisch-shelf-out 200ms ease-in 260ms both;
+}
+
+.tshelf.leaving .tdeal {
+  animation: tisch-collect 240ms cubic-bezier(0.5, 0, 0.8, 0.4) both;
+  animation-delay: calc(var(--i, 0) * 12ms);
+}
+
+@keyframes tisch-shelf-out {
+  to {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+}
+
+@keyframes tisch-collect {
+  to {
+    opacity: 0;
+    transform: translate(90px, 120px) rotate(10deg) scale(0.7);
+  }
+}
+
 /* Was vom Stapel aufsteigt oder auseinanderfliegt – liegt über allem. */
 .tisch-float {
   position: fixed;
