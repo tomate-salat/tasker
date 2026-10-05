@@ -97,3 +97,80 @@ export function doneRefusal(ws: Workspace, t: Task): string | null {
 /** Ein Stapel, dessen Unteraufgaben alle erledigt sind – er wartet aufs Ablegen. */
 export const stackReady = (ws: Workspace, t: Task): boolean =>
   !isDone(t) && ws.kids(t.id).length > 0 && doneRefusal(ws, t) === null;
+
+/* ------------------------------------------------------------ Ablage */
+
+/**
+ * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers, nach Codecks): was im
+ * Milestone erledigt wurde, je Woche. Wochen laufen von Montag bis Sonntag in
+ * der Zeitzone des Geräts – der Server kennt nur UTC.
+ */
+export type DoneWeek = {
+  /** Der Montag der Woche, `YYYY-MM-DD`. */
+  start: string;
+  /** Erledigtes jeder Ebene, das zuletzt Erledigte zuerst – auch schon Archiviertes. */
+  cards: Task[];
+  /** Was fürs Wochenziel zählt: nur Karten ohne Unteraufgaben, wie beim Fortschritt. */
+  count: number;
+  current: boolean;
+  /** Die Woche mit den meisten Karten – erst ab zwei Wochen, bei Gleichstand die jüngere. */
+  best: boolean;
+};
+
+export type DoneShelf = {
+  /** Die jüngste Woche zuerst; Wochen ohne Erledigtes fehlen. */
+  weeks: DoneWeek[];
+  /** Wochen in Folge mit mindestens einer Karte. Die laufende Woche bricht die Serie nicht, solange sie läuft. */
+  streak: number;
+  /** Karten fürs Wochenziel in der laufenden Woche. */
+  thisWeek: number;
+};
+
+const day = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Der Montag der Woche, in der `d` liegt – in der Zeitzone des Geräts. */
+export const weekStart = (d: Date): string =>
+  day(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)));
+
+/** Der Montag `weeks` Wochen vor diesem Montag. */
+function weeksBefore(start: string, weeks: number): string {
+  const [y, m, d] = start.split('-').map(Number) as [number, number, number];
+  return day(new Date(y, m - 1, d - 7 * weeks));
+}
+
+export function doneShelf(ws: Workspace, m: Milestone, now: Date = new Date()): DoneShelf {
+  // Erledigt Archiviertes bleibt liegen – sonst schrumpften alte Wochen beim Aufräumen.
+  const done: Task[] = [];
+  const walk = (t: Task): void => {
+    if (isDone(t)) done.push(t);
+    for (const k of ws.countedKids(t.id)) walk(k);
+  };
+  for (const root of ws.msCounted(m)) if (!root.doc) walk(root);
+
+  // Ohne Zeitpunkt ist es gerade eben erledigt worden – siehe `tischLayout`.
+  const at = (t: Task): number => (t.doneAt ? new Date(t.doneAt).getTime() : now.getTime());
+  done.sort((a, b) => at(b) - at(a));
+
+  const thisStart = weekStart(now);
+  const byStart = new Map<string, DoneWeek>();
+  for (const t of done) {
+    const start = weekStart(new Date(at(t)));
+    let week = byStart.get(start);
+    if (!week) byStart.set(start, (week = { start, cards: [], count: 0, current: start === thisStart, best: false }));
+    week.cards.push(t);
+    if (!ws.countedKids(t.id).length) week.count++;
+  }
+  const weeks = [...byStart.values()].sort((a, b) => b.start.localeCompare(a.start));
+
+  const most = Math.max(0, ...weeks.map((w) => w.count));
+  const best = weeks.length > 1 && most > 0 ? weeks.find((w) => w.count === most) : undefined;
+  if (best) best.best = true;
+
+  const counts = (start: string): number => byStart.get(start)?.count ?? 0;
+  let from = counts(thisStart) ? 0 : 1;
+  let streak = 0;
+  while (counts(weeksBefore(thisStart, from++))) streak++;
+
+  return { weeks, streak, thisWeek: counts(thisStart) };
+}

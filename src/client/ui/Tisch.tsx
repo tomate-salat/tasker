@@ -2,13 +2,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import type { Step } from '@shared/api.js';
 import { blockers, isBlocked } from '@shared/blocking.js';
-import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
+import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { plannedMilestones } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import {
   activeMilestone,
   doneRefusal,
+  doneShelf,
+  type DoneShelf,
   playRefusal,
   stackReady,
   tischLayout,
@@ -33,7 +35,8 @@ import './tisch.css';
  * - **Gesperrt:** Karten mit offenen Voraussetzungen, angekettet.
  * - **Offen:** die große Fläche in der Mitte, dazu alle Stapel.
  * - **Im Spiel:** In Progress; sieben Plätze als Richtwert, begrenzt wird nicht.
- * - **Erledigt-Stapel** rechts daneben.
+ * - **Erledigt-Stapel** rechts daneben. Ein Klick deckt ihn auf: die Ablage
+ *   zeigt dann je Woche, was erledigt wurde (`Shelf`).
  *
  * Ziehen zwischen den Zonen setzt den Status. Zwischen zwei Karten abgelegt wird
  * sortiert (Wunsch des Nutzers): in „Offen“ ist das die Reihenfolge im Plan, „Im
@@ -161,6 +164,26 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   const selected = useStore((s) => s.selected);
   const focus = useFocus((s) => s.id);
 
+  // Die Ablage: der aufgedeckte Erledigt-Stapel, je Woche. Das Wochenziel ist
+  // das Tempo aus den Einstellungen (Aufgaben pro Woche).
+  const goal = useStore((s) => s.settings.velocity);
+  const done = doneShelf(ws, m);
+  const [shelf, setShelf] = useState(false);
+  const shelfOpen = shelf && done.weeks.length > 0;
+  const weekRef = useRef<HTMLSpanElement>(null);
+
+  // Mit der Karte, die das Wochenziel voll macht, fliegen die Funken – nicht
+  // beim Öffnen des Tisches und nicht beim Wechsel des Milestones.
+  const reached = done.thisWeek >= goal;
+  const was = useRef({ id: m.id, reached });
+  useEffect(() => {
+    if (reached && !was.current.reached && was.current.id === m.id && pileRef.current) {
+      burst(pileRef.current);
+      float(weekRef.current ?? pileRef.current, '★ Wochenziel');
+    }
+    was.current = { id: m.id, reached };
+  }, [reached, m.id]);
+
   const toggle = (id: string, value?: boolean): void => {
     setOpen((cur) => {
       const next = { ...cur, [id]: value ?? !cur[id] };
@@ -206,6 +229,8 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
     <div className="tisch" ref={root}>
       <Head ws={ws} m={m} />
 
+      {/* Gesperrt und Offen in einem Rahmen – darüber legt sich die Ablage. */}
+      <div className={`tisch-top ${shelfOpen ? 'shelf-open' : ''}`}>
       {layout.locked.length > 0 && (
         <section className="tzone tzone-locked">
           <h2 className="tzone-head">
@@ -238,6 +263,8 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
         </div>
         {drawersOf(layout.open)}
       </DropArea>
+      {shelfOpen && <Shelf ws={ws} shelf={done} goal={goal} onClose={() => setShelf(false)} />}
+      </div>
 
       <div className="tisch-bottom">
         <DropArea zone="play" className="tzone tzone-play" onDrop={drop('play')} sorts={sortsPlay}>
@@ -263,7 +290,15 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
                 .slice(0, 3)
                 .reverse()
                 .map((t) => (
-                  <PileCard key={t.id} ws={ws} task={t} top={t.id === layout.pile[0]?.id} selected={selected === t.id} focused={focus === t.id} />
+                  <PileCard
+                    key={t.id}
+                    ws={ws}
+                    task={t}
+                    top={t.id === layout.pile[0]?.id}
+                    selected={selected === t.id}
+                    focused={focus === t.id}
+                    onToggle={() => setShelf((v) => !v)}
+                  />
                 ))
             ) : (
               <div className="tpile-empty" aria-hidden>
@@ -271,12 +306,24 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
               </div>
             )}
           </div>
-          <p className="tpile-label">
-            <span className="tpile-n" ref={countRef}>
-              {layout.pile.length}
-            </span>{' '}
-            erledigt
-          </p>
+          <button
+            className="tpile-label"
+            disabled={!done.weeks.length}
+            aria-expanded={shelfOpen}
+            title={shelfOpen ? 'Stapel wieder einsammeln' : 'Stapel aufdecken – was wurde wann erledigt?'}
+            onClick={() => setShelf((v) => !v)}
+          >
+            <span>
+              <span className="tpile-n" ref={countRef}>
+                {layout.pile.length}
+              </span>{' '}
+              erledigt
+            </span>
+            <span className={`tpile-week ${reached ? 'reached' : ''}`} ref={weekRef}>
+              {reached ? '★ ' : ''}
+              {done.thisWeek} diese Woche
+            </span>
+          </button>
         </DropArea>
       </div>
     </div>
@@ -285,7 +332,9 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
 
 /**
  * Eine Karte auf dem Erledigt-Stapel. Die oberste lässt sich wieder
- * herausziehen (Wunsch des Nutzers) – auf „Offen“ oder ins Spiel.
+ * herausziehen (Wunsch des Nutzers) – auf „Offen“ oder ins Spiel. Ein Klick
+ * deckt den Stapel auf (wie ein Stapel in „Offen“ seine Schublade), der
+ * Doppelklick öffnet wie überall den Inspektor.
  */
 function PileCard({
   ws,
@@ -293,12 +342,14 @@ function PileCard({
   top,
   selected,
   focused,
+  onToggle,
 }: {
   ws: Workspace;
   task: Task;
   top: boolean;
   selected: boolean;
   focused: boolean;
+  onToggle: () => void;
 }) {
   const dragging = useDragging(t.id);
   const drag = dragSource('task', t.id, top);
@@ -312,6 +363,7 @@ function PileCard({
       onClick={(e) => {
         useFocus.setState({ id: t.id });
         if (e.detail >= 2) useStore.getState().select(t.id);
+        else onToggle();
       }}
     >
       <div
@@ -324,6 +376,160 @@ function PileCard({
         }}
       >
         <CardFace ws={ws} task={t} />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- Ablage */
+
+const dayMonth = (start: string): string => `${start.slice(8, 10)}.${start.slice(5, 7)}.`;
+
+/**
+ * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers, nach Codecks): legt sich
+ * über „Gesperrt“ und „Offen“ und zeigt je Woche, was erledigt wurde – mit
+ * Wochenziel, bester Woche und Serie. Jede Karte lässt sich von hier zurück auf
+ * „Offen“ oder ins Spiel ziehen; solange gezogen wird, tritt die Ablage dafür
+ * zur Seite. Die Zahlen stehen in `doneShelf`.
+ */
+function Shelf({
+  ws,
+  shelf,
+  goal,
+  onClose,
+}: {
+  ws: Workspace;
+  shelf: DoneShelf;
+  goal: number;
+  onClose: () => void;
+}) {
+  const dragging = useDrag((s) => s.drag?.kind === 'task');
+  const selected = useStore((s) => s.selected);
+  const focus = useFocus((s) => s.id);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const s = useStore.getState();
+      if (e.key !== 'Escape' || s.dialog !== 'none' || s.graphOpen) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const total = shelf.weeks.reduce((n, w) => n + w.cards.length, 0);
+  let dealt = 0;
+  return (
+    <section className={`tshelf ${dragging ? 'aside' : ''}`} aria-label="Erledigt">
+      <header className="tshelf-head">
+        <h2>✓ Erledigt</h2>
+        <span className="muted">
+          {total} {total === 1 ? 'Karte' : 'Karten'} in diesem Milestone
+        </span>
+        {shelf.streak >= 2 && (
+          <span className="tbadge" title="Wochen in Folge mit mindestens einer erledigten Karte">
+            🔥 {shelf.streak} Wochen in Folge
+          </span>
+        )}
+        <button
+          className="icon-btn tshelf-close"
+          onClick={onClose}
+          title="Stapel wieder einsammeln (Esc)"
+          aria-label="Ablage schließen"
+        >
+          ✕
+        </button>
+      </header>
+      {shelf.weeks.map((w) => (
+        <div key={w.start} className="tweek">
+          <div className="tweek-head">
+            <b>{w.current ? 'Diese Woche' : `Woche ab ${dayMonth(w.start)}`}</b>
+            {w.current && <span className="muted">ab {dayMonth(w.start)}</span>}
+            <span
+              className="tweek-bar"
+              role="progressbar"
+              aria-valuenow={w.count}
+              aria-valuemin={0}
+              aria-valuemax={goal}
+              aria-label="Wochenziel"
+            >
+              <i style={{ width: `${Math.min(100, Math.round((w.count / goal) * 100))}%` }} />
+            </span>
+            <span className="tweek-n" title="Erledigte Karten ohne Unteraufgaben gegen das Tempo aus den Einstellungen">
+              {w.count} von {goal}
+            </span>
+            {w.count >= goal && <span className="tbadge">★ Ziel geschafft</span>}
+            {w.best && <span className="tbadge tbadge-best">♛ Beste Woche</span>}
+          </div>
+          <div className="tzone-cards">
+            {w.cards.map((t) => (
+              <ShelfCard
+                key={t.id}
+                ws={ws}
+                task={t}
+                i={dealt++}
+                selected={selected === t.id}
+                focused={focus === t.id}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** Eine Karte in der Ablage, darüber Wochentag und Uhrzeit. Archiviertes liegt nur noch da. */
+function ShelfCard({
+  ws,
+  task: t,
+  i,
+  selected,
+  focused,
+}: {
+  ws: Workspace;
+  task: Task;
+  /** Die wievielte ausgeteilte Karte – versetzt die Animation. */
+  i: number;
+  selected: boolean;
+  focused: boolean;
+}) {
+  // Auch was nur mit einem archivierten Elternteil mitgegangen ist, steht nicht mehr im Bestand.
+  const archived = isArchived(t) || !ws.task(t.id);
+  const dragging = useDragging(t.id);
+  const drag = dragSource('task', t.id, !archived);
+  const at = t.doneAt ? new Date(t.doneAt) : new Date();
+  return (
+    <div className="tdeal" style={{ '--i': Math.min(i, 14) } as React.CSSProperties}>
+      <div
+        className={`tcell tshelf-card ${archived ? 'is-archived' : ''}`}
+        data-tcell={t.id}
+        data-tkey={`shelf:${t.id}`}
+        data-zone="shelf"
+        title={archived ? 'Archiviert' : undefined}
+        onClick={(e) => {
+          if (archived) return;
+          useFocus.setState({ id: t.id });
+          if (e.detail >= 2) useStore.getState().select(t.id);
+        }}
+      >
+        <span className="tshelf-when">
+          {at.toLocaleDateString('de-DE', { weekday: 'short' })}{' '}
+          {at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+        <div
+          className={`tcard done ${selected ? 'sel' : ''} ${focused ? 'focus' : ''} ${dragging ? 'dragging' : ''}`}
+          data-tcard={archived ? undefined : t.id}
+          {...drag}
+          onDragStart={(e) => {
+            drag.onDragStart(e);
+            startTilt(e);
+          }}
+        >
+          <CardFace ws={ws} task={t} crumb />
+        </div>
       </div>
     </div>
   );

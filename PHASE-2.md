@@ -636,6 +636,16 @@ Nachgezogen (Wunsch des Nutzers):
   (Server, `nextPlayOrder`), und eine Karte lässt sich gleich an einen Platz ausspielen. Offen:
   „Gesperrt“ und die Schubladen sortieren nicht, und eine Karte aus einer anderen Zone landet in
   „Offen“ an ihrem Platz im Plan, nicht an der Ablagestelle.
+- **Ablage: der aufgedeckte Erledigt-Stapel** (nach Codecks, Entwurf vom Nutzer bestätigt). Ein
+  Klick auf den Stapel oder seinen Zähler legt die Ablage über „Gesperrt“ und „Offen“: je Woche
+  (Montag bis Sonntag, Ortszeit, jüngste oben), was im aktiven Milestone erledigt wurde, mit
+  Wochentag und Uhrzeit über jeder Karte. Esc, ✕ oder ein weiterer Klick sammelt wieder ein.
+  Gamification: Balken je Woche gegen das Tempo aus den Einstellungen („Ziel geschafft“), Krone
+  für die beste Woche, Serie der Wochen in Folge, am Stapel „n diese Woche“ – und Funken, wenn
+  die Karte abgelegt wird, die das Wochenziel voll macht. Festlegungen: fürs Ziel zählen nur
+  Karten ohne Unteraufgaben; erledigt Archiviertes bleibt liegen und zählt mit (blass, nicht
+  anfassbar); jede andere Karte lässt sich zurück auf „Offen“ oder ins Spiel ziehen – die Ablage
+  tritt beim Ziehen zur Seite. Logik in `doneShelf` (`src/shared/tisch.ts`, mit Tests).
 
 ### Angleichen an den Prototyp
 
