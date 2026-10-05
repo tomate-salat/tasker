@@ -201,6 +201,10 @@ export function CardGrid({
  * Die Schublade unter dem Raster: die Unteraufgaben einer angeklickten Karte,
  * wieder als Karten – wie auf dem Tisch. Eine Unteraufgabe mit eigenen
  * Unteraufgaben öffnet darin ihre eigene, eingerückte Schublade.
+ *
+ * Die freie Fläche nimmt Karten auf (Wunsch des Nutzers): dort losgelassen,
+ * hängt sich die Karte hinten an die Unteraufgaben an. Zwischen zwei Karten
+ * gilt weiter „davor/danach“ – die Karten fangen das Ziehen selbst ab.
  */
 function CardDrawer({
   ws,
@@ -217,8 +221,20 @@ function CardDrawer({
 }) {
   const { open, toggle } = useCardsOpen();
   const kids = ws.kids(stack.id);
+  const lane = { type: 'task', task: stack, lane: true } as const;
+  const zone = useZone(lane);
+  const drop = dropTarget(lane);
+  // Nur Aufgaben – ein Milestone oder ein Bild hat in der Schublade nichts verloren.
+  const tasksOnly = (f: (e: React.DragEvent) => void) => (e: React.DragEvent) => {
+    if (useDrag.getState().drag?.kind === 'task') f(e);
+  };
   return (
-    <div className="cdrawer" style={{ '--depth': path.length - 1 } as React.CSSProperties}>
+    <div
+      className={`cdrawer ${zone ? 'dz-into' : ''}`}
+      style={{ '--depth': path.length - 1 } as React.CSSProperties}
+      onDragOver={tasksOnly(drop.onDragOver)}
+      onDrop={tasksOnly(drop.onDrop)}
+    >
       <div className="cdrawer-head">
         <span className="cdrawer-path">{path.map((t) => t.title || 'Ohne Titel').join(' › ')}</span>
         <button
@@ -663,11 +679,19 @@ function TaskCard({
     // Eine Datei vom Rechner auf der Karte wird ihr Titelbild.
     <div
       data-axis="x"
-      className={`tcard-cell ${zone ? `dz-${zone}` : ''} ${files.over ? 'dz-into' : ''} ${fan === undefined ? '' : 'cfan'}`}
+      className={`tcard-cell ${zone ? `dz-${zone}` : ''} ${files.over ? 'dz-into' : ''} ${fan === undefined ? '' : 'cfan'} ${kids.length ? 'is-stack' : ''}`}
       style={fan === undefined ? undefined : ({ '--i': Math.min(fan, 14) } as React.CSSProperties)}
       onDragLeave={files.events.onDragLeave}
       {...mergeDrop(files.events, dropTarget(target))}
     >
+      {/* Mit Unteraufgaben ein Stapel, wie auf dem Tisch: zwei Kartenkanten dahinter.
+          Eigene Elemente – `::before` und `::after` der Zelle sind die Einfügemarken. */}
+      {kids.length > 0 && (
+        <>
+          <i className="tstack-edge" aria-hidden />
+          <i className="tstack-edge" aria-hidden />
+        </>
+      )}
       <div
         data-row={task.id}
         className={[

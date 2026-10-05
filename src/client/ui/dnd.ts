@@ -61,8 +61,12 @@ type GroupRowT = Extract<OutlineRow, { type: 'group' }>;
 type EmptyRowT = Extract<OutlineRow, { type: 'empty' }>;
 
 export type Target =
-  /** `card`: eine Karte – nimmt zusätzlich ein Galeriebild als Titelbild. */
-  | { type: 'task'; task: Task; card?: boolean }
+  /**
+   * `card`: eine Karte – nimmt zusätzlich ein Galeriebild als Titelbild.
+   * `lane`: die Schublade der Karte (Kartenansicht) – wo auch immer man auf
+   * ihrer freien Fläche loslässt, heißt es „hinein“, ans Ende.
+   */
+  | { type: 'task'; task: Task; card?: boolean; lane?: boolean }
   /** Karten: das Feld „Titelbild“ im Inspektor, nimmt ein Galeriebild. */
   | { type: 'cover'; task: Task }
   | { type: 'milestone'; milestone: Milestone }
@@ -345,6 +349,7 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
     case 'task':
       if (target.type === 'task') {
         if (drag.blocked.has(target.task.id)) return null;
+        if (target.lane) return 'child';
         // Karten stehen nebeneinander: dort liegt „davor/danach“ links und rechts.
         const at =
           (e.currentTarget as HTMLElement).dataset['axis'] === 'x'
