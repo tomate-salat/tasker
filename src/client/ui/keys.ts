@@ -278,9 +278,9 @@ export function useGlobalKeys(): void {
         if (typing) target?.blur();
         // Escape hebt zuerst die Mehrfachauswahl auf, erst danach die Anzeige.
         else if (store.multi.size) store.clearMulti();
-        // Wie im Prototyp schließt der Inspektor nur, wenn er über der Liste liegt;
-        // daneben stört er nicht, und Escape soll nichts Unsichtbares tun.
-        else if (store.selected && window.matchMedia('(max-width: 1240px)').matches) store.select(null);
+        // Anders als im Prototyp schließt der Inspektor immer, auch neben der
+        // Liste (Wunsch des Nutzers).
+        else if (store.selected) store.select(null);
         return;
       }
       if (typing) return;

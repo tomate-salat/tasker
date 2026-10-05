@@ -640,7 +640,6 @@ function TaskCard({
   const files = useFileDrop({ kind: 'task', item: task });
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
-  const cover = coverOf(ws, task);
   // Ist eine Unteraufgabe dieser Karte ausgewählt, bleibt die Karte markiert.
   const holds = selected !== task.id && hierarchyRoot(ws, selected)?.id === task.id;
   // Karten kippen beim Ziehen in die Bewegungsrichtung (`cardTilt.ts`).
@@ -696,7 +695,6 @@ function TaskCard({
         data-row={task.id}
         className={[
           'tcard',
-          cover ? 'has-cover' : '',
           multi.has(task.id) ? 'multi' : '',
           sel ? 'sel' : '',
           focused ? 'focus' : '',

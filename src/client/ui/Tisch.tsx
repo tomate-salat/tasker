@@ -437,7 +437,8 @@ function Shelf({
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const s = useStore.getState();
-      if (e.key !== 'Escape' || s.dialog !== 'none' || s.graphOpen) return;
+      // Ist der Inspektor offen, schließt Escape erst ihn (`useGlobalKeys`).
+      if (e.key !== 'Escape' || s.dialog !== 'none' || s.graphOpen || s.selected || s.multi.size) return;
       const el = e.target as HTMLElement | null;
       if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
       onClose();

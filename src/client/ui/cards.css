@@ -325,7 +325,9 @@
   font-weight: 500;
 }
 
-.tcard.has-cover .tcard-title {
+/* Am Titelbild selbst festgemacht, nicht an einer Klasse der Karte – so gilt
+   es überall, wo `CardFace` ein Bild zeigt (Kartenansicht, Board, Tisch). */
+.tcard:has(.tcard-cover) .tcard-title {
   color: #fff;
   /* Schwarze Kontur, damit der Titel auf jedem Bild lesbar bleibt. Die Kontur
      liegt auf der Glyphenkante, `paint-order` malt sie unter die Füllung – so

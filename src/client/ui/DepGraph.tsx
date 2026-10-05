@@ -52,7 +52,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { useBackClose } from '../back.js';
 import { useStore } from '../store.js';
-import { CardFace, coverOf } from './Cards.js';
+import { CardFace } from './Cards.js';
 import { edgeKey, elkLayout, fitRoute, roundedPath, type Layout } from './graphElk.js';
 import { DEFAULT_MARK, MS_STATUS, STATUS_LABEL } from './icons.js';
 import { Inspector } from './Inspector.js';
@@ -706,7 +706,7 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
     <div
       className={[
         'tcard gn',
-        isMs(item) ? 'gn-ms' : coverOf(ws, item) ? 'has-cover' : '',
+        isMs(item) ? 'gn-ms' : '',
         done ? 'done' : '',
         focus ? 'holds' : '',
       ]
