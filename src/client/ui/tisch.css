@@ -533,7 +533,11 @@
   inset: 0;
   /* Über Karten, die darunter gerade landen (`tischFx.ts`). */
   z-index: 70;
-  overflow-y: auto;
+  /* Ausgeteilte und eingesammelte Karten ragen kurz über den Rand – das soll
+     keine Scrollleiste aufblitzen lassen. Der feste Platz für die senkrechte
+     hält die Karten beim Einsammeln an ihrer Stelle. */
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
   padding: 8px 10px 14px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--line));
@@ -657,6 +661,7 @@
 /* Schließen: die Karten fliegen der Reihe nach zurück zum Stapel, dann sinkt
    die Ablage weg – das Austeilen rückwärts. Die Dauer kennt `SHELF_OUT`. */
 .tshelf.leaving {
+  overflow: hidden;
   pointer-events: none;
   animation: tisch-shelf-out 200ms ease-in 260ms both;
 }

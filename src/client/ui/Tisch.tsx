@@ -179,18 +179,18 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   }, []);
   useEffect(() => {
     if (!collecting) return;
-    // Die eingesammelten Karten kommen auf dem Stapel an.
-    const hit = setTimeout(() => pileRef.current && thump(pileRef.current, false), SHELF_OUT - 260);
     const end = setTimeout(() => {
       setShelf(false);
       setCollecting(false);
     }, SHELF_OUT);
-    return () => {
-      clearTimeout(hit);
-      clearTimeout(end);
-    };
+    return () => clearTimeout(end);
   }, [collecting]);
-  const toggleShelf = (): void => (shelfOpen ? closeShelf() : setShelf(true));
+  // Der Stapel gibt bei jedem Klick kurz nach (Wunsch des Nutzers) – beim Auf- wie beim Zudecken.
+  const toggleShelf = (): void => {
+    if (pileRef.current) thump(pileRef.current, false, 0);
+    if (shelfOpen) closeShelf();
+    else setShelf(true);
+  };
   const weekRef = useRef<HTMLSpanElement>(null);
 
   // Mit der Karte, die das Wochenziel voll macht, fliegen die Funken – nicht

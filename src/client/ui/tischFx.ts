@@ -103,13 +103,16 @@ export function shake(cell: HTMLElement): void {
   );
 }
 
-/** Der Erledigt-Stapel gibt beim Aufprall nach – ein ganzer Stapel stärker. */
-export function thump(pile: HTMLElement, big: boolean): void {
+/**
+ * Der Erledigt-Stapel gibt beim Aufprall nach – ein ganzer Stapel stärker.
+ * `delay`: so lange braucht die Karte bis dorthin; ein Klick auf den Stapel wirkt sofort.
+ */
+export function thump(pile: HTMLElement, big: boolean, delay = 120): void {
   if (reduced()) return;
   const s = big ? 0.86 : 0.93;
   pile.animate(
     [{ transform: 'scale(1)' }, { transform: `scale(${s})`, offset: 0.35 }, { transform: 'scale(1)' }],
-    { duration: big ? 520 : 380, easing: SPRING, delay: 120 },
+    { duration: big ? 520 : 380, easing: SPRING, delay },
   );
 }
 
