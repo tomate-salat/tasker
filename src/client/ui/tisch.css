@@ -178,6 +178,32 @@
   pointer-events: none;
 }
 
+/* Die beiden Karten an der Einfügemarke weichen zur Seite, als machten sie
+   Platz – wie im Kartenraster (`cards.css`, dort steht auch der Übergang der
+   Karte). Die Kanten eines Stapels gehen mit. */
+.tcell[data-gap='l'] > .tcard {
+  transform: translateX(-10px);
+}
+
+.tcell[data-gap='r'] > .tcard {
+  transform: translateX(10px);
+}
+
+.tcell.is-stack::before,
+.tcell.is-stack::after {
+  transition: translate 160ms ease;
+}
+
+.tcell.is-stack[data-gap='l']::before,
+.tcell.is-stack[data-gap='l']::after {
+  translate: -10px 0;
+}
+
+.tcell.is-stack[data-gap='r']::before,
+.tcell.is-stack[data-gap='r']::after {
+  translate: 10px 0;
+}
+
 /* ---------------------------------------------------------------- Karten */
 
 /* Die Zelle um die Karte – dieselbe Größe wie im Kartenraster. */
@@ -623,7 +649,9 @@
     animation: none;
   }
 
-  .tisch-xp i {
+  .tisch-xp i,
+  .tcell.is-stack::before,
+  .tcell.is-stack::after {
     transition: none;
   }
 }

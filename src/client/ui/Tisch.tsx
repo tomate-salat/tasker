@@ -560,12 +560,17 @@ function Drawer({
  */
 type Gap = { index: number; x: number; y: number; h: number };
 
+/** Die Karten einer Zone, zwischen die sortiert wird – ohne die gezogenen. */
+const sortCells = (zone: HTMLElement, dragged: string[]): HTMLElement[] =>
+  [...zone.querySelectorAll<HTMLElement>(':scope > .tzone-cards > .tcell[data-tcell]')].filter(
+    (c) => !dragged.includes(c.dataset['tcell'] as string),
+  );
+
 function gapAt(zone: HTMLElement, e: React.DragEvent, dragged: string[]): Gap | null {
   // Über einer Schublade wird nicht sortiert – dort liegen die Unteraufgaben.
   if ((e.target as HTMLElement).closest('.tdrawer')) return null;
-  const rects = [...zone.querySelectorAll<HTMLElement>(':scope > .tzone-cards > .tcell[data-tcell]')]
-    .filter((c) => !dragged.includes(c.dataset['tcell'] as string))
-    .map((c) => c.getBoundingClientRect());
+  // Gemessen wird die Zelle – die Karte darin weicht der Marke aus, die Zelle bleibt stehen.
+  const rects = sortCells(zone, dragged).map((c) => c.getBoundingClientRect());
   if (!rects.length) return null;
 
   // Vor der ersten Karte, deren Mitte rechts vom Zeiger liegt – oder die schon in der nächsten Zeile steht.
@@ -608,8 +613,29 @@ function DropArea({
     const drag = useDrag.getState().drag;
     return drag?.kind === 'task' && sorts?.(drag.ids) ? gapAt(e.currentTarget, e, drag.ids) : null;
   };
+
+  // Die beiden Karten an der Einfügemarke weichen zur Seite, als machten sie
+  // Platz – wie im Kartenraster (`cards.css`). Über ein Attribut statt einer
+  // Klasse: die Klassen der Zellen gehören den Karten selbst.
+  const ref = useRef<HTMLElement>(null);
+  const at = active && over && gap ? gap.index : null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || at === null) return;
+    const cells = sortCells(el, useDrag.getState().drag?.ids ?? []);
+    const left = cells[at - 1];
+    const right = cells[at];
+    left?.setAttribute('data-gap', 'l');
+    right?.setAttribute('data-gap', 'r');
+    return () => {
+      left?.removeAttribute('data-gap');
+      right?.removeAttribute('data-gap');
+    };
+  }, [at]);
+
   return (
     <section
+      ref={ref}
       className={`${className} ${over && active ? 'dz-over' : ''} ${active ? 'dz-live' : ''}`}
       data-drop={zone}
       onDragOver={(e) => {
