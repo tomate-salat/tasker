@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { create } from 'zustand';
 import { checklist } from '@shared/checklist.js';
 import { coverFromLabel, effectiveCover } from '@shared/inherit.js';
 import { isDone, type Category, type Mark, type Project, type Task } from '@shared/model.js';
@@ -28,6 +29,11 @@ import './cards.css';
  * Inspektor (`Hierarchy`), und zwar immer von der Wurzel an – auch wenn
  * gerade eine Unteraufgabe ausgewählt ist.
  *
+ * Bedient wird wie auf dem Tisch (Versuch, Wunsch des Nutzers): ein Klick
+ * markiert die Karte nur (`marked` im Speicher) und deckt ihre Unteraufgaben
+ * in einer Schublade unter dem Raster auf, erst der Doppelklick öffnet den
+ * Inspektor.
+ *
  * Alles hängt an `cardsOn`; fliegt die Ansicht wieder raus, gehen
  * diese Datei, `cards.css` und die paar Aufrufe mit „Karten“ im Kommentar.
  * Das Abhängigkeits-Board zeigt seine Tasks mit `CardFace` – es braucht dann
@@ -41,6 +47,34 @@ const HIER_KEY = 'inspector:hierarchy';
 /** Ob die Karten gerade gelten – je Ansicht gewählt, in Plan, Ready, Backlog und Doku. */
 export const cardsOn = (s: { layouts: Record<LayoutView, Layout>; view: View }): boolean =>
   isLayoutView(s.view) && s.layouts[s.view] === 'cards';
+
+/** Welche Schubladen offen sind – das merkt sich das Gerät, wie auf dem Tisch. */
+const OPEN_KEY = 'tasker.cardsOpen';
+
+function readOpen(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}') as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+export const useCardsOpen = create<{
+  open: Record<string, boolean>;
+  toggle: (id: string, value?: boolean) => void;
+}>((set, get) => ({
+  open: readOpen(),
+  toggle: (id, value) => {
+    const open = { ...get().open, [id]: value ?? !get().open[id] };
+    if (!open[id]) delete open[id];
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(open));
+    } catch {
+      // Privates Fenster – dann eben nur für diese Sitzung.
+    }
+    set({ open });
+  },
+}));
 
 /** Die oberste Aufgabe (oder Doku-Seite) über `id` – deren Baum zeigt der Inspektor. */
 export function hierarchyRoot(ws: Workspace, id: string | null): Task | null {
@@ -66,18 +100,20 @@ export function treeRows(ws: Workspace, root: Task, collapsed: Record<string, bo
 
 /**
  * Aus der Zeilenfolge der Liste die der Karten: Unteraufgaben fallen weg.
- * Für die Tastatur (`keys`) steht hinter der Karte, deren Baum gerade im
- * Inspektor offen ist, dieser Baum – so wandern die Pfeiltasten hinein.
+ * Für die Tastatur (`keys`) stehen hinter einer Karte die Karten ihrer
+ * offenen Schublade – so wandern die Pfeiltasten hinein.
  */
 export function cardRows(
   ws: Workspace,
   rows: OutlineRow[],
-  selected: string | null,
-  collapsed: Record<string, boolean>,
+  open: Record<string, boolean>,
 ): { shown: OutlineRow[]; keys: OutlineRow[] } {
   const shown = rows.filter((r) => r.type !== 'task' || !r.task.parentId);
-  const root = collapsed[HIER_KEY] ? null : hierarchyRoot(ws, selected);
-  const keys = shown.flatMap((r) => (root && r.id === root.id ? treeRows(ws, root, collapsed) : [r]));
+  const walk = (t: Task, depth: number): OutlineRow[] => [
+    { type: 'task', id: t.id, task: t, depth },
+    ...(open[t.id] ? ws.kids(t.id).flatMap((k) => walk(k, depth + 1)) : []),
+  ];
+  const keys = shown.flatMap((r) => (r.type === 'task' ? walk(r.task, r.depth) : [r]));
   return { shown, keys };
 }
 
@@ -134,7 +170,9 @@ export function CardGrid({
   const tasksOnly = (f: (e: React.DragEvent) => void) => (e: React.DragEvent) => {
     if (useDrag.getState().drag?.kind === 'task') f(e);
   };
+  const open = useCardsOpen((s) => s.open);
   return (
+    <>
     <div
       className={`card-grid ${zone ? `dz-${zone}` : ''}`}
       data-view={view}
@@ -149,6 +187,59 @@ export function CardGrid({
       {tasks.map((t) => (
         <TaskCard key={t.id} ws={ws} task={t} menu={menu} />
       ))}
+    </div>
+    {tasks
+      .filter((t) => open[t.id] && ws.kids(t.id).length)
+      .map((t) => (
+        <CardDrawer key={`drawer:${t.id}`} ws={ws} stack={t} path={[t]} view={view} menu={menu} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Die Schublade unter dem Raster: die Unteraufgaben einer angeklickten Karte,
+ * wieder als Karten – wie auf dem Tisch. Eine Unteraufgabe mit eigenen
+ * Unteraufgaben öffnet darin ihre eigene, eingerückte Schublade.
+ */
+function CardDrawer({
+  ws,
+  stack,
+  path,
+  view,
+  menu,
+}: {
+  ws: Workspace;
+  stack: Task;
+  path: Task[];
+  view: OutlineView;
+  menu: Menu;
+}) {
+  const { open, toggle } = useCardsOpen();
+  const kids = ws.kids(stack.id);
+  return (
+    <div className="cdrawer" style={{ '--depth': path.length - 1 } as React.CSSProperties}>
+      <div className="cdrawer-head">
+        <span className="cdrawer-path">{path.map((t) => t.title || 'Ohne Titel').join(' › ')}</span>
+        <button
+          className="icon-btn"
+          onClick={() => toggle(stack.id, false)}
+          title="Schublade zuklappen"
+          aria-label="Schublade zuklappen"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="card-grid" data-view={view}>
+        {kids.map((k, i) => (
+          <TaskCard key={k.id} ws={ws} task={k} menu={menu} fan={i} />
+        ))}
+      </div>
+      {kids
+        .filter((k) => open[k.id] && ws.kids(k.id).length)
+        .map((k) => (
+          <CardDrawer key={`drawer:${k.id}`} ws={ws} stack={k} path={[...path, k]} view={view} menu={menu} />
+        ))}
     </div>
   );
 }
@@ -514,8 +605,20 @@ export function CoverSlot({ owner }: { owner: Exclude<CoverOwner, { kind: 'task'
 
 /* ---------------------------------------------------------------- Karte */
 
-function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu }) {
-  const { selected, select, editing, multi, toggleMulti, rangeMulti, clearMulti } = useStore();
+function TaskCard({
+  ws,
+  task,
+  menu,
+  fan,
+}: {
+  ws: Workspace;
+  task: Task;
+  menu: Menu;
+  /** In einer Schublade: die wievielte Karte – sie fächern versetzt heraus. */
+  fan?: number;
+}) {
+  const { selected, select, marked, mark, editing, multi, toggleMulti, rangeMulti, clearMulti } = useStore();
+  const drawer = useCardsOpen();
   const target = { type: 'task', task, card: true } as const;
   const zone = useZone(target);
   const files = useFileDrop({ kind: 'task', item: task });
@@ -528,10 +631,12 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
   const drag = dragSource('task', task.id, !editing);
 
   // Strg+V mit einem Bild in der Zwischenablage macht es zum Titelbild der
-  // ausgewählten Karte – solange kein Eingabefeld den Fokus hat.
+  // markierten Karte – solange kein Eingabefeld den Fokus hat.
   const sel = selected === task.id && !multi.size;
+  const focused = marked === task.id && !multi.size;
+  const pastes = marked ? focused : sel;
   useEffect(() => {
-    if (!sel) return;
+    if (!pastes) return;
     const onPaste = (e: ClipboardEvent): void => {
       const el = e.target instanceof HTMLElement ? e.target : null;
       if (el?.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return;
@@ -542,7 +647,7 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
-  }, [sel, task]);
+  }, [pastes, task]);
 
   const cell =
     (kind: CellKind) =>
@@ -558,7 +663,8 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
     // Eine Datei vom Rechner auf der Karte wird ihr Titelbild.
     <div
       data-axis="x"
-      className={`tcard-cell ${zone ? `dz-${zone}` : ''} ${files.over ? 'dz-into' : ''}`}
+      className={`tcard-cell ${zone ? `dz-${zone}` : ''} ${files.over ? 'dz-into' : ''} ${fan === undefined ? '' : 'cfan'}`}
+      style={fan === undefined ? undefined : ({ '--i': Math.min(fan, 14) } as React.CSSProperties)}
       onDragLeave={files.events.onDragLeave}
       {...mergeDrop(files.events, dropTarget(target))}
     >
@@ -569,6 +675,8 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           cover ? 'has-cover' : '',
           multi.has(task.id) ? 'multi' : '',
           sel ? 'sel' : '',
+          focused ? 'focus' : '',
+          kids.length && drawer.open[task.id] ? 'drawer-open' : '',
           holds ? 'holds' : '',
           isDone(task) ? 'done' : '',
           dragging ? 'dragging' : '',
@@ -579,8 +687,13 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           if (e.ctrlKey || e.metaKey) toggleMulti(task.id);
           else if (e.shiftKey) rangeMulti(task.id);
           else {
+            // Wie auf dem Tisch: ein Klick markiert (und deckt die Unteraufgaben
+            // auf oder räumt sie weg), erst der zweite Klick eines Doppelklicks
+            // öffnet den Inspektor.
             clearMulti();
-            select(task.id);
+            mark(task.id);
+            if (e.detail >= 2) select(task.id);
+            else if (kids.length) drawer.toggle(task.id);
           }
         }}
         {...drag}
@@ -593,7 +706,6 @@ function TaskCard({ ws, task, menu }: { ws: Workspace; task: Task; menu: Menu })
           ws={ws}
           task={task}
           onCell={cell}
-          onTitleDoubleClick={() => useStore.getState().edit(task.id)}
           // Mit Unteraufgaben wird der Titel im Baum des Inspektors bearbeitet.
           titleEdit={
             editing === task.id && !kids.length ? <TitleEdit kind="task" id={task.id} title={task.title} /> : undefined

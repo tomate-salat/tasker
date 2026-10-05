@@ -14,8 +14,14 @@ import { locationMenu, rowMenu } from './rowMenu.js';
  *
  * Während in einem Feld getippt wird, greift hier nichts – die
  * Titelbearbeitung hat ihre eigenen Tasten.
+ *
+ * `cards`: in der Kartenansicht gelten die Tasten der markierten Karte, nicht
+ * der im Inspektor – dort markiert ein Klick nur. Die Pfeile wandern dann von
+ * Markierung zu Markierung, → und ← öffnen und schließen die Schublade.
  */
-export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
+export type CardKeys = { open: Record<string, boolean>; toggle: (id: string, value?: boolean) => void };
+
+export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu, cards: CardKeys | null = null): void {
   const store = useStore();
 
   useEffect(() => {
@@ -68,11 +74,15 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
         }
       }
 
-      const index = rows.findIndex((r) => r.id === store.selected);
+      // Karten: die markierte Karte – aber nur, solange sie zu sehen ist. Sonst
+      // träfe etwa `Entf` eine Aufgabe, die nirgends mehr angezeigt wird.
+      const marked = cards && rows.some((r) => r.id === store.marked) ? store.marked : null;
+      const current = marked ?? store.selected;
+      const index = rows.findIndex((r) => r.id === current);
       // Wie im Prototyp (`item(u.sel)`) gelten die Tasten dem Ausgewählten, auch
       // wenn es gerade aus der Ansicht gefallen ist – `P` holt einen Milestone
       // sonst nicht mehr in den Plan zurück, den es eben herausgenommen hat.
-      const row = rows[index] ?? hidden(ws, store.selected);
+      const row = rows[index] ?? hidden(ws, current);
 
       // Mit Alt verschieben die Pfeiltasten die Zeile, sie wandern nicht.
       if (!e.altKey && (e.key === 'ArrowDown' || e.key === 'j')) {
@@ -98,6 +108,16 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
         return;
       }
 
+      // Karten: → deckt die Unteraufgaben auf, ← räumt sie weg oder geht zur Karte darüber.
+      if (cards && row.type === 'task' && !e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault();
+        const hasKids = ws.kids(row.id).length > 0;
+        if (e.key === 'ArrowRight') {
+          if (hasKids) cards.toggle(row.id, true);
+        } else if (hasKids && cards.open[row.id]) cards.toggle(row.id, false);
+        else if (row.task.parentId) store.mark(row.task.parentId);
+        return;
+      }
       if (e.key === 'ArrowRight' && !e.altKey) {
         e.preventDefault();
         store.setCollapsed(row.id, false);
@@ -219,7 +239,8 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
 
     const go = (row: OutlineRow | undefined): void => {
       if (!row) return;
-      store.select(row.id);
+      if (cards) store.mark(row.id);
+      else store.select(row.id);
       document.querySelector(`[data-row="${row.id}"]`)?.scrollIntoView({ block: 'nearest' });
     };
 
@@ -232,7 +253,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu): void {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ws, rows, store, menu]);
+  }, [ws, rows, store, menu, cards]);
 }
 
 const isTyping = (target: HTMLElement | null): boolean =>

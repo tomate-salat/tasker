@@ -13,7 +13,7 @@ import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { listMenu, rowMenu } from './rowMenu.js';
 import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
-import { cardArea, CardGrid, cardRows, cardsOn, chunkCards } from './Cards.js';
+import { cardArea, CardGrid, cardRows, cardsOn, chunkCards, useCardsOpen } from './Cards.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
 
@@ -26,11 +26,12 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const { collapsed, settings, filter } = state;
   const full = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed, filter });
   const all = useHideDone(full, view === 'plan' && state.hideDone);
-  // Karten: nur die Wurzeln; die Tastatur läuft zusätzlich durch den offenen Baum.
-  const cards = cardsOn(state) ? cardRows(ws, all, state.selected, collapsed) : null;
+  // Karten: nur die Wurzeln; die Tastatur läuft zusätzlich durch die offenen Schubladen.
+  const cardsOpen = useCardsOpen();
+  const cards = cardsOn(state) ? cardRows(ws, all, cardsOpen.open) : null;
   const rows = cards ? cards.keys : all;
   const menu = useMenu();
-  useKeys(ws, rows, menu);
+  useKeys(ws, rows, menu, cards ? cardsOpen : null);
 
   // Auswahl und Tastatur brauchen dieselbe Reihenfolge, die hier gezeichnet wird.
   const { setVisible } = state;

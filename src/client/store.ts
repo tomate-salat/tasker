@@ -121,6 +121,13 @@ type State = {
   sideOpen: boolean;
   view: View;
   selected: string | null;
+  /**
+   * Kartenansicht (Versuch, Wunsch des Nutzers): die markierte Karte. Wie auf
+   * dem Tisch markiert ein Klick nur, erst der Doppelklick öffnet den Inspektor
+   * (`selected`). Die Tasten gelten dort der markierten Karte.
+   */
+  marked: string | null;
+  mark: (id: string | null) => void;
   /** Zeile, deren Titel gerade im Baum bearbeitet wird. */
   editing: string | null;
   /** Zugeklappte Zeilen – bleibt pro Gerät, nicht auf dem Server. */
@@ -398,6 +405,8 @@ export const useStore = create<State>((set, get) => ({
   sideOpen: false,
   view: 'plan',
   selected: null,
+  marked: null,
+  mark: (marked) => set({ marked }),
   editing: null,
   collapsed: readLocal<Record<string, boolean>>(COLLAPSED_KEY, {}),
   settings: { velocity: 8, theme: 'system', imageMaxKb: 500, imageMaxEdge: 2560 },
@@ -485,7 +494,7 @@ export const useStore = create<State>((set, get) => ({
 
   // Die Auswahl bleibt beim Reiterwechsel stehen (Wunsch des Nutzers): so kann
   // man Tasks aus einer anderen Ansicht auf die Abhängigkeiten im Inspektor ziehen.
-  setView: (view) => set({ view, editing: null, sideOpen: false }),
+  setView: (view) => set({ view, editing: null, sideOpen: false, marked: null }),
 
   setVelocity: async (velocity) => {
     try {
@@ -504,7 +513,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   // Den Inspektor zu schließen hebt auch die Auswahl auf (so wie im Prototyp).
-  select: (id) => set({ selected: id, editing: null }),
+  // Was im Inspektor aufgeht, ist damit auch markiert.
+  select: (id) => set({ selected: id, editing: null, ...(id ? { marked: id } : {}) }),
 
   editingNew: false,
   // Eine Gruppe hat keinen Inspektor – sie umzubenennen wählt nichts aus.

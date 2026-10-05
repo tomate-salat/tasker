@@ -56,6 +56,84 @@
     0 3px 10px rgba(22, 34, 29, 0.14);
 }
 
+/* Markiert (ein Klick, Pfeiltasten) – den Inspektor öffnet erst der Doppelklick. */
+.tcard.focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Die Schublade dieser Karte ist offen. */
+.list .tcard.drawer-open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Die Schublade unter dem Raster: die Unteraufgaben einer Karte, wie auf dem Tisch. */
+.cdrawer {
+  margin: 6px 8px 10px calc(23px + var(--depth, 0) * 18px);
+  padding: 6px 6px 2px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  animation: card-drawer 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: top center;
+}
+
+.cdrawer .cdrawer {
+  margin: 0 0 8px calc(var(--depth, 0) * 18px);
+  border-style: dashed;
+  background: var(--surface);
+}
+
+.cdrawer .card-grid {
+  padding: 0 0 6px;
+  border-bottom: 0;
+}
+
+@keyframes card-drawer {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.92);
+  }
+}
+
+.cdrawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 2px 6px;
+  font: 600 12px/1.4 var(--body);
+  color: var(--accent);
+}
+
+.cdrawer-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Die Karten fächern leicht versetzt heraus. */
+.cfan {
+  animation: card-fan 360ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+@keyframes card-fan {
+  from {
+    opacity: 0;
+    transform: translate(-24px, -14px) rotate(-6deg) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdrawer,
+  .cfan {
+    animation: none;
+  }
+}
+
 /* Eine Unteraufgabe der Karte ist im Inspektor offen. */
 .tcard.holds {
   border-color: var(--accent);
