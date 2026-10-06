@@ -20,7 +20,23 @@ const WORKER_FILE = 'dist/server/drawing-worker.mjs';
 const IDLE_MS = 60_000;
 const TIMEOUT_MS = 20_000;
 
-type Waiting = { resolve: (png: Uint8Array) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
+type Waiting = {
+  resolve: (png: Uint8Array) => void;
+  reject: (e: Error) => void;
+  timer: NodeJS.Timeout;
+  since: number;
+};
+
+/**
+ * Start, jedes Bild und das Ende stehen im Log, mit dem Speicher beider
+ * Prozesse – sonst lässt sich am Speicher-Verlauf des Dienstes nicht ablesen,
+ * wem ein Anstieg gehört und ob der Zeichen-Prozess wirklich gegangen ist.
+ */
+const mb = (bytes: number): number => Math.round(bytes / 1e6);
+const serverMemory = (): string => {
+  const m = process.memoryUsage();
+  return `Server: ${mb(m.rss)} MB (Heap ${mb(m.heapUsed)}, extern ${mb(m.external)})`;
+};
 
 let worker: ChildProcess | null = null;
 let idle: NodeJS.Timeout | null = null;
@@ -52,15 +68,21 @@ function start(): ChildProcess {
     if (!job) return;
     waiting.delete(reply.id);
     clearTimeout(job.timer);
-    if ('error' in reply) job.reject(new Error(reply.error));
-    else job.resolve(reply.png);
+    if ('error' in reply) return job.reject(new Error(reply.error));
+    console.log(
+      `Zeichnung gezeichnet in ${Date.now() - job.since} ms, ${Math.round(reply.png.length / 1e3)} KB. ` +
+        `Zeichen-Prozess ${w.pid}: ${mb(reply.rss)} MB. ${serverMemory()}`,
+    );
+    job.resolve(reply.png);
   });
   w.on('error', (e) => {
     if (worker === w) stop(e.message);
   });
-  w.on('exit', () => {
+  w.on('exit', (code, signal) => {
+    console.log(`Zeichen-Prozess ${w.pid} beendet (${signal ?? code}). ${serverMemory()}`);
     if (worker === w) stop('Der Zeichen-Prozess ist beendet.');
   });
+  console.log(`Zeichen-Prozess ${w.pid} gestartet. ${serverMemory()}`);
   // Ein wartender Prozess soll den Server nicht am Beenden hindern.
   w.unref();
   w.channel?.unref();
@@ -78,7 +100,7 @@ export function renderDrawing(scene: Scene, opts: { dark: boolean; maxEdge: numb
   return new Promise((res, rej) => {
     // Hängt der Prozess, geht er ganz – der nächste Abruf startet einen neuen.
     const timer = setTimeout(() => stop('Das Zeichnen hat zu lange gedauert.'), TIMEOUT_MS);
-    waiting.set(id, { resolve: res, reject: rej, timer });
+    waiting.set(id, { resolve: res, reject: rej, timer, since: Date.now() });
     worker?.send(req);
   });
 }

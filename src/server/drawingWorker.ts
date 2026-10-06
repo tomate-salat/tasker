@@ -28,7 +28,8 @@ export type RenderRequest = {
   maxEdge: number;
 };
 
-export type RenderReply = { id: number; png: Uint8Array } | { id: number; error: string };
+/** `rss` ist der Speicher dieses Prozesses nach dem Zeichnen, fürs Log. */
+export type RenderReply = { id: number; png: Uint8Array; rss: number } | { id: number; error: string };
 
 /** Über diese Schärfe hinaus wird eine kleine Zeichnung nicht vergrößert. */
 const MAX_SCALE = 2;
@@ -177,7 +178,7 @@ const reply = (r: RenderReply): void => void process.send?.(r);
 
 process.on('message', (req: RenderRequest) => {
   void render(req).then(
-    (png) => reply({ id: req.id, png }),
+    (png) => reply({ id: req.id, png, rss: process.memoryUsage().rss }),
     (e: unknown) => reply({ id: req.id, error: e instanceof Error ? e.message : String(e) }),
   );
 });
