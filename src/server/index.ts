@@ -11,6 +11,7 @@ import { appEvents } from './events.js';
 import { handleMcp } from './mcp.js';
 import { createToken, listTokens, revokeToken, tokenValid } from './tokens.js';
 import { runMigrations } from './migrate.js';
+import { getSettings } from './settings.js';
 import {
   SESSION_COOKIE,
   bootstrapAccount,
@@ -31,7 +32,7 @@ await bootstrapAccount();
 purgeExpiredSessions();
 const boot = recordBoot();
 
-const app = new Hono();
+const app = new Hono<{ Variables: { viaToken: boolean } }>();
 
 /* ------------------------------------------------------------ Öffentliches */
 
@@ -91,16 +92,32 @@ app.all('/mcp', async (c) => {
  * einem Zugangs-Token. Das gilt nur für die hier genannten Routen: eine neue
  * Route ist damit von selbst der Sitzung vorbehalten, bis sie jemand bewusst
  * freigibt – Konto, Passwort und Tokens gehören nie dazu.
+ *
+ * `TOKEN_READ_ROUTES` gilt nur für GET: die Bytes eines Bildes (für die
+ * Titelbilder der Karten), aber weder die Galerie noch Hochladen oder Löschen –
+ * und die Einstellungen, von denen ein Token aber nur einen Ausschnitt sieht.
  */
-const TOKEN_ROUTES = /^\/api\/(me|bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
+const TOKEN_ROUTES = /^\/api\/(bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
+const TOKEN_READ_ROUTES = /^\/api\/(settings|bilder\/[^/]+)$/;
 
 app.use('/api/*', async (c, next) => {
-  const allowed =
-    sessionValid(getCookie(c, SESSION_COOKIE)) ||
-    (TOKEN_ROUTES.test(c.req.path) && tokenValid(appDb, c.req.header('authorization')));
-  if (!allowed) return c.json({ error: 'Nicht angemeldet.' }, 401);
+  const path = c.req.path;
+  const forToken = TOKEN_ROUTES.test(path) || (c.req.method === 'GET' && TOKEN_READ_ROUTES.test(path));
+  const session = sessionValid(getCookie(c, SESSION_COOKIE));
+  const viaToken = !session && forToken && tokenValid(appDb, c.req.header('authorization'));
+  if (!session && !viaToken) return c.json({ error: 'Nicht angemeldet.' }, 401);
+  c.set('viaToken', viaToken);
   await next();
 });
+
+/**
+ * Per Token gibt es von den Einstellungen nur, was ein Client ausdrücklich
+ * braucht – einzeln aufgezählt, damit ein neues Feld nicht von selbst mitgeht.
+ * Mit Sitzung antwortet die Route in routes.ts.
+ */
+app.get('/api/settings', (c, next) =>
+  c.get('viaToken') ? c.json({ velocity: getSettings(appDb).velocity }) : next(),
+);
 
 app.get('/api/me', (c) => c.json({ account: getAccount() }));
 
