@@ -29,6 +29,7 @@ import type { Task } from '../shared/model.js';
 import { loadLogs, logScopes } from './burnup.js';
 import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
+import { renderDrawing } from './drawingImage.js';
 import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
 import {
@@ -83,6 +84,9 @@ import { getGraph, getSettings, putGraph, putSettings } from './settings.js';
  * Jede erfolgreiche Änderung meldet sich anschließend im Änderungs-Strom
  * (`GET /events`), damit ein zweiter Tab nicht auf einem alten Stand sitzt.
  */
+/** Längere Kante eines Zeichnungsbilds, wenn der Client keine nennt. */
+const DRAWING_EDGE = 1600;
+
 export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   const app = new Hono();
   const run = (...args: RunArgs) => runWith(ctx, ...args);
@@ -115,6 +119,54 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       ? ({ kind: 'task', id: taskId } as const)
       : ({ kind: 'milestone', id: milestoneId as string } as const);
     return c.json({ drawings: loadDrawings(ctx, owner) });
+  });
+
+  /**
+   * Eine Zeichnung als PNG, für Clients ohne Excalidraw (das Godot-Addon).
+   * Gefunden wird sie wie im Text: über den Besitzer und den Namen aus
+   * `![[zeichnung:Name]]`. Das Bild entsteht bei jedem Abruf neu, gespeichert
+   * wird nichts – am ETag (er trägt die Version) erkennt der Client, ob seins
+   * noch gilt, und bekommt dann 304, ohne dass gezeichnet wird.
+   *
+   * Eigener Pfad statt `/drawings/bild`, damit er sich mit `/drawings/:id`
+   * nicht überschneidet.
+   */
+  app.get('/zeichnungsbild', async (c) => {
+    const taskId = c.req.query('taskId');
+    const milestoneId = c.req.query('milestoneId');
+    const name = c.req.query('name');
+    if (!taskId === !milestoneId || !name) {
+      return c.json({ error: 'taskId oder milestoneId und name angeben.' }, 400);
+    }
+    const owner = taskId
+      ? ({ kind: 'task', id: taskId } as const)
+      : ({ kind: 'milestone', id: milestoneId as string } as const);
+    const drawing = loadDrawings(ctx, owner).find((d) => d.name === name);
+    if (!drawing) return c.json({ error: 'Nicht gefunden.' }, 404);
+
+    const dark = c.req.query('thema') === 'dunkel';
+    const wanted = Number(c.req.query('kante') ?? DRAWING_EDGE);
+    const maxEdge = Number.isFinite(wanted) ? Math.min(4000, Math.max(64, Math.round(wanted))) : DRAWING_EDGE;
+
+    const headers = {
+      'Cache-Control': 'private, no-cache',
+      ETag: `"${drawing.id}-${drawing.version}-${maxEdge}${dark ? 'd' : 'h'}"`,
+    };
+    if (c.req.header('if-none-match') === headers.ETag) return c.body(null, 304, headers);
+    // Eine leere Zeichnung hat kein Bild.
+    if (!drawing.scene.elements.length) return c.body(null, 204, headers);
+
+    try {
+      const png = await renderDrawing(drawing.scene, { dark, maxEdge });
+      return c.body(png as unknown as ArrayBuffer, 200, {
+        ...headers,
+        'Content-Type': 'image/png',
+        'Content-Length': String(png.length),
+      });
+    } catch (e) {
+      console.error(`Zeichnung ${drawing.id} ließ sich nicht zeichnen:`, e);
+      return c.json({ error: 'Die Zeichnung ließ sich nicht als Bild ausgeben.' }, 500);
+    }
   });
 
   /* ---------------------------------------------------- Änderungs-Strom */

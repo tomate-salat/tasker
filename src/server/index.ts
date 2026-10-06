@@ -94,11 +94,12 @@ app.all('/mcp', async (c) => {
  * freigibt – Konto, Passwort und Tokens gehören nie dazu.
  *
  * `TOKEN_READ_ROUTES` gilt nur für GET: die Bytes eines Bildes (für die
- * Titelbilder der Karten), aber weder die Galerie noch Hochladen oder Löschen –
- * und die Einstellungen, von denen ein Token aber nur einen Ausschnitt sieht.
+ * Titelbilder der Karten), aber weder die Galerie noch Hochladen oder Löschen;
+ * eine Zeichnung als fertiges Bild, aber nicht ihre Szene; und die
+ * Einstellungen, von denen ein Token aber nur einen Ausschnitt sieht.
  */
 const TOKEN_ROUTES = /^\/api\/(bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
-const TOKEN_READ_ROUTES = /^\/api\/(settings|bilder\/[^/]+)$/;
+const TOKEN_READ_ROUTES = /^\/api\/(settings|zeichnungsbild|bilder\/[^/]+)$/;
 
 app.use('/api/*', async (c, next) => {
   const path = c.req.path;
