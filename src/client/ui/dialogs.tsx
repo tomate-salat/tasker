@@ -638,6 +638,10 @@ function McpTokens() {
       <p className="pf-hint">
         Mit einem Token dürfen Claude Code und andere MCP-Clients Aufgaben lesen, anlegen und
         ändern – aber nichts löschen. Adresse: {url}
+        <br />
+        Dasselbe Token gilt auch für die Schnittstelle unter {location.origin}/api (etwa für ein
+        Editor-Addon). Dort lassen sich Projekte, Milestones und Aufgaben lesen, anlegen, ändern,
+        verschieben und auch löschen.
       </p>
     </>
   );

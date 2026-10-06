@@ -86,10 +86,19 @@ app.all('/mcp', async (c) => {
 
 /* ------------------------------------------------- Ab hier nur angemeldet */
 
+/**
+ * Clients ohne Browser (etwa das Godot-Addon) kommen statt mit der Sitzung mit
+ * einem Zugangs-Token. Das gilt nur für die hier genannten Routen: eine neue
+ * Route ist damit von selbst der Sitzung vorbehalten, bis sie jemand bewusst
+ * freigibt – Konto, Passwort und Tokens gehören nie dazu.
+ */
+const TOKEN_ROUTES = /^\/api\/(me|bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
+
 app.use('/api/*', async (c, next) => {
-  if (!sessionValid(getCookie(c, SESSION_COOKIE))) {
-    return c.json({ error: 'Nicht angemeldet.' }, 401);
-  }
+  const allowed =
+    sessionValid(getCookie(c, SESSION_COOKIE)) ||
+    (TOKEN_ROUTES.test(c.req.path) && tokenValid(appDb, c.req.header('authorization')));
+  if (!allowed) return c.json({ error: 'Nicht angemeldet.' }, 401);
   await next();
 });
 

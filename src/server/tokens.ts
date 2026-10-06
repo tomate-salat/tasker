@@ -4,7 +4,8 @@ import { apiTokens } from '../../db/schema.js';
 import type { DbCtx } from './db.js';
 
 /**
- * Zugangs-Tokens für den MCP-Endpunkt (`/mcp`). Ein Token ersetzt dort die
+ * Zugangs-Tokens für den MCP-Endpunkt (`/mcp`) und die in index.ts
+ * freigegebenen Datenrouten (`TOKEN_ROUTES`). Ein Token ersetzt dort die
  * Anmeldung: wer es hat, darf lesen und schreiben wie der Nutzer selbst.
  *
  * Gespeichert wird nur der SHA-256 – ein langes Zufallstoken braucht kein
