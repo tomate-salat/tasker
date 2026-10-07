@@ -53,14 +53,38 @@ export function holdGhost(): { el: HTMLElement; release: () => void } | null {
   return { el: current.ghost, release: current.release };
 }
 
+/** Wo die gezogene Karte angefasst wurde und wie groß sie ist – solange gezogen wird. */
+let grab: { ox: number; oy: number; w: number; h: number } | null = null;
+
+/**
+ * Mitte und Größe der gezogenen Karte zu einer Zeigerposition. Wer einen Platz
+ * für sie sucht, richtet sich nach der Mitte und nicht nach dem Zeiger: an
+ * einer Ecke gegriffen, liegt der schon über der Nachbarkarte, während die
+ * Karte sichtbar noch davor ist.
+ */
+export function draggedCard(e: {
+  clientX: number;
+  clientY: number;
+}): { x: number; y: number; w: number; h: number } | null {
+  if (!grab) return null;
+  return { x: e.clientX - grab.ox + grab.w / 2, y: e.clientY - grab.oy + grab.h / 2, w: grab.w, h: grab.h };
+}
+
 /** Aus `onDragStart` einer Karte aufrufen, nach dem Start in `dnd.ts`. */
 export function startTilt(e: React.DragEvent<HTMLElement>): void {
   stop?.();
   if (!useDrag.getState().drag) return;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   const card = e.currentTarget;
   const box = card.getBoundingClientRect();
+  grab = { ox: e.clientX - box.left, oy: e.clientY - box.top, w: box.width, h: box.height };
+  const forget = useDrag.subscribe((s) => {
+    if (s.drag) return;
+    grab = null;
+    forget();
+  });
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
   const ghost = card.cloneNode(true) as HTMLElement;
   ghost.classList.remove('sel', 'multi', 'holds', 'dragging');
   ghost.classList.add('tcard-ghost');
@@ -72,8 +96,7 @@ export function startTilt(e: React.DragEvent<HTMLElement>): void {
   e.dataTransfer.setDragImage(BLANK, 0, 0);
 
   // Die Karte bleibt dort gepackt, wo man sie angefasst hat.
-  const ox = e.clientX - box.left;
-  const oy = e.clientY - box.top;
+  const { ox, oy } = grab;
   let x = e.clientX;
   let y = e.clientY;
   /** Tempo in Pixel pro Sekunde, geglättet. */

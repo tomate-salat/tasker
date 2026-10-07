@@ -167,41 +167,38 @@
   background: var(--accent-soft);
 }
 
-/* Die Einfügemarke beim Sortieren – mitten im Abstand zweier Karten, wie im Kartenraster. */
-.tins {
+/* Beim Sortieren rücken die Karten einer Zone auseinander und lassen eine Lücke
+   in Kartengröße – dort landet die gezogene Karte (wie im Godot-Addon). Der
+   Übergang hängt am Attribut: fällt es weg, steht die Karte sofort wieder,
+   denn dann liegt sie nach dem Ablegen schon wirklich dort. */
+.tcell[data-shift] {
+  translate: calc(var(--shift-x, 0) * 100%) calc(var(--shift-y, 0) * 100%);
+  transition: translate 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Die gezogene Karte lag selbst in der Zone: ihren Platz nehmen die anderen ein. */
+.tcell[data-lift] {
+  visibility: hidden;
+}
+
+.tland {
   position: absolute;
-  z-index: 5;
-  width: 3px;
-  margin-left: -1.5px;
-  border-radius: 2px;
-  background: var(--accent);
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px solid var(--accent);
+  border-radius: 11px;
+  background: var(--accent-soft);
   pointer-events: none;
+  transition:
+    left 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Die beiden Karten an der Einfügemarke weichen zur Seite, als machten sie
-   Platz – wie im Kartenraster (`cards.css`, dort steht auch der Übergang der
-   Karte). Die Kanten eines Stapels gehen mit. */
-.tcell[data-gap='l'] > .tcard {
-  transform: translateX(-10px);
-}
-
-.tcell[data-gap='r'] > .tcard {
-  transform: translateX(10px);
-}
-
-.tcell.is-stack::before,
-.tcell.is-stack::after {
-  transition: translate 160ms ease;
-}
-
-.tcell.is-stack[data-gap='l']::before,
-.tcell.is-stack[data-gap='l']::after {
-  translate: -10px 0;
-}
-
-.tcell.is-stack[data-gap='r']::before,
-.tcell.is-stack[data-gap='r']::after {
-  translate: 10px 0;
+@media (prefers-reduced-motion: reduce) {
+  .tcell[data-shift],
+  .tland {
+    transition: none;
+  }
 }
 
 /* ---------------------------------------------------------------- Karten */

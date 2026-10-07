@@ -18,7 +18,7 @@ import {
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { CardFace } from './Cards.js';
-import { holdGhost, startTilt } from './cardTilt.js';
+import { draggedCard, holdGhost, startTilt } from './cardTilt.js';
 import { LOCK_ICON } from './icons.js';
 import { dragSource, useDrag, useDragging } from './dnd.js';
 import { useMenu, type Menu } from './Menu.js';
@@ -113,6 +113,7 @@ function show(els: HTMLElement[]): void {
 /** Kommt kein neuer Stand (abgelehnt, Fehler), gleitet die Kopie zurück. */
 async function cancel(p: Pending): Promise<void> {
   if (pending === p) pending = null;
+  releaseGap(document);
   if (p.ghost) {
     await refuse(p.ghost.el, p.home);
     p.ghost.release();
@@ -233,9 +234,14 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
     void onDrop(zone, e, root.current, reveal, m, at);
 
   // „Offen“ sortiert nur um, was dort schon liegt. Im Spiel bekommt auch eine
-  // Karte ihren Platz, die gerade erst hineinkommt – nur ein Stapel nie.
+  // Karte ihren Platz, die gerade erst hineinkommt – nur nicht, was gar nicht
+  // ins Spiel darf (ein Stapel, eine angekettete Karte).
   const sortsOpen = (ids: string[]): boolean => ids.every((id) => layout.open.some((t) => t.id === id));
-  const sortsPlay = (ids: string[]): boolean => ids.every((id) => !ws.kids(id).length);
+  const sortsPlay = (ids: string[]): boolean =>
+    ids.every((id) => {
+      const t = ws.task(id);
+      return !!t && !playRefusal(ws, t);
+    });
 
   const drawersOf = (list: Task[]) =>
     list
@@ -788,43 +794,132 @@ function Drawer({
 /* ------------------------------------------------------------ Ablegen */
 
 /**
- * Die Lücke zwischen zwei Karten einer Zone, in die gerade sortiert würde:
+ * Der Landeplatz der gezogenen Karte in einer Zone, in der sortiert wird:
  * `index` zählt unter den Karten der Zone ohne die gezogenen, der Rest ist die
- * Lage der Einfügemarke in der Zone.
+ * Lage des Platzes in der Zone.
  */
-type Gap = { index: number; x: number; y: number; h: number };
+type Gap = { index: number; x: number; y: number; w: number; h: number };
 
-/** Die Karten einer Zone, zwischen die sortiert wird – ohne die gezogenen. */
-const sortCells = (zone: HTMLElement, dragged: string[]): HTMLElement[] =>
-  [...zone.querySelectorAll<HTMLElement>(':scope > .tzone-cards > .tcell[data-tcell]')].filter(
-    (c) => !dragged.includes(c.dataset['tcell'] as string),
-  );
+/** Alle Karten einer Zone, in der Reihenfolge, in der sie liegen. */
+const zoneCells = (zone: HTMLElement): HTMLElement[] => [
+  ...zone.querySelectorAll<HTMLElement>(':scope > .tzone-cards > .tcell[data-tcell]'),
+];
 
+/** Größe einer Zelle, falls gerade keine zum Messen in der Zone liegt (`.tcell` in tisch.css). */
+const CELL = { w: 142, h: 190 };
+
+/**
+ * Das Raster einer Zone: wo es beginnt, wie groß ein Platz ist und wie viele
+ * nebeneinander passen. „Im Spiel“ ist eine einzige Reihe, „Offen“ bricht um.
+ */
+function gridOf(zone: HTMLElement): { left: number; top: number; w: number; h: number; cols: number } | null {
+  const row = zone.querySelector<HTMLElement>(':scope > .tzone-cards');
+  if (!row) return null;
+  const cell = zoneCells(zone)[0];
+  const w = cell?.offsetWidth || CELL.w;
+  const h = cell?.offsetHeight || CELL.h;
+  const box = row.getBoundingClientRect();
+  const style = getComputedStyle(row);
+  return {
+    left: box.left - row.scrollLeft + parseFloat(style.paddingLeft || '0'),
+    top: box.top - row.scrollTop + parseFloat(style.paddingTop || '0'),
+    w,
+    h,
+    cols: style.flexWrap === 'nowrap' ? Infinity : Math.max(1, Math.floor((row.clientWidth + 1) / w)),
+  };
+}
+
+const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
+
+/**
+ * Der Platz der gezogenen Karte. Gerechnet wird gegen die Zone, wie sie mit ihr
+ * aussähe: bei n anderen Karten n+1 Plätze im Raster, und es gilt der Platz,
+ * dessen Mitte der Kartenmitte am nächsten liegt. Die Mitte der Karte und nicht
+ * der Zeiger: an einer Ecke gegriffen, liegt der schon über der Nachbarkarte.
+ * Und bewusst gegen diese feste Aufteilung statt gegen die Karten, wie sie
+ * gerade stehen – die sind schon zur Seite gerückt, und die Lücke bestimmte
+ * sonst ihre eigene Lage und flatterte.
+ */
 function gapAt(zone: HTMLElement, e: React.DragEvent, dragged: string[]): Gap | null {
   // Über einer Schublade wird nicht sortiert – dort liegen die Unteraufgaben.
   if ((e.target as HTMLElement).closest('.tdrawer')) return null;
-  // Gemessen wird die Zelle – die Karte darin weicht der Marke aus, die Zelle bleibt stehen.
-  const rects = sortCells(zone, dragged).map((c) => c.getBoundingClientRect());
-  if (!rects.length) return null;
+  const grid = gridOf(zone);
+  if (!grid) return null;
+  const others = zoneCells(zone).filter((c) => !dragged.includes(c.dataset['tcell'] as string)).length;
 
-  // Vor der ersten Karte, deren Mitte rechts vom Zeiger liegt – oder die schon in der nächsten Zeile steht.
-  const found = rects.findIndex(
-    (r) => e.clientY < r.top || (e.clientY <= r.bottom && e.clientX < r.left + r.width / 2),
-  );
-  const index = found < 0 ? rects.length : found;
-  const before = rects[index - 1];
-  const after = rects[index];
-  // Am Ende einer Zeile steht die Marke hinter deren letzter Karte, nicht vor der ersten der nächsten.
-  const behind = before && (!after || (e.clientY >= before.top && e.clientY <= before.bottom));
-  const r = (behind ? before : after) as DOMRect;
+  // Ohne Angaben zur Karte (sie kam nicht von einer Karte des Tischs) zählt der Zeiger.
+  const card = draggedCard(e) ?? { x: e.clientX, y: e.clientY, w: grid.w - 14, h: grid.h - 14 };
+  const single = grid.cols === Infinity;
+  const col = clamp(Math.round((card.x - grid.left - grid.w / 2) / grid.w), 0, single ? others : grid.cols - 1);
+  const line = single
+    ? 0
+    : clamp(Math.round((card.y - grid.top - grid.h / 2) / grid.h), 0, Math.floor(others / grid.cols));
+  const index = single ? col : Math.min(others, line * grid.cols + col);
+
   const box = zone.getBoundingClientRect();
-  return { index, x: (behind ? r.right : r.left) - box.left, y: r.top - box.top + 10, h: r.height - 20 };
+  const at = single ? { col: index, line: 0 } : { col: index % grid.cols, line: Math.floor(index / grid.cols) };
+  return {
+    index,
+    x: grid.left + at.col * grid.w + (grid.w - card.w) / 2 - box.left - zone.clientLeft,
+    y: grid.top + at.line * grid.h + (grid.w - card.w) / 2 - box.top - zone.clientTop,
+    w: card.w,
+    h: card.h,
+  };
 }
 
 /**
+ * Rückt die Karten der Zone so, dass an `at` eine Lücke für die gezogenen
+ * bleibt (`null`: wieder zusammen). Eine gezogene Karte, die selbst in der
+ * Zone liegt, verschwindet dabei – ihren Platz nehmen die anderen ein. Am
+ * Zeilenende rückt eine Karte in die nächste Zeile.
+ */
+function shiftCells(zone: HTMLElement, dragged: string[], at: number | null): void {
+  const cols = gridOf(zone)?.cols ?? Infinity;
+  const place = (slot: number) =>
+    cols === Infinity ? { col: slot, line: 0 } : { col: slot % cols, line: Math.floor(slot / cols) };
+  let other = 0;
+  let slot = 0;
+  for (const cell of zoneCells(zone)) {
+    if (dragged.includes(cell.dataset['tcell'] as string)) {
+      if (at === null) cell.removeAttribute('data-lift');
+      else cell.setAttribute('data-lift', '');
+      slot++;
+      continue;
+    }
+    const from = place(slot);
+    const to = place(at === null ? slot : other < at ? other : other + dragged.length);
+    cell.setAttribute('data-shift', '');
+    cell.style.setProperty('--shift-x', String(to.col - from.col));
+    cell.style.setProperty('--shift-y', String(to.line - from.line));
+    other++;
+    slot++;
+  }
+}
+
+/**
+ * Nach dem Ablegen bleibt die Lücke stehen, bis der neue Stand da ist – sonst
+ * sprängen die Karten zurück und glitten gleich wieder an denselben Platz.
+ */
+let gapHeld = false;
+
+/** Nimmt das Auseinanderrücken sofort zurück, ohne Übergang. */
+function releaseGap(root: ParentNode): void {
+  gapHeld = false;
+  for (const cell of root.querySelectorAll<HTMLElement>('.tcell[data-shift], .tcell[data-lift]')) {
+    cell.removeAttribute('data-shift');
+    cell.removeAttribute('data-lift');
+    cell.style.removeProperty('--shift-x');
+    cell.style.removeProperty('--shift-y');
+  }
+}
+
+/** Misst die Lagen der Karten neu, ohne zu animieren – gesetzt von `useTableMotion`. */
+let resync: (() => void) | null = null;
+
+/**
  * Eine Zone, auf die man Karten zieht – hervorgehoben, solange eine darüber
- * schwebt. Mit `sorts` zeigt sie zwischen ihren Karten eine Einfügemarke und
- * gibt beim Ablegen den Platz mit.
+ * schwebt. Mit `sorts` rücken ihre Karten auseinander und lassen eine Lücke als
+ * Landeplatz; beim Ablegen gibt sie diesen Platz mit.
  */
 function DropArea({
   zone,
@@ -848,24 +943,17 @@ function DropArea({
     return drag?.kind === 'task' && sorts?.(drag.ids) ? gapAt(e.currentTarget, e, drag.ids) : null;
   };
 
-  // Die beiden Karten an der Einfügemarke weichen zur Seite, als machten sie
-  // Platz – wie im Kartenraster (`cards.css`). Über ein Attribut statt einer
-  // Klasse: die Klassen der Zellen gehören den Karten selbst.
+  // Solange gezogen wird, öffnet und schließt sich die Lücke mit Übergang;
+  // danach steht alles sofort wieder – außer es wurde hier abgelegt (`gapHeld`).
   const ref = useRef<HTMLElement>(null);
   const at = active && over && gap ? gap.index : null;
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || at === null) return;
-    const cells = sortCells(el, useDrag.getState().drag?.ids ?? []);
-    const left = cells[at - 1];
-    const right = cells[at];
-    left?.setAttribute('data-gap', 'l');
-    right?.setAttribute('data-gap', 'r');
-    return () => {
-      left?.removeAttribute('data-gap');
-      right?.removeAttribute('data-gap');
-    };
-  }, [at]);
+    if (!el || !sorts) return;
+    const ids = useDrag.getState().drag?.ids;
+    if (active && ids) shiftCells(el, ids, at);
+    else if (!gapHeld) releaseGap(el);
+  }, [at, active, sorts]);
 
   return (
     <section
@@ -888,15 +976,15 @@ function DropArea({
         setGap(null);
       }}
       onDrop={(e) => {
-        const at = gapOf(e)?.index ?? null;
+        // Es gilt der Platz, den die Lücke zuletzt gezeigt hat.
+        onDrop(e, gap?.index ?? null);
         setOver(false);
         setGap(null);
-        onDrop(e, at);
       }}
     >
       {children}
       {active && over && gap && (
-        <i className="tins" style={{ left: gap.x, top: gap.y, height: gap.h }} aria-hidden />
+        <i className="tland" style={{ left: gap.x, top: gap.y, width: gap.w, height: gap.h }} aria-hidden />
       )}
     </section>
   );
@@ -1008,6 +1096,12 @@ async function onDrop(
   };
   if (pending) void cancel(pending);
   pending = p;
+  if (sort) {
+    // Die Karten stehen schon, wie sie gleich liegen werden – das merkt sich
+    // die Bewegung, und die Lücke bleibt bis zum neuen Stand.
+    gapHeld = true;
+    resync?.();
+  }
 
   if (sort) {
     await sort();
@@ -1093,6 +1187,8 @@ function useTableMotion(
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    // Eine nach dem Ablegen gehaltene Lücke: die Karten liegen jetzt wirklich so.
+    if (gapHeld) releaseGap(root);
     const base = root.getBoundingClientRect();
     const cells = [...root.querySelectorAll<HTMLElement>('[data-tkey]')];
     const now = new Map<string, Cell>();
@@ -1201,9 +1297,11 @@ function useTableMotion(
     const ro = new ResizeObserver(again);
     ro.observe(root);
     root.addEventListener('scroll', again, true);
+    resync = again;
     return () => {
       ro.disconnect();
       root.removeEventListener('scroll', again, true);
+      if (resync === again) resync = null;
     };
   }, [rootRef]);
 }
