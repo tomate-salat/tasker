@@ -36,6 +36,15 @@ type Pending = {
 };
 let pending: Pending | null = null;
 
+/**
+ * Karten: läuft, bevor nach einem neuen Stand gemessen wird (und wenn keiner
+ * kommt) – `cardGap.ts` nimmt dann das Auseinanderrücken zurück.
+ */
+let beforeFlip: (() => void) | null = null;
+export function onBeforeFlip(fn: () => void): void {
+  beforeFlip = fn;
+}
+
 /** Die Kopie weg, die echte Karte wieder sichtbar. */
 function settle(p: Pending): void {
   p.ghost?.release();
@@ -94,6 +103,7 @@ export function snapshotDrop(draggedIds: string[]): void {
   // Kommt kein neuer Stand (abgelehnt, nichts geändert), räumt das hier auf.
   setTimeout(() => {
     if (pending !== p) return;
+    beforeFlip?.();
     settle(p);
     pending = null;
   }, WINDOW_MS);
@@ -116,6 +126,7 @@ export function useDropFlip(ref: React.RefObject<HTMLElement | null>, ws: Worksp
     }
     if (p.ws === ws) return;
     p.ws = ws;
+    beforeFlip?.();
 
     const now = items(root).map(({ el, id }) => {
       for (const a of el.getAnimations()) a.cancel();

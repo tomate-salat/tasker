@@ -19,6 +19,7 @@ import type { Menu, MenuItem } from './Menu.js';
 import { rowMenu } from './rowMenu.js';
 import { ChecklistBadge, DrawingBadge, LockBadge, StatusDot, TaskRow, TitleEdit } from './rows.js';
 import { startTilt } from './cardTilt.js';
+import { gapView, useCardGap, watchCardGap } from './cardGap.js';
 import './cards.css';
 
 /**
@@ -171,12 +172,14 @@ export function CardGrid({
     if (useDrag.getState().drag?.kind === 'task') f(e);
   };
   const open = useCardsOpen((s) => s.open);
+  const gap = useGapGrid(view);
   return (
     <>
     <div
       className={`card-grid ${zone ? `dz-${zone}` : ''}`}
       data-view={view}
       data-area={id}
+      {...gap.events}
       {...(drop
         ? {
             onDragOver: tasksOnly(drop.onDragOver),
@@ -187,6 +190,7 @@ export function CardGrid({
       {tasks.map((t) => (
         <TaskCard key={t.id} ws={ws} task={t} menu={menu} />
       ))}
+      {gap.land}
     </div>
     {tasks
       .filter((t) => open[t.id] && ws.kids(t.id).length)
@@ -195,6 +199,27 @@ export function CardGrid({
       ))}
     </>
   );
+}
+
+/**
+ * Ein Raster, in dem die Karten beim Sortieren auseinanderrücken (`cardGap.ts`,
+ * vorerst Plan und Ready): das Kennzeichen dafür und der Landeplatz in der
+ * Lücke. In den anderen Ansichten bleibt es bei der Einfügemarke.
+ */
+function useGapGrid(view: OutlineView): { events: React.HTMLAttributes<HTMLDivElement>; land: React.ReactNode } {
+  const ref = useRef<HTMLDivElement>(null);
+  const land = useCardGap((s) => (s.grid && s.grid === ref.current ? s.land : null));
+  const on = gapView(view);
+  useEffect(() => {
+    if (on) watchCardGap();
+  }, [on]);
+  if (!on) return { events: {}, land: null };
+  return {
+    events: { ref, 'data-gapgrid': '' } as React.HTMLAttributes<HTMLDivElement>,
+    land: land && (
+      <i className="cland" style={{ left: land.x, top: land.y, width: land.w, height: land.h }} aria-hidden />
+    ),
+  };
 }
 
 /**
@@ -224,6 +249,7 @@ function CardDrawer({
   const lane = { type: 'task', task: stack, lane: true } as const;
   const zone = useZone(lane);
   const drop = dropTarget(lane);
+  const gap = useGapGrid(view);
   // Nur Aufgaben – ein Milestone oder ein Bild hat in der Schublade nichts verloren.
   const tasksOnly = (f: (e: React.DragEvent) => void) => (e: React.DragEvent) => {
     if (useDrag.getState().drag?.kind === 'task') f(e);
@@ -246,10 +272,11 @@ function CardDrawer({
           ✕
         </button>
       </div>
-      <div className="card-grid" data-view={view}>
+      <div className="card-grid" data-view={view} {...gap.events}>
         {kids.map((k, i) => (
           <TaskCard key={k.id} ws={ws} task={k} menu={menu} fan={i} />
         ))}
+        {gap.land}
       </div>
       {kids
         .filter((k) => open[k.id] && ws.kids(k.id).length)
@@ -636,7 +663,11 @@ function TaskCard({
   const { selected, select, marked, mark, editing, multi, toggleMulti, rangeMulti, clearMulti } = useStore();
   const drawer = useCardsOpen();
   const target = { type: 'task', task, card: true } as const;
-  const zone = useZone(target);
+  // Rückt das Raster auseinander (`cardGap.ts`), zeigt die Lücke den Platz –
+  // die Einfügemarke an der Karte bleibt dann weg, „hinein“ leuchtet weiter.
+  const gapOn = useCardGap((s) => s.grid !== null);
+  const over = useZone(target);
+  const zone = gapOn && over !== 'child' && over !== 'into' ? null : over;
   const files = useFileDrop({ kind: 'task', item: task });
   const dragging = useDragging(task.id);
   const kids = ws.kids(task.id);
