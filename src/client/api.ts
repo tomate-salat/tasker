@@ -288,7 +288,7 @@ export const api = {
   addDrawing: (owner: DrawingOwner, name?: string) =>
     post<Drawing>('/api/drawings', { [OWNER_KEY[owner.kind]]: owner.id, ...(name ? { name } : {}) }),
 
-  saveDrawing: (id: string, version: number, changes: { name?: string; scene?: Scene }) =>
+  saveDrawing: (id: string, version: number, changes: { name?: string; scene?: Scene; svg?: string }) =>
     request<Drawing>(`/api/drawings/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ version, changes }),

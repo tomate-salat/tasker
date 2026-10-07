@@ -254,6 +254,13 @@ export const drawings = sqliteTable(
     order: integer('sort_order').notNull().default(0),
     /** Die Formen als JSON – sie werden nie einzeln abgefragt, nur als Ganzes. */
     shapes: text('shapes', { mode: 'json' }).notNull().default(sql`'[]'`),
+    /**
+     * Die Zeichnung als fertiges SVG, so wie die Web-App sie beim Speichern
+     * gezeichnet hat – daraus macht der Server das Bild für Clients ohne
+     * Excalidraw. Gehört zur Szene daneben: wird die ohne SVG geändert, ist
+     * dieses Feld wieder leer. So kann das Bild fehlen, aber nie veraltet sein.
+     */
+    previewSvg: text('preview_svg'),
     ...tracked,
   },
   (t) => [

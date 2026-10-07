@@ -11,6 +11,10 @@ import { Conflict, NotFound } from './repo.js';
  * Der Bestand liefert beim Start nur die Namen (`DrawingMeta`); die Szene
  * selbst holt erst der Editor. Eine Zeichnung ist schnell ein paar hundert
  * Kilobyte groß und hat im Startpaket nichts zu suchen.
+ *
+ * Neben der Szene liegt ihr Bild als SVG (`preview_svg`), gezeichnet von der
+ * Web-App beim Speichern – der Server kann Excalidraw nicht selbst zeichnen.
+ * Es gilt nur für genau diese Szene: wer die Szene ohne SVG ändert, leert es.
  */
 
 export type Scene = {
@@ -43,6 +47,7 @@ type Row = {
   name: string;
   sort_order: number;
   shapes: string;
+  preview_svg: string | null;
   updated_at: string;
 };
 
@@ -94,6 +99,22 @@ export const loadDrawings = (ctx: DbCtx, owner: Owner): Drawing[] =>
       .all(owner.id) as Row[]
   ).map(toDrawing);
 
+/**
+ * Das gespeicherte Bild einer Zeichnung, gefunden wie im Text: über den
+ * Besitzer und den Namen aus `![[zeichnung:Name]]`. Die Szene bleibt dabei
+ * in der Datenbank.
+ */
+export function drawingPreview(
+  ctx: DbCtx,
+  owner: Owner,
+  name: string,
+): { id: string; version: number; svg: string | null } | null {
+  const row = ctx.sqlite
+    .prepare(`SELECT id, version, preview_svg FROM drawing WHERE ${COLUMN[owner.kind]} = ? AND name = ?`)
+    .get(owner.id, name) as Pick<Row, 'id' | 'version' | 'preview_svg'> | undefined;
+  return row ? { id: row.id, version: row.version, svg: row.preview_svg } : null;
+}
+
 export function createDrawing(ctx: DbCtx, owner: Owner, name?: string): Drawing {
   return ctx.sqlite.transaction(() => {
     const found = ctx.sqlite.prepare(`SELECT id FROM ${owner.kind} WHERE id = ?`).get(owner.id);
@@ -116,7 +137,7 @@ export function patchDrawing(
   ctx: DbCtx,
   id: string,
   version: number,
-  changes: { name?: string; scene?: Scene; order?: number },
+  changes: { name?: string; scene?: Scene; svg?: string; order?: number },
 ): Drawing {
   return ctx.sqlite.transaction(() => {
     const row = ctx.sqlite.prepare('SELECT * FROM drawing WHERE id = ?').get(id) as Row | undefined;
@@ -133,13 +154,16 @@ export function patchDrawing(
 
     ctx.sqlite
       .prepare(
-        `UPDATE drawing SET name = ?, sort_order = ?, shapes = ?, updated_at = ?, version = version + 1
+        `UPDATE drawing SET name = ?, sort_order = ?, shapes = ?, preview_svg = ?, updated_at = ?, version = version + 1
          WHERE id = ?`,
       )
       .run(
         name,
         changes.order ?? row.sort_order,
         changes.scene ? JSON.stringify(changes.scene) : row.shapes,
+        // Eine neue Szene ohne Bild macht das alte ungültig; ein Bild allein
+        // gilt der Szene, die schon da ist (die Version ist geprüft).
+        changes.svg ?? (changes.scene ? null : row.preview_svg),
         nowIso(),
         id,
       );

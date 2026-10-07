@@ -1,10 +1,8 @@
 /**
- * Eine Zeichnung als PNG: die Route und der Zeichen-Prozess dahinter, mit dem
- * echten Excalidraw. Der Prozess wird dafür frisch gebaut – er läuft nie aus
- * den Quellen, sondern immer als Bündel (siehe drawingWorker.ts).
+ * Eine Zeichnung als PNG: das SVG, das die Web-App neben die Szene legt, und
+ * die Route, die daraus das Bild macht.
  */
 import assert from 'node:assert/strict';
-import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +10,6 @@ import { after, before, describe, it } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { Hono } from 'hono';
 import { createDbCtx, type DbCtx } from './db.js';
-import { stopDrawingWorker } from './drawingImage.js';
 import { EventBus } from './events.js';
 import { dataRoutes } from './routes.js';
 
@@ -21,25 +18,30 @@ let ctx: DbCtx;
 let app: Hono;
 
 before(() => {
-  execSync('npm run build:worker', { stdio: 'ignore' });
   ctx = createDbCtx(join(dir, 'z.db'));
   migrate(ctx.db, { migrationsFolder: 'db/migrations' });
   app = dataRoutes(ctx, new EventBus());
 });
 
 after(() => {
-  stopDrawingWorker();
   ctx.sqlite.close();
   rmSync(dir, { recursive: true, force: true });
 });
 
-const json = async (method: string, path: string, body?: unknown) => {
+const send = async (method: string, path: string, body?: unknown) => {
   const res = await app.request(path, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     headers: { 'content-type': 'application/json' },
   });
-  return (await res.json()) as { id: string; version: number };
+  return { status: res.status, body: (await res.json()) as never };
+};
+const json = async (method: string, path: string, body?: unknown) =>
+  (await send(method, path, body)).body as { id: string; version: number };
+
+const image = async (path: string, headers?: Record<string, string>) => {
+  const res = await app.request(path, { ...(headers ? { headers } : {}) });
+  return { status: res.status, etag: res.headers.get('etag'), type: res.headers.get('content-type'), png: Buffer.from(await res.arrayBuffer()) };
 };
 
 /** Breite und Höhe stehen im PNG gleich hinter der Kennung. */
@@ -48,141 +50,109 @@ const sizeOf = (png: Buffer) => {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 };
 
-const base = {
-  angle: 0,
-  strokeColor: '#1e1e1e',
-  backgroundColor: 'transparent',
-  fillStyle: 'solid',
-  strokeWidth: 2,
-  strokeStyle: 'solid',
-  roughness: 1,
-  opacity: 100,
-  groupIds: [],
-  frameId: null,
-  roundness: null,
-  seed: 1234,
-  version: 1,
-  versionNonce: 1,
-  isDeleted: false,
-  boundElements: null,
-  updated: 1,
-  link: null,
-  locked: false,
-};
-
-// Ein rotes Pixel, als Bild in der Szene.
+// Ein rotes Pixel, als Bild in der Zeichnung.
 const PIXEL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
 
-const scene = {
-  elements: [
-    { ...base, id: 'r1', type: 'rectangle', x: 10, y: 10, width: 200, height: 100, backgroundColor: '#a5d8ff', index: 'a0' },
-    { ...base, id: 'e1', type: 'ellipse', x: 260, y: 20, width: 120, height: 80, index: 'a1' },
-    {
-      ...base,
-      id: 'a1',
-      type: 'arrow',
-      x: 210,
-      y: 60,
-      width: 50,
-      height: 0,
-      points: [
-        [0, 0],
-        [50, 0],
-      ],
-      lastCommittedPoint: null,
-      startBinding: null,
-      endBinding: null,
-      startArrowhead: null,
-      endArrowhead: 'arrow',
-      elbowed: false,
-      index: 'a2',
-    },
-    {
-      ...base,
-      id: 't1',
-      type: 'text',
-      x: 30,
-      y: 45,
-      width: 160,
-      height: 25,
-      text: 'Hallo Tasker äöü',
-      originalText: 'Hallo Tasker äöü',
-      fontSize: 20,
-      fontFamily: 5,
-      textAlign: 'left',
-      verticalAlign: 'top',
-      containerId: null,
-      autoResize: true,
-      lineHeight: 1.25,
-      index: 'a3',
-    },
-    {
-      ...base,
-      id: 'i1',
-      type: 'image',
-      x: 280,
-      y: 120,
-      width: 60,
-      height: 60,
-      fileId: 'f1',
-      status: 'saved',
-      scale: [1, 1],
-      crop: null,
-      index: 'a4',
-    },
-  ],
-  files: { f1: { id: 'f1', mimeType: 'image/png', dataURL: PIXEL, created: 1 } },
+/**
+ * So kommt es aus Excalidraws `exportToSvg` (0.18, hell, ohne eingebettete
+ * Schriften): ein Rechteck, ein Text und ein Bild, 300 × 120.
+ */
+const SVG =
+  '<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" width="300" height="120"><!-- svg-source:excalidraw --><metadata></metadata>' +
+  `<defs><symbol id="image-f1"><image href="${PIXEL}" preserveAspectRatio="none" width="100%" height="100%"></image></symbol><style class="style-fonts">\n      </style></defs>` +
+  '<g stroke-linecap="round" transform="translate(10 10) rotate(0 100 50)"><path d="M0.9 0.49 L201.62 -0.73 L201.13 101.1 L-1.66 99.13" stroke="none" stroke-width="0" fill="#a5d8ff"></path>' +
+  '<path d="M0 0 C40.99 1.15, 81.7 2.88, 200 0 M0 0 C47.24 1.6, 95.51 0.93, 200 0 M200 0 C197.72 34.68, 199.77 72.57, 200 100 M200 0 C201.46 28.89, 200.58 58.52, 200 100 M200 100 C140.36 102.23, 75.44 100.16, 0 100 M200 100 C143.3 100.91, 87.84 101.89, 0 100 M0 100 C-1.2 78.63, 1.49 56.89, 0 0 M0 100 C0.65 62.35, 0.12 24.28, 0 0" stroke="#1e1e1e" stroke-width="2" fill="none"></path></g>' +
+  '<g transform="translate(30 45) rotate(0 80 12.5)"><text x="0" y="17.619999999999997" font-family="Excalifont, Xiaolai, Segoe UI Emoji" font-size="20px" fill="#1e1e1e" text-anchor="start" style="white-space: pre;" direction="ltr" dominant-baseline="alphabetic">Hallo Tasker äöü</text></g>' +
+  '<g transform="translate(230 20) rotate(0 30 30)"><use href="#image-f1" width="60" height="60" opacity="1"></use></g></svg>';
+
+const scene = { elements: [{ type: 'rectangle', id: 'a' }] };
+
+const setup = async (name: string) => {
+  const p = await json('POST', '/kind/project', { name: 'P' });
+  const t = await json('POST', '/kind/task', { projectId: p.id, title: 'Mit Skizze' });
+  const d = await json('POST', '/drawings', { taskId: t.id, name });
+  return { t, d, url: `/zeichnungsbild?taskId=${t.id}&name=${encodeURIComponent(name)}` };
 };
 
 describe('Zeichnung als Bild', () => {
   it('liefert ein PNG, hält die Kante ein und erkennt den Stand am ETag', async () => {
-    const p = await json('POST', '/kind/project', { name: 'P' });
-    const t = await json('POST', '/kind/task', { projectId: p.id, title: 'Mit Skizze' });
-    const d = await json('POST', '/drawings', { taskId: t.id, name: 'Ablauf Süd' });
-    const url = `/zeichnungsbild?taskId=${t.id}&name=${encodeURIComponent('Ablauf Süd')}`;
+    const { d, url } = await setup('Ablauf Süd');
 
-    // Leer: kein Bild, aber auch kein Fehler.
-    assert.equal((await app.request(url)).status, 204);
+    // Frisch angelegt: kein Bild, aber auch kein Fehler.
+    assert.equal((await image(url)).status, 204);
 
-    await json('PATCH', `/drawings/${d.id}`, { version: d.version, changes: { scene } });
+    await json('PATCH', `/drawings/${d.id}`, { version: 1, changes: { scene, svg: SVG } });
 
-    const res = await app.request(url);
-    assert.equal(res.status, 200);
-    assert.equal(res.headers.get('content-type'), 'image/png');
-    const png = Buffer.from(await res.arrayBuffer());
-    const full = sizeOf(png);
+    const light = await image(url);
+    assert.equal(light.status, 200);
+    assert.equal(light.type, 'image/png');
     // Eine kleine Zeichnung kommt in doppelter Schärfe, nicht aufgeblasen auf die Kante.
-    assert.ok(full.width > 600 && full.width < 1000, `Breite ${full.width}`);
+    assert.deepEqual(sizeOf(light.png), { width: 600, height: 240 });
+    assert.match(light.etag as string, new RegExp(`^"${d.id}-2-`));
+    assert.equal((await image(url, { 'if-none-match': light.etag as string })).status, 304);
 
-    const etag = res.headers.get('etag') as string;
-    assert.match(etag, new RegExp(`^"${d.id}-2-`));
-    assert.equal((await app.request(url, { headers: { 'if-none-match': etag } })).status, 304);
+    const small = await image(`${url}&kante=150`);
+    assert.deepEqual(sizeOf(small.png), { width: 150, height: 60 });
+    assert.notEqual(small.etag, light.etag);
 
-    const small = await app.request(`${url}&kante=200&thema=dunkel`);
-    const smallPng = Buffer.from(await small.arrayBuffer());
-    assert.equal(Math.max(sizeOf(smallPng).width, sizeOf(smallPng).height), 200);
-    assert.notEqual(small.headers.get('etag'), etag);
+    // Dunkel ist dasselbe Bild mit anderen Farben.
+    const dark = await image(`${url}&thema=dunkel`);
+    assert.deepEqual(sizeOf(dark.png), sizeOf(light.png));
+    assert.notDeepEqual(dark.png, light.png);
 
     // Zum Ansehen, wenn man an der Darstellung arbeitet.
-    if (process.env['TASKER_BILD_AUSGABE']) {
-      writeFileSync(join(process.env['TASKER_BILD_AUSGABE'], 'hell.png'), png);
-      const dark = await app.request(`${url}&thema=dunkel`);
-      writeFileSync(join(process.env['TASKER_BILD_AUSGABE'], 'dunkel.png'), Buffer.from(await dark.arrayBuffer()));
+    const out = process.env['TASKER_BILD_AUSGABE'];
+    if (out) {
+      writeFileSync(join(out, 'hell.png'), light.png);
+      writeFileSync(join(out, 'dunkel.png'), dark.png);
     }
+  });
 
-    // Nach einer Änderung gilt der alte Stand nicht mehr.
-    await json('PATCH', `/drawings/${d.id}`, { version: 2, changes: { scene: { elements: scene.elements.slice(0, 1) } } });
-    const again = await app.request(url, { headers: { 'if-none-match': etag } });
-    assert.equal(again.status, 200);
-    assert.ok(sizeOf(Buffer.from(await again.arrayBuffer())).width < full.width);
+  it('das Bild gehört zur Szene: ohne neues SVG ist es weg, ein neuer Name lässt es stehen', async () => {
+    const { t, d, url } = await setup('Plan');
+    await json('PATCH', `/drawings/${d.id}`, { version: 1, changes: { scene, svg: SVG } });
+
+    // Umbenennen ändert die Szene nicht.
+    await json('PATCH', `/drawings/${d.id}`, { version: 2, changes: { name: 'Plan B' } });
+    const renamed = `/zeichnungsbild?taskId=${t.id}&name=${encodeURIComponent('Plan B')}`;
+    assert.equal((await image(url)).status, 404);
+    assert.equal((await image(renamed)).status, 200);
+
+    // Die Szene liefert ihr Bild nicht mit aus – es ist nur für die Route da.
+    const list = (await send('GET', `/drawings?taskId=${t.id}`)).body as { drawings: Record<string, unknown>[] };
+    assert.deepEqual(Object.keys(list.drawings[0] ?? {}).filter((k) => /svg/i.test(k)), []);
+
+    // Ein Bild allein gilt der Szene, die schon da ist.
+    await json('PATCH', `/drawings/${d.id}`, { version: 3, changes: { svg: SVG.replace('#a5d8ff', '#ffc9c9') } });
+    assert.equal((await image(renamed)).status, 200);
+
+    // Eine neue Szene ohne Bild: das alte passt nicht mehr.
+    await json('PATCH', `/drawings/${d.id}`, { version: 4, changes: { scene: { elements: [] } } });
+    assert.equal((await image(renamed)).status, 204);
+  });
+
+  it('das Bild übersteht Löschen und Zurückholen', async () => {
+    const { d, url } = await setup('Skizze');
+    await json('PATCH', `/drawings/${d.id}`, { version: 1, changes: { scene, svg: SVG } });
+
+    const removed = (await send('DELETE', `/drawings/${d.id}`)).body as { undo: unknown[] };
+    assert.equal((await image(url)).status, 404);
+    assert.equal((await send('POST', '/steps', { steps: removed.undo })).status, 200);
+    assert.equal((await image(url)).status, 200);
+  });
+
+  it('zeichnet nur, was eingebettet ist', async () => {
+    const { d, url } = await setup('Fremd');
+    const foreign = SVG.replace(PIXEL, '/etc/hostname');
+    await json('PATCH', `/drawings/${d.id}`, { version: 1, changes: { scene, svg: foreign } });
+    assert.equal((await image(url)).status, 204);
   });
 
   it('nennt Fehlendes und Unvollständiges', async () => {
-    const p = await json('POST', '/kind/project', { name: 'Q' });
-    const t = await json('POST', '/kind/task', { projectId: p.id, title: 'Ohne' });
-    assert.equal((await app.request(`/zeichnungsbild?taskId=${t.id}&name=Nichts`)).status, 404);
-    assert.equal((await app.request(`/zeichnungsbild?taskId=${t.id}`)).status, 400);
-    assert.equal((await app.request('/zeichnungsbild?name=X')).status, 400);
+    const { t } = await setup('Da');
+    assert.equal((await image(`/zeichnungsbild?taskId=${t.id}&name=Nichts`)).status, 404);
+    assert.equal((await image(`/zeichnungsbild?taskId=${t.id}`)).status, 400);
+    assert.equal((await image('/zeichnungsbild?name=X')).status, 400);
   });
 });

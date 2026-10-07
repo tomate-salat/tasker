@@ -328,7 +328,11 @@ export const drawingCreate = z
 
 export const drawingPatch = z.object({
   version: z.number().int().positive(),
-  changes: z.object({ name: title, scene: sceneSchema, order: z.number() }).partial(),
+  // `svg` ist die Zeichnung als fertiges Bild, von der Web-App gezeichnet und
+  // zusammen mit der Szene geschickt – siehe drawings.ts.
+  changes: z
+    .object({ name: title, scene: sceneSchema, svg: z.string().max(30_000_000), order: z.number() })
+    .partial(),
 });
 
 export const settingsBody = z

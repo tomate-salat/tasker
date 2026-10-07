@@ -10,7 +10,8 @@ import { useStore } from '../store.js';
  * nichts merken.
  *
  * Gespeichert wird die Szene als Ganzes, mit derselben Versionsprüfung wie
- * überall sonst.
+ * überall sonst – und daneben ihr Bild als SVG. Daraus macht der Server das
+ * Bild für Clients, die Excalidraw nicht haben; selbst zeichnen kann er nicht.
  */
 const Excalidraw = lazy(() =>
   import('./excalidraw-lazy.js').then((m) => ({ default: m.Excalidraw })),
@@ -27,6 +28,28 @@ const signature = (elements: unknown[]): string =>
       return `${x.id}:${x.version}:${x.isDeleted ? 1 : 0}`;
     })
     .join('|');
+
+/**
+ * Die Szene als SVG, hell und ohne eingebettete Schriften: die dunkle Fassung
+ * und die Schriften bringt der Server selbst mit. Eine leere Zeichnung hat
+ * keins, und scheitert das Zeichnen, wird eben ohne Bild gespeichert.
+ */
+async function imageOf(scene: Scene): Promise<string | undefined> {
+  const elements = scene.elements.filter((e) => !(e as { isDeleted?: boolean }).isDeleted);
+  if (!elements.length) return undefined;
+  try {
+    const { exportToSvg } = await import('./excalidraw-lazy.js');
+    const svg = await exportToSvg({
+      elements: elements as never,
+      appState: { exportBackground: false, exportWithDarkMode: false } as never,
+      files: (scene.files ?? null) as never,
+      skipInliningFonts: true,
+    });
+    return svg.outerHTML;
+  } catch {
+    return undefined;
+  }
+}
 
 const dark = (): boolean =>
   document.documentElement.dataset['theme'] === 'dark' ||
@@ -58,7 +81,8 @@ export function DrawingEditor({ drawing, onClose }: { drawing: Drawing; onClose:
     const run = queue.current.then(async () => {
       setSaving(true);
       try {
-        const updated = await api.saveDrawing(drawing.id, version.current, changes);
+        const svg = changes.scene && (await imageOf(changes.scene));
+        const updated = await api.saveDrawing(drawing.id, version.current, { ...changes, ...(svg ? { svg } : {}) });
         version.current = updated.version;
         // Nur vergessen, was wirklich gespeichert ist – wer während der Anfrage
         // weitergezeichnet hat, hat einen neueren Stand hinterlassen.

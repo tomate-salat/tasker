@@ -29,8 +29,8 @@ import type { Task } from '../shared/model.js';
 import { loadLogs, logScopes } from './burnup.js';
 import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
-import { renderDrawing } from './drawingImage.js';
-import { createDrawing, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
+import { drawable, renderDrawing } from './drawingImage.js';
+import { createDrawing, drawingPreview, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
 import { appEvents, type EventBus } from './events.js';
 import {
   addFolder,
@@ -124,9 +124,12 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   /**
    * Eine Zeichnung als PNG, für Clients ohne Excalidraw (das Godot-Addon).
    * Gefunden wird sie wie im Text: über den Besitzer und den Namen aus
-   * `![[zeichnung:Name]]`. Das Bild entsteht bei jedem Abruf neu, gespeichert
-   * wird nichts – am ETag (er trägt die Version) erkennt der Client, ob seins
-   * noch gilt, und bekommt dann 304, ohne dass gezeichnet wird.
+   * `![[zeichnung:Name]]`. Das PNG entsteht bei jedem Abruf aus dem SVG, das
+   * die Web-App beim Speichern hinterlegt hat – am ETag (er trägt die Version)
+   * erkennt der Client, ob seins noch gilt, und bekommt dann 304.
+   *
+   * 204 heißt: zu dieser Zeichnung gibt es kein Bild. Sie ist leer, oder sie
+   * wurde seit dem letzten Ändern nicht in der Web-App gespeichert.
    *
    * Eigener Pfad statt `/drawings/bild`, damit er sich mit `/drawings/:id`
    * nicht überschneidet.
@@ -141,7 +144,7 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     const owner = taskId
       ? ({ kind: 'task', id: taskId } as const)
       : ({ kind: 'milestone', id: milestoneId as string } as const);
-    const drawing = loadDrawings(ctx, owner).find((d) => d.name === name);
+    const drawing = drawingPreview(ctx, owner, name);
     if (!drawing) return c.json({ error: 'Nicht gefunden.' }, 404);
 
     const dark = c.req.query('thema') === 'dunkel';
@@ -153,11 +156,10 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       ETag: `"${drawing.id}-${drawing.version}-${maxEdge}${dark ? 'd' : 'h'}"`,
     };
     if (c.req.header('if-none-match') === headers.ETag) return c.body(null, 304, headers);
-    // Eine leere Zeichnung hat kein Bild.
-    if (!drawing.scene.elements.length) return c.body(null, 204, headers);
+    if (!drawing.svg || !drawable(drawing.svg)) return c.body(null, 204, headers);
 
     try {
-      const png = await renderDrawing(drawing.scene, { dark, maxEdge });
+      const png = await renderDrawing(drawing.svg, { dark, maxEdge });
       return c.body(png as unknown as ArrayBuffer, 200, {
         ...headers,
         'Content-Type': 'image/png',

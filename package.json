@@ -7,13 +7,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "npm run build:worker && concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:client": "vite",
-    "build": "npm run build:client && npm run build:server && npm run build:worker",
+    "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.js",
-    "build:worker": "esbuild src/server/drawingWorker.ts --bundle --platform=node --format=esm --packages=bundle --external:jsdom --external:@resvg/resvg-js --external:wawoff2 --loader:.css=empty --conditions=production --outfile=dist/server/drawing-worker.mjs",
     "start": "node dist/server/index.js",
     "check": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
@@ -32,7 +31,6 @@
     "drizzle-orm": "^0.45.2",
     "elkjs": "^0.12.0",
     "hono": "^4.9.0",
-    "jsdom": "^30.1.2",
     "marked": "^18.0.13",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -42,7 +40,6 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/jsdom": "^30.0.0",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

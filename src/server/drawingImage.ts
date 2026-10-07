@@ -1,109 +1,87 @@
-import { fork, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import type { RenderReply, RenderRequest } from './drawingWorker.js';
-import type { Scene } from './drawings.js';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * Eine Zeichnung als PNG, für Clients, die Excalidraw nicht selbst zeichnen
- * können (das Godot-Addon). Gespeichert wird davon nichts – das Bild entsteht
- * bei jedem Abruf aus der Szene.
+ * können (das Godot-Addon).
  *
- * Gezeichnet wird in einem eigenen Prozess (drawingWorker.ts). Der startet erst
- * beim ersten Abruf und geht nach einer Minute ohne Arbeit wieder – er braucht
- * rund 200 MB, und nur ein beendeter Prozess gibt die auch wirklich zurück
- * (ein Thread behielt gut die Hälfte). Solange niemand eine Zeichnung als Bild
- * will, kostet das den Server nichts.
+ * Gezeichnet hat die Web-App: beim Speichern legt sie das SVG neben die Szene
+ * (siehe drawings.ts). Hier wird daraus nur noch ein PNG, mit resvg – der
+ * Server braucht dafür weder Excalidraw noch einen Browser. Das PNG selbst wird
+ * nicht gespeichert.
  */
 
-const WORKER_FILE = 'dist/server/drawing-worker.mjs';
-const IDLE_MS = 60_000;
-const TIMEOUT_MS = 20_000;
-
-type Waiting = {
-  resolve: (png: Uint8Array) => void;
-  reject: (e: Error) => void;
-  timer: NodeJS.Timeout;
-  since: number;
-};
+/** Über diese Schärfe hinaus wird eine kleine Zeichnung nicht vergrößert. */
+const MAX_SCALE = 2;
 
 /**
- * Start, jedes Bild und das Ende stehen im Log, mit dem Speicher beider
- * Prozesse – sonst lässt sich am Speicher-Verlauf des Dienstes nicht ablesen,
- * wem ein Anstieg gehört und ob der Zeichen-Prozess wirklich gegangen ist.
+ * So macht Excalidraw aus dem hellen Export den dunklen: ein Filter über
+ * allem, und einer auf eingebetteten Bildern, der ihn dort wieder aufhebt.
+ * Gespeichert ist deshalb nur die helle Fassung.
  */
-const mb = (bytes: number): number => Math.round(bytes / 1e6);
-const serverMemory = (): string => {
-  const m = process.memoryUsage();
-  return `Server: ${mb(m.rss)} MB (Heap ${mb(m.heapUsed)}, extern ${mb(m.external)})`;
-};
+const DARK_FILTER = 'invert(93%) hue-rotate(180deg)';
+const DARK_IMAGE_FILTER = 'invert(100%) hue-rotate(180deg) saturate(1.25)';
 
-let worker: ChildProcess | null = null;
-let idle: NodeJS.Timeout | null = null;
-let seq = 0;
-const waiting = new Map<number, Waiting>();
+const darkened = (svg: string): string =>
+  svg
+    .replace('<svg ', `<svg filter="${DARK_FILTER}" `)
+    .replaceAll('<use href="#image-', `<use filter="${DARK_IMAGE_FILTER}" href="#image-`);
 
-function stop(reason: string): void {
-  const w = worker;
-  worker = null;
-  if (idle) clearTimeout(idle);
-  idle = null;
-  for (const [id, job] of waiting) {
-    clearTimeout(job.timer);
-    job.reject(new Error(reason));
-    waiting.delete(id);
+/**
+ * Ein SVG, das der Server zeichnen mag. Bilder darin müssen eingebettet sein:
+ * resvg läse sonst auch Dateien des Servers ein.
+ */
+export const drawable = (svg: string): boolean =>
+  svg.startsWith('<svg ') && !/<(image|feImage)\b[^>]*\bhref\s*=\s*["'](?!data:)/i.test(svg);
+
+/* ---------------------------------------------------------------- Schriften */
+
+/**
+ * resvg liest keine WOFF2. Excalidraws Schriften werden deshalb einmal
+ * entpackt und im Temp-Ordner abgelegt – immer am selben Ort, damit sich dort
+ * nichts ansammelt. Xiaolai (Chinesisch, 13 MB) bleibt draußen.
+ */
+const FONT_SOURCE = 'node_modules/@excalidraw/excalidraw/dist/prod/fonts';
+const FONT_FAMILIES = ['Excalifont', 'Virgil', 'Nunito', 'ComicShanns', 'Cascadia', 'Lilita', 'Liberation', 'Assistant'];
+
+async function unpackFonts(): Promise<string[]> {
+  const target = join(tmpdir(), 'tasker-zeichnung-schriften');
+  mkdirSync(target, { recursive: true });
+  const files: string[] = [];
+  const { default: wawoff2 } = await import('wawoff2');
+  for (const family of FONT_FAMILIES) {
+    const dir = join(FONT_SOURCE, family);
+    if (!existsSync(dir)) continue;
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.woff2')) continue;
+      const out = join(target, name.replace(/\.woff2$/, '.ttf'));
+      if (!existsSync(out)) writeFileSync(out, await wawoff2.decompress(readFileSync(join(dir, name))));
+      files.push(out);
+    }
   }
-  w?.kill();
+  return files;
 }
 
-function start(): ChildProcess {
-  const file = resolve(WORKER_FILE);
-  if (!existsSync(file)) {
-    throw new Error(`${WORKER_FILE} fehlt – einmal \`npm run build:worker\` ausführen.`);
-  }
-  // `advanced`, damit das PNG als Bytes ankommt und nicht als JSON.
-  const w = fork(file, { serialization: 'advanced', execArgv: [] });
-  w.on('message', (reply: RenderReply) => {
-    const job = waiting.get(reply.id);
-    if (!job) return;
-    waiting.delete(reply.id);
-    clearTimeout(job.timer);
-    if ('error' in reply) return job.reject(new Error(reply.error));
-    console.log(
-      `Zeichnung gezeichnet in ${Date.now() - job.since} ms, ${Math.round(reply.png.length / 1e3)} KB. ` +
-        `Zeichen-Prozess ${w.pid}: ${mb(reply.rss)} MB. ${serverMemory()}`,
-    );
-    job.resolve(reply.png);
+/* ------------------------------------------------------------------ Zeichnen */
+
+/** Erst beim ersten Bild geladen: wer keine Zeichnung abruft, zahlt dafür nichts. */
+let ready: Promise<{ Resvg: typeof import('@resvg/resvg-js').Resvg; fontFiles: string[] }> | null = null;
+
+export async function renderDrawing(svg: string, opts: { dark: boolean; maxEdge: number }): Promise<Uint8Array> {
+  ready ??= (async () => ({
+    Resvg: (await import('@resvg/resvg-js')).Resvg,
+    fontFiles: await unpackFonts(),
+  }))();
+  const { Resvg, fontFiles } = await ready;
+
+  const root = svg.slice(0, svg.indexOf('>'));
+  const edge = (name: string): number => Number(root.match(new RegExp(`\\s${name}="([\\d.]+)"`))?.[1]);
+  const longer = Math.max(edge('width'), edge('height')) || 1;
+
+  const image = new Resvg(opts.dark ? darkened(svg) : svg, {
+    fitTo: { mode: 'zoom', value: Math.min(opts.maxEdge / longer, MAX_SCALE) },
+    font: { fontFiles, loadSystemFonts: false, defaultFontFamily: 'Excalifont' },
   });
-  w.on('error', (e) => {
-    if (worker === w) stop(e.message);
-  });
-  w.on('exit', (code, signal) => {
-    console.log(`Zeichen-Prozess ${w.pid} beendet (${signal ?? code}). ${serverMemory()}`);
-    if (worker === w) stop('Der Zeichen-Prozess ist beendet.');
-  });
-  console.log(`Zeichen-Prozess ${w.pid} gestartet. ${serverMemory()}`);
-  // Ein wartender Prozess soll den Server nicht am Beenden hindern.
-  w.unref();
-  w.channel?.unref();
-  return w;
+  return image.render().asPng();
 }
-
-export function renderDrawing(scene: Scene, opts: { dark: boolean; maxEdge: number }): Promise<Uint8Array> {
-  worker ??= start();
-  if (idle) clearTimeout(idle);
-  idle = setTimeout(() => stop('Pause'), IDLE_MS);
-  idle.unref();
-
-  const id = ++seq;
-  const req: RenderRequest = { id, elements: scene.elements, files: scene.files ?? null, ...opts };
-  return new Promise((res, rej) => {
-    // Hängt der Prozess, geht er ganz – der nächste Abruf startet einen neuen.
-    const timer = setTimeout(() => stop('Das Zeichnen hat zu lange gedauert.'), TIMEOUT_MS);
-    waiting.set(id, { resolve: res, reject: rej, timer, since: Date.now() });
-    worker?.send(req);
-  });
-}
-
-/** Für Tests: den Prozess sofort beenden. */
-export const stopDrawingWorker = (): void => stop('Beendet');

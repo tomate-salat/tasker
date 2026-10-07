@@ -1,0 +1,1 @@
+ALTER TABLE `drawing` ADD `preview_svg` text;
