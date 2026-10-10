@@ -47,6 +47,11 @@ export type ScheduledMilestone = MilestoneStats & {
   late: boolean;
   /** Position in der Reihenfolge, beginnend bei 1. */
   pos: number;
+  /**
+   * Wie viele aktive Milestones des Projekts sich gerade das Tempo teilen,
+   * dieser eingeschlossen – 0, wenn er selbst nicht dazugehört.
+   */
+  sharing: number;
 };
 
 export type Schedule = {
@@ -66,6 +71,11 @@ export type ScheduleOptions = {
  *
  * Abhängigkeiten kommen aus zwei Quellen: direkt zwischen Milestones und
  * indirekt über Aufgaben, die auf Aufgaben eines anderen Milestones warten.
+ *
+ * Sind in einem Projekt mehrere Milestones „In Progress“, teilen sie sich das
+ * Tempo (Wunsch des Nutzers) – siehe `sharedFinish`. Was noch nicht begonnen
+ * hat, fängt erst an, wenn die aktiven durch sind: bis dahin ist das Tempo
+ * vergeben.
  */
 export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
   const velocity = Math.max(1, options.velocity || 1);
@@ -115,7 +125,29 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
       early: false,
       late: false,
       pos: 0,
+      sharing: 0,
     });
+  }
+
+  // Je Projekt: wann jeder aktive Milestone bei geteiltem Tempo fertig ist.
+  const active = new Map<string, ScheduledMilestone[]>();
+  for (const m of planned) {
+    const x = byId.get(m.id) as ScheduledMilestone;
+    const begun = m.startDate === null || weeksFromToday(m.startDate, today) <= 0;
+    if (m.status !== 'progress' || !x.open || !begun) continue;
+    const list = active.get(m.projectId);
+    if (list) list.push(x);
+    else active.set(m.projectId, [x]);
+  }
+  const shared = new Map<string, number>();
+  const busyUntil = new Map<string, number>();
+  for (const [projectId, list] of active) {
+    const finish = sharedFinish(list.map((x) => x.open), velocity);
+    list.forEach((x, i) => {
+      shared.set(x.milestone.id, finish[i] as number);
+      x.sharing = list.length;
+    });
+    busyUntil.set(projectId, Math.max(...finish));
   }
 
   const pending = [...planned];
@@ -136,7 +168,9 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     const m = pending.splice(i, 1)[0] as Milestone;
     const x = byId.get(m.id) as ScheduledMilestone;
     const depEnd = Math.max(0, ...x.deps.map((d) => byId.get(d)?.end ?? 0));
-    const cursor = cursors.get(m.projectId) ?? 0;
+    const share = shared.get(m.id);
+    // Was noch nicht läuft, wartet auf die aktiven Milestones des Projekts.
+    const cursor = cursors.get(m.projectId) ?? (share === undefined ? (busyUntil.get(m.projectId) ?? 0) : 0);
 
     x.fixed = m.startDate !== null;
     x.fixedEnd = m.endDate !== null;
@@ -145,15 +179,39 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     x.start = m.startDate !== null ? weeksFromToday(m.startDate, today) : Math.max(cursor, depEnd);
     x.early = x.fixed && x.deps.length > 0 && x.start < depEnd - 1e-6;
     // Liegt der Start in der Vergangenheit, wird die Restarbeit ab heute gerechnet.
-    x.forecastEnd = Math.max(x.start, 0) + x.open / velocity;
+    x.forecastEnd = Math.max(x.start, 0) + (share ?? x.open / velocity);
     x.end = m.endDate !== null ? weeksFromToday(m.endDate, today) : x.forecastEnd;
     if (x.fixedEnd && !x.fixed) x.start = Math.min(x.start, x.end);
     x.late = !x.isDone && x.fixedEnd && x.forecastEnd > x.end + 1e-6;
 
-    cursors.set(m.projectId, Math.max(cursor, x.isDone ? x.end : Math.max(x.end, x.forecastEnd)));
+    cursors.set(
+      m.projectId,
+      Math.max(cursor, busyUntil.get(m.projectId) ?? 0, x.isDone ? x.end : Math.max(x.end, x.forecastEnd)),
+    );
     x.pos = list.length + 1;
     list.push(x);
   }
 
   return { list, byId };
+}
+
+/**
+ * Wann mehrere gleichzeitig laufende Milestones fertig sind, in Wochen ab
+ * heute: sie teilen sich das Tempo zu gleichen Teilen, und wird einer fertig,
+ * geht sein Anteil an die übrigen. Der letzte ist damit genau dann fertig, wenn
+ * alle offenen Aufgaben zusammen durch das Tempo geteilt aufgehen – nur die
+ * einzelnen Enden davor hängen an der Annahme der gleichen Teile.
+ */
+export function sharedFinish(open: number[], velocity: number): number[] {
+  const order = open.map((_, i) => i).sort((a, b) => (open[a] as number) - (open[b] as number));
+  const out = new Array<number>(open.length).fill(0);
+  let t = 0;
+  let level = 0;
+  order.forEach((i, k) => {
+    // Bis hierher haben alle noch laufenden gleich viel geschafft – `level` je Milestone.
+    t += (((open[i] as number) - level) * (open.length - k)) / velocity;
+    level = open[i] as number;
+    out[i] = t;
+  });
+  return out;
 }

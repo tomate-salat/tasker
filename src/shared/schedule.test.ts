@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { dateFromWeeks, isoWeek, schedule, weeksFromToday } from './schedule.js';
+import { dateFromWeeks, isoWeek, schedule, sharedFinish, weeksFromToday } from './schedule.js';
 import { Builder } from './testing.js';
 
 // Fester Bezugstag, damit die Tests nicht vom Kalender abhängen.
@@ -224,5 +224,72 @@ describe('Zeitplan', () => {
 
     const s = schedule(ws, { velocity: 1, today: TODAY });
     assert.equal(s.list.length, 2);
+  });
+});
+
+describe('Geteiltes Tempo', () => {
+  const close = (a: number[], b: number[]): void =>
+    assert.deepEqual(a.map((x) => Math.round(x * 1000) / 1000), b);
+
+  it('teilt gleichmäßig – wird einer fertig, geht sein Anteil an die übrigen', () => {
+    close(sharedFinish([4, 12], 8), [1, 2]);
+    close(sharedFinish([12, 20], 8), [3, 4]);
+    close(sharedFinish([20, 12], 8), [4, 3]);
+    close(sharedFinish([6, 6, 12], 8), [2.25, 2.25, 3]);
+    close(sharedFinish([10], 4), [2.5]);
+    close(sharedFinish([], 4), []);
+  });
+
+  const two = () =>
+    new Builder()
+      .project('p1')
+      .project('p2')
+      .milestone('stream', 'p1', { planned: true, qorder: 0, status: 'progress', startDate: day(-7) })
+      .milestone('sonst', 'p1', { planned: true, qorder: 1, status: 'progress', startDate: day(0) })
+      .milestone('danach', 'p1', { planned: true, qorder: 2 })
+      .milestone('fremd', 'p2', { planned: true, qorder: 0, status: 'progress', startDate: day(0) });
+
+  it('zwei aktive Milestones eines Projekts teilen sich das Tempo, der nächste beginnt danach', () => {
+    const b = two();
+    for (let i = 0; i < 12; i++) b.task(`s${i}`, 'p1', { milestoneId: 'stream' });
+    for (let i = 0; i < 20; i++) b.task(`o${i}`, 'p1', { milestoneId: 'sonst' });
+    for (let i = 0; i < 8; i++) b.task(`d${i}`, 'p1', { milestoneId: 'danach' });
+    for (let i = 0; i < 8; i++) b.task(`f${i}`, 'p2', { milestoneId: 'fremd' });
+    const s = schedule(b.build(), { velocity: 8, today: TODAY }).byId;
+
+    assert.equal(s.get('stream')!.forecastEnd, 3);
+    assert.equal(s.get('sonst')!.forecastEnd, 4);
+    assert.equal(s.get('stream')!.sharing, 2);
+    // Erst wenn beide durch sind, ist wieder Tempo frei.
+    assert.equal(s.get('danach')!.start, 4);
+    assert.equal(s.get('danach')!.forecastEnd, 5);
+    assert.equal(s.get('danach')!.sharing, 0);
+    // Das andere Projekt rechnet für sich, mit vollem Tempo.
+    assert.equal(s.get('fremd')!.forecastEnd, 1);
+    assert.equal(s.get('fremd')!.sharing, 1);
+  });
+
+  it('was vor einem aktiven Milestone im Plan steht, aber nicht läuft, wartet auf ihn', () => {
+    const b = new Builder()
+      .project('p1')
+      .milestone('wartet', 'p1', { planned: true, qorder: 0 })
+      .milestone('läuft', 'p1', { planned: true, qorder: 1, status: 'progress', startDate: day(0) });
+    for (let i = 0; i < 4; i++) b.task(`w${i}`, 'p1', { milestoneId: 'wartet' });
+    for (let i = 0; i < 8; i++) b.task(`l${i}`, 'p1', { milestoneId: 'läuft' });
+    const s = schedule(b.build(), { velocity: 4, today: TODAY }).byId;
+    assert.equal(s.get('läuft')!.forecastEnd, 2);
+    assert.equal(s.get('wartet')!.start, 2);
+    assert.equal(s.get('wartet')!.forecastEnd, 3);
+  });
+
+  it('ein erledigter oder leerer aktiver Milestone nimmt kein Tempo weg', () => {
+    const b = new Builder()
+      .project('p1')
+      .milestone('leer', 'p1', { planned: true, qorder: 0, status: 'progress', startDate: day(0) })
+      .milestone('läuft', 'p1', { planned: true, qorder: 1, status: 'progress', startDate: day(0) });
+    for (let i = 0; i < 8; i++) b.task(`l${i}`, 'p1', { milestoneId: 'läuft' });
+    const s = schedule(b.build(), { velocity: 4, today: TODAY }).byId;
+    assert.equal(s.get('läuft')!.forecastEnd, 2);
+    assert.equal(s.get('läuft')!.sharing, 1);
   });
 });

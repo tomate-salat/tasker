@@ -498,7 +498,11 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
         : 'nicht geschätzt';
 
   const forecastTitle = milestone.planned
-    ? `Position ${line ? line.pos : '–'} im Plan · ${weeks.toFixed(1)} Wochen bei ${settings.velocity} Aufgaben/Woche${line?.late ? ' · liegt nach dem Enddatum' : ''}`
+    ? `Position ${line ? line.pos : '–'} im Plan · ${
+        line && line.sharing > 1
+          ? `teilt sich ${settings.velocity} Aufgaben/Woche mit ${line.sharing - 1} ${line.sharing === 2 ? 'weiterem aktiven Milestone' : 'weiteren aktiven Milestones'}`
+          : `${weeks.toFixed(1)} Wochen bei ${settings.velocity} Aufgaben/Woche`
+      }${line?.late ? ' · liegt nach dem Enddatum' : ''}`
     : 'Ein Datum gibt es, sobald der Milestone im Plan ist';
 
   return (

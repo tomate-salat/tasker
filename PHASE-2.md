@@ -814,6 +814,16 @@ einem gemeinsamen Erledigt-Stapel:
   Milestones; nur die Enden der einzelnen Milestones darin sind eine Schätzung. Echte parallele
   Balken mit aufgeteiltem Tempo erst, wenn sie beim Benutzen fehlen.
 
+**Geteiltes Tempo (Wunsch des Nutzers, 10.10.2026):** Zuvor rechnete jeder aktive Milestone seine
+Restarbeit mit dem vollen Tempo – zwei aktive ergaben so das doppelte. Jetzt teilen sich die
+Milestones eines Projekts, die „In Progress“ sind, das Tempo zu gleichen Teilen; wird einer
+fertig, geht sein Anteil an die übrigen (`sharedFinish` in `schedule.ts`, mit Tests). Der letzte
+ist damit nach „alle offenen Aufgaben durch Tempo“ fertig; nur die einzelnen Enden davor hängen
+an der Annahme der gleichen Teile. Was noch nicht läuft, beginnt erst, wenn die aktiven durch
+sind – auch wenn es im Plan vor ihnen steht. Projekte rechnen weiter jedes für sich. Offen
+gelassen: die Aufteilung aus dem tatsächlich Erledigten der letzten Wochen abzuleiten statt
+gleichmäßig.
+
 **Umgesetzt (10.10.2026), Schritt 6:** `releaseGroups` in `src/shared/release.ts`. Die Gruppen
 stehen in der Reihenfolge, in der ihr erster Milestone im Plan kommt; ohne ein einziges Release
 sieht der Zeitplan aus wie zuvor. Ein Klick auf das Release führt zum Reiter „Releases“.

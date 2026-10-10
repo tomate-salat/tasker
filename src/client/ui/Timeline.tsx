@@ -56,7 +56,9 @@ export function Timeline({ ws }: { ws: Workspace }) {
         unabhängig voneinander. Hat ein Milestone ein <b>Startdatum</b>, beginnt
         er dort – so steuerst du den Zeitplan; der blassere Teil des Balkens ist die bereits
         vergangene Zeit, die Restarbeit wird ab heute gerechnet. Die Dauer ergibt sich aus den
-        offenen Aufgaben und deinem Tempo. Vorbereitete Milestones im Backlog zählen nicht mit.
+        offenen Aufgaben und deinem Tempo. Sind mehrere Milestones eines Projekts <b>In Progress</b>,
+        teilen sie sich das Tempo zu gleichen Teilen; wird einer fertig, geht sein Anteil an die
+        übrigen. Vorbereitete Milestones im Backlog zählen nicht mit.
         {grouped && (
           <>
             {' '}
@@ -229,7 +231,10 @@ function Row({
       cls: '',
       from: workFrom,
       to: x.end,
-      title: `${x.open} offene Aufgaben ≈ ${(x.open / velocity).toFixed(1)} Wochen`,
+      title:
+        x.sharing > 1
+          ? `${x.open} offene Aufgaben · teilt sich das Tempo mit ${x.sharing - 1} ${x.sharing === 2 ? 'weiterem aktiven Milestone' : 'weiteren aktiven Milestones'}`
+          : `${x.open} offene Aufgaben ≈ ${(x.open / velocity).toFixed(1)} Wochen`,
     });
     if (x.late) {
       segments.push({
