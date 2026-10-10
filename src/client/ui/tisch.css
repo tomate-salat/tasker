@@ -63,6 +63,58 @@
   transition: width 700ms cubic-bezier(0.34, 1.3, 0.64, 1) 200ms;
 }
 
+/* Mehrere aktive Milestones: je eine Zeile in ihrer Farbe. */
+.tisch-head.multi .tisch-ms span,
+.tisch-head.multi .tisch-xp i {
+  color: hsl(var(--ms-h) 55% 42%);
+}
+
+.tisch-head.multi .tisch-xp i {
+  background: hsl(var(--ms-h) 55% 42%);
+}
+
+.tisch-head.dimmed {
+  opacity: 0.45;
+}
+
+.tisch-head + .tisch-head {
+  margin-top: -8px;
+}
+
+.tisch-only {
+  padding: 3px 9px;
+  font: 12px var(--body);
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tisch-only:hover,
+.tisch-only[aria-pressed='true'] {
+  color: var(--ink);
+  border-color: hsl(var(--ms-h) 55% 42%);
+}
+
+/* Die Herkunft an der Karte: ein Reiter in der Farbe des Milestones, der oben aus der Karte ragt. */
+.tms {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 14px;
+  max-width: calc(100% - 28px);
+  padding: 0 6px;
+  overflow: hidden;
+  font: 600 10px/14px var(--body);
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: hsl(var(--ms-h) 55% 38%);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
 .tisch-xp-n,
 .tisch-due {
   font: 600 13px/1 var(--body);

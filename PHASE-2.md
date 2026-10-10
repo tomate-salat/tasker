@@ -546,8 +546,10 @@ Codecks. Die Ansicht ist ein eigener Reiter **„Tisch“**. Sie **ersetzt die z
 **Der aktive Milestone**
 
 - Aktiv ist der Milestone mit dem Status **In Progress**; ein eigenes Kennzeichen gibt es nicht.
-- **Je Projekt höchstens einer.** Ist einer aktiv, ist „In Progress“ bei allen anderen Milestones
-  des Projekts gesperrt, bis keiner mehr aktiv ist.
+- ~~**Je Projekt höchstens einer.**~~ Seit den Releases (10.10.2026) dürfen mehrere Milestones
+  gleichzeitig aktiv sein; der Tisch zeigt dann die Karten aller – siehe „Releases“, „Milestones
+  laufen parallel“. Was in diesem Abschnitt von „dem aktiven Milestone“ spricht, gilt je
+  Milestone.
 - Eine bearbeitete Aufgabe gehört immer zu einem Milestone – der Nutzer führt darüber ein
   Changelog. Auf den Tisch kommt ein Task deshalb nur über die bestehenden Wege in den Milestone;
   einen eigenen Weg aus Ready oder Backlog auf den Tisch gibt es nicht.
@@ -646,6 +648,193 @@ Nachgezogen (Wunsch des Nutzers):
   Karten ohne Unteraufgaben; erledigt Archiviertes bleibt liegen und zählt mit (blass, nicht
   anfassbar); jede andere Karte lässt sich zurück auf „Offen“ oder ins Spiel ziehen – die Ablage
   tritt beim Ziehen zur Seite. Logik in `doneShelf` (`src/shared/tisch.ts`, mit Tests).
+
+### Releases (über den Prototyp hinaus)
+
+Wunsch des Nutzers (10.10.2026). Bisher sammelt er das Changelog im Milestone und führt die Stages
+(Implementierung, itch-Release) dort als Checkliste – damit ist jeder Milestone genau ein Release.
+Er will mehrere Milestones in ein Release packen und auf mehreren Plattformen veröffentlichen
+können (etwa Steam-Demo und itch-Seite). **Stand: alle sieben Schritte umgesetzt (10.10.2026).**
+
+**Das Release**
+
+- Ein eigenes Objekt je Projekt: Version (freier Text), Titel, Beschreibung (Einleitung fürs
+  Changelog), Reihenfolge, archivierbar.
+- **Stages** sind zweierlei: jeder zugeordnete Milestone ist eine Stage (Fortschritt und Status
+  kommen vom Milestone), dazu je Kanal eine Veröffentlichungs-Stage (itch-Seite, Steam-Demo, …),
+  einzeln abhakbar und untereinander parallel. Ein neues Release übernimmt die Kanäle des
+  vorherigen im Projekt; eine eigene Plattform-Verwaltung gibt es nicht.
+- Ein Milestone gehört zu **höchstens einem** Release, sonst stünde ein Task in zwei Changelogs.
+- Der Status wird berechnet, nicht gespeichert: geplant → in Arbeit → bereit (alle Milestones
+  fertig) → veröffentlicht (alle Kanäle abgehakt).
+- Abhängigkeiten **zwischen Releases** gibt es nicht; ihre Reihenfolge reicht.
+
+Daten: Tabelle `release` (`project_id`, `name`, `title`, `desc`, `sort_order`, `archived_at`),
+Tabelle `release_stage` (`release_id`, `name`, `sort_order`, `done_at`), Spalte
+`milestone.release_id`. Die Versionsbezeichnung steht in `name`, weil `version` an jeder Tabelle
+schon die Konflikterkennung ist.
+
+**Umgesetzt (10.10.2026), Schritt 1 – nur die Daten, noch ohne Oberfläche:** Migration 0017,
+Release und Kanal als Typen `release` und `stage` der Objektrouten (`/api/kind/…`), im Startpaket
+als `releases` und `stages`. Festlegungen dabei:
+
+- Abgehakt wird ein Kanal über `doneAt`; den Zeitpunkt schickt der Client, `null` nimmt den Haken
+  zurück.
+- Ein Milestone nimmt nur ein Release des eigenen Projekts an. Wechselt er das Projekt, bleibt
+  das Release zurück; „Rückgängig“ holt es wieder.
+- Wie ein Milestone seine Aufgaben nimmt ein gelöschtes Release seine Milestones nicht mit in den
+  Papierkorb: sie lösen sich und kehren beim Wiederherstellen zurück, sofern sie inzwischen in
+  keinem anderen Release stecken. Die Kanäle gehen mit dem Release und kommen mit ihm zurück.
+- Ein Milestone aus dem Papierkorb, dessen Release es nicht mehr gibt, kommt ohne Release zurück.
+- Archivieren lässt sich ein Release noch nicht – die Spalte steht, der Weg kommt mit dem Reiter.
+
+**Aufbau im Abhängigkeitsgraphen**
+
+Der Graph ist der visuelle Editor dafür, welche Milestones in welches Release gehen und welche
+voneinander abhängen.
+
+- Das Release ist ein Knoten. Ein Pfeil vom Milestone zum Release heißt wie überall „Release
+  benötigt Milestone“ und ist zugleich die Zuordnung. Gespeichert wird sie als `release_id` am
+  Milestone – der Pfeil ist nur deren Darstellung, es gibt keine zweite Wahrheit in `dependency`.
+- Pfeile zwischen Milestones bleiben die bestehenden Abhängigkeiten.
+- Ausschnitt vom Release aus: das Release, seine Milestones und alles, was diese benötigen. Die
+  Liste links führt die Releases als ziehbare Einträge.
+- Die Kanäle stehen als abhakbare Punkte im Release-Knoten, nicht als eigene Knoten.
+
+**Umgesetzt (10.10.2026), Schritt 2:** in `DepGraph.tsx`; der berechnete Status steht in
+`src/shared/release.ts` (mit Tests). Festlegungen dabei:
+
+- Der Pfeil in ein Release ist gestrichelt – er ist eine Zuordnung, keine Abhängigkeit. Steckt
+  der Milestone schon in einem anderen Release, zieht er um. Entf oder das Menü am Pfeil nimmt
+  ihn wieder heraus.
+- Aus einem Release führt kein Pfeil heraus; hinein führen nur Milestones.
+- Angelegt wird ein Release im Graphen: „+ Release“ im Kopf (landet rechts neben allem) oder
+  „Neues Release“ im Menü der freien Fläche (landet dort). Es öffnet sich gleich als Formular.
+- Ein Doppelklick macht den Release-Knoten zum Formular für Version, Titel und Kanäle – einen
+  Inspektor hat ein Release noch nicht. Die Kanäle hakt man direkt im Knoten ab.
+- Die Liste links führt die Releases oben, je mit ihren Milestones.
+- Veröffentlicht ist ein Release, sobald alle Kanäle abgehakt sind – auch wenn ein Milestone noch
+  offen ist; der Haken ist die Aussage des Nutzers.
+
+**Reiter „Releases“**
+
+Übersicht je Projekt: Version, Titel, berechneter Status, die Milestones mit Fortschritt, die
+Kanäle zum Abhaken, darunter das Changelog. Zugeordnet wird im Graphen und über ein Feld „Release“
+im Inspektor des Milestones; im Plan trägt ein Milestone seine Version als Chip.
+
+**Umgesetzt (10.10.2026), Schritt 3:** `Releases.tsx`, Reiter hinter dem Zeitplan. Festlegungen
+dabei:
+
+- Das jüngste Release steht oben. Unter „Alle Projekte“ stehen die Releases aller Projekte mit
+  Projektname; angelegt wird im zuletzt gewählten.
+- Version, Titel und Kanalnamen sind Felder, die wie Text aussehen und beim Verlassen speichern.
+- Milestones lassen sich auch hier zuordnen („+ Milestone“) und herausnehmen; aufgebaut wird
+  sonst im Graphen, den der Knopf im Kopf öffnet.
+- Archivieren und Löschen stehen im Menü „⋯“. Archivierte Releases blendet ein Link ein.
+- Archivierte Milestones bleiben am Release stehen und gelten als fertig – der aktive Bestand
+  kennt sie nicht, deshalb kommen sie mit dem Changelog vom Server (`GET /api/changelog/<id>`).
+  Im Graphen fehlen sie weiterhin.
+
+**Changelog**
+
+- Das Changelog hängt am Task, mit drei Zuständen: **unentschieden** (Vorgabe), **Eintrag** (eine
+  Zeile in Spielersprache, unabhängig vom Titel) und **kein Eintrag** (bewusst, weil zu
+  technisch).
+- Das Release sammelt die Einträge aller Tasks seiner Milestones. Noch nicht Erledigtes steht
+  blass dabei – die Vorschau auf das, was kommt.
+- Erledigte Tasks ohne Entscheidung stehen in einer eigenen Liste im Release: eine Zeile tippen
+  oder „Technisch“. Unteraufgaben erben die Entscheidung des Elternteils. Der **Tisch fragt beim
+  Ablegen nicht** danach.
+- **Frei belegbare Liste** (Wunsch des Nutzers, statt Abschnitten aus der Markierung – die
+  bekäme sonst zu viel Logik): Die Einträge eines Releases sind eine Liste, die sich per Drag &
+  Drop ordnen lässt, mit einfachen Überschriften, die man dazwischen einfügt. Neue Einträge
+  reihen sich hinten ein. Markierungen spielen fürs Changelog keine Rolle.
+- **Alle Kanäle bekommen dasselbe Changelog.**
+- Ausgabe: als Markdown kopieren, die Beschreibung des Releases obenauf.
+
+Daten: `task.changelog` (Text), `task.changelog_skip` (kein Eintrag), `task.changelog_order`
+(Platz in der Liste); Tabelle `release_heading` (`release_id`, `title`, `sort_order`) im selben
+Zahlenraum wie `changelog_order`. Die Sammellogik kommt nach `src/shared`, mit Tests.
+
+**Umgesetzt (10.10.2026), Schritt 4:** Migration 0018, Logik in `src/shared/changelog.ts`.
+Festlegungen dabei:
+
+- **Auch Archiviertes zählt.** Erledigtes wird hier regelmäßig archiviert und gehört trotzdem
+  ins Changelog. Deshalb kommt die Grundlage gesondert vom Server (alle Aufgaben unter den
+  Milestones des Releases, auch archivierte), und geändert wird über Schritte (`/api/steps`),
+  die auch archivierte Aufgaben erreichen – mit „Rückgängig“.
+- Das Feld „Changelog“ im Inspektor gibt es nur an Aufgaben in einem Milestone: eine Zeile
+  schreiben oder „Technisch“ drücken.
+- Ein neuer Eintrag bekommt den nächsten freien Platz **des Projekts**, nicht des Releases – so
+  bleibt er hinten, auch wenn sein Milestone das Release wechselt.
+- Ohne Entscheidung gilt eine erledigte Aufgabe nicht mehr, wenn eine Aufgabe über ihr
+  entschieden ist oder alle ihre Unteraufgaben entschieden sind.
+- Sortiert wird am Griff links: ziehen oder Alt+↑/↓. Überschriften kommen mit „+ Überschrift“
+  hinten dazu und werden an ihren Platz gezogen; beim Entfernen gehen sie ohne Papierkorb.
+- „✕“ an einem Eintrag markiert die Aufgabe als technisch; unter „Ohne Eintrag“ lässt sich das
+  zurücknehmen.
+- „Als Markdown kopieren“ gibt nur Erledigtes aus und lässt Überschriften weg, unter denen
+  nichts steht. Offene Einträge stehen in der Liste blass mit „noch offen“.
+- Eine duplizierte Aufgabe übernimmt den Eintrag nicht.
+
+**Milestones laufen parallel**
+
+Weil ein Release aus mehreren Milestones gespeist wird, fällt die Regel „je Projekt höchstens ein
+aktiver Milestone“ aus dem Abschnitt „Tisch“ weg – ohne Einschränkung, also nicht nur innerhalb
+eines Releases. Es entfallen `assertSingleActive` im Server, die Sperre von „In Progress“ in
+Inspektor und Kontextmenü und die Meldung der Leertaste.
+
+Der **Tisch** zeigt dann die Karten aller aktiven Milestones des Projekts in denselben Zonen, mit
+einem gemeinsamen Erledigt-Stapel:
+
+- Jeder Milestone bekommt eine Farbe; jede Karte trägt einen farbigen Streifen mit seinem Namen.
+- Im Kopf steht je aktivem Milestone ein Fortschrittsbalken in seiner Farbe; ein Klick darauf
+  blendet den Tisch auf diesen Milestone ein.
+- Ist nur einer aktiv, sieht der Tisch aus wie bisher. Auf den Tisch kommt ein Task weiterhin
+  nur, indem er in einen aktiven Milestone kommt.
+
+**Umgesetzt (10.10.2026), Schritt 5.** Festlegungen dabei:
+
+- Die Farbe hängt am Platz des Milestones im Plan. Die Herkunft ist ein kleiner Reiter in dieser
+  Farbe mit dem Namen des Milestones, oben an der Karte – in „Gesperrt“, „Offen“ und „Im Spiel“,
+  nicht in den Schubladen (dort steht sie am Stapel) und nicht auf dem Erledigt-Stapel.
+- Eingeschränkt wird über den Knopf „Nur dieser“ in der Zeile des Milestones; der Klick auf den
+  Namen öffnet weiter die Details.
+- In „Offen“ und „Gesperrt“ stehen die Milestones nacheinander, „Im Spiel“ und der
+  Erledigt-Stapel mischen sich. Sortiert wird in „Offen“ nur innerhalb des eigenen Milestones –
+  in einen anderen wandert dort nichts.
+- Wochenziel, Serie und Ablage zählen über alle Milestones, die der Tisch gerade zeigt.
+
+**Zeitplan**
+
+- Je Projekt nach Release gruppiert: ein Band je Release mit einer Marke am Ende seines letzten
+  Milestones, dazu eine Gruppe „ohne Release“.
+- Gerechnet wird weiter nacheinander – der Nutzer arbeitet allein, parallele Milestones teilen
+  sich das Tempo. Das Ende eines Releases stimmt dabei unabhängig von der Reihenfolge seiner
+  Milestones; nur die Enden der einzelnen Milestones darin sind eine Schätzung. Echte parallele
+  Balken mit aufgeteiltem Tempo erst, wenn sie beim Benutzen fehlen.
+
+**Umgesetzt (10.10.2026), Schritt 6:** `releaseGroups` in `src/shared/release.ts`. Die Gruppen
+stehen in der Reihenfolge, in der ihr erster Milestone im Plan kommt; ohne ein einziges Release
+sieht der Zeitplan aus wie zuvor. Ein Klick auf das Release führt zum Reiter „Releases“.
+
+**Reihenfolge der Umsetzung**
+
+1. Daten: `release`, `release_stage`, `release_id` am Milestone – Migration, Repo, Routen,
+   Events, Papierkorb.
+2. Graph: Release-Knoten, Zuordnen per Pfeil, Kanäle im Knoten.
+3. Reiter „Releases“: Übersicht mit Version, Status und Kanälen.
+4. Changelog: Felder am Task und im Inspektor, Sammellogik, Entscheidungsliste, Liste mit
+   Überschriften und Drag & Drop, Markdown-Kopie.
+5. Parallele Milestones und Tisch. Hängt nicht an den Releases und lässt sich vorziehen.
+6. Zeitplan: Gruppierung nach Release.
+7. Umstieg: „Release aus Milestone anlegen“ im Kontextmenü. Alte Changelog-Texte bleiben in der
+   Beschreibung des Milestones und werden nicht automatisch zerlegt. **Umgesetzt:** im Menü
+   „Release“ des Milestones (Kontextmenü und Inspektor) als „Neues Release daraus anlegen“ – das
+   Release übernimmt den Titel, die Version trägt der Nutzer nach.
+
+Bewusst nicht dabei: unterschiedliche Changelogs je Kanal, Export in anderen Formaten, Zugriff
+per Token.
 
 ### Angleichen an den Prototyp
 

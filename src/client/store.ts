@@ -15,7 +15,6 @@ import {
   type OutlineFilter,
 } from '@shared/outline.js';
 import { schedule } from '@shared/schedule.js';
-import { progressLockedBy } from '@shared/tisch.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -37,6 +36,7 @@ export const VIEWS = [
   'backlog',
   'docs',
   'timeline',
+  'releases',
   'bilder',
   'archive',
   'trash',
@@ -67,6 +67,7 @@ export const VIEW_LABEL: Record<View, string> = {
   backlog: 'Backlog',
   docs: 'Doku',
   timeline: 'Zeitplan',
+  releases: 'Releases',
   bilder: 'Bilder',
   archive: 'Archiv',
   trash: 'Papierkorb',
@@ -77,8 +78,9 @@ export const VIEW_LABEL: Record<View, string> = {
  * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
  * „Bilder“ ebenso: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
  * „Tisch“ (Wunsch des Nutzers) steht als erster: der aktive Milestone als Kartenspiel.
+ * „Releases“ steht hinter dem Zeitplan: Versionen, Kanäle und Changelog.
  */
-export const TABS: View[] = ['tisch', 'plan', 'ready', 'backlog', 'docs', 'timeline', 'bilder', 'archive'];
+export const TABS: View[] = ['tisch', 'plan', 'ready', 'backlog', 'docs', 'timeline', 'releases', 'bilder', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help' | 'search';
 
@@ -283,6 +285,12 @@ type State = {
   ) => Promise<string | null>;
   /** Gibt die ID zurück – „Neue Gruppe“ im Menü benennt sie gleich um. */
   addGroup: (title: string, projectId?: string) => Promise<string | null>;
+  /** Ein neues Release samt den Kanälen des vorherigen. Gibt die ID zurück. */
+  addRelease: (projectId: string) => Promise<string | null>;
+  /** Ein weiterer Kanal an einem Release. */
+  addStage: (releaseId: string, name: string) => Promise<void>;
+  /** Legt aus einem Milestone ein Release an, das seinen Titel trägt, und ordnet ihn zu. */
+  releaseFromMilestone: (milestoneId: string) => Promise<void>;
   /** Kopiert eine Aufgabe samt Unterbaum und wählt die Kopie aus. */
   duplicateTask: (id: string) => Promise<void>;
   /**
@@ -930,6 +938,44 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
+  addRelease: async (projectId) => {
+    try {
+      const created = await api.create<{ id: string }>('release', { projectId });
+      await get().load();
+      return created.id;
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+      return null;
+    }
+  },
+
+  addStage: async (releaseId, name) => {
+    try {
+      await api.create('stage', { releaseId, name });
+      await get().load();
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+    }
+  },
+
+  releaseFromMilestone: async (milestoneId) => {
+    const m = get().ws?.milestone(milestoneId);
+    if (!m) return;
+    try {
+      const release = await api.create<{ id: string }>('release', { projectId: m.projectId, title: m.title });
+      await api.patch('milestone', m.id, m.version, { releaseId: release.id });
+      await get().load();
+      set({
+        toast: 'Release angelegt – die Version fehlt noch',
+        toastUndo: false,
+        toastLink: { toast: 'Release angelegt – die Version fehlt noch', label: 'Zu den Releases', run: () => get().setView('releases') },
+      });
+    } catch (e) {
+      await get().load();
+      set({ toast: e instanceof Error ? e.message : 'Anlegen fehlgeschlagen' });
+    }
+  },
+
   duplicateTask: async (id) => {
     try {
       const copy = await api.duplicate(id);
@@ -1061,12 +1107,6 @@ export const useStore = create<State>((set, get) => ({
     const ws = get().ws;
     const m = ws?.milestone(id);
     if (!ws || !m || m.status === status) return;
-    // Je Projekt ist nur einer aktiv – der Server lehnt es sonst auch ab.
-    const other = status === 'progress' ? progressLockedBy(ws, m) : null;
-    if (other) {
-      set({ toast: `Erst ist „${other.title || 'Ohne Titel'}“ dran – nur ein Milestone kann In Progress sein`, toastUndo: false });
-      return;
-    }
     const today = dayKey(new Date());
     const changes: Partial<Milestone> = { status };
     const autoStart = status === 'progress' && !m.startDate;
@@ -1518,6 +1558,7 @@ export function archiveWorkspace(s: State): Workspace | null {
  * bestehen. Das sagt die Meldung ausdrücklich, sonst sucht man sie.
  */
 const REMOVED: Partial<Record<Kind, string>> = {
+  release: 'Release im Papierkorb – seine Milestones bleiben bestehen',
   milestone: 'Milestone im Papierkorb – seine Tasks liegen unter „Unsortiert“',
   group: 'Gruppe gelöscht – ihre Tasks liegen unter „Unsortiert“',
 };
@@ -1676,30 +1717,22 @@ export function applyTheme(theme: Settings['theme']): void {
 
 type Entity = { id: string; version: number };
 
-const listOf = (boot: Bootstrap, kind: Kind): Entity[] =>
-  kind === 'task'
-    ? boot.tasks
-    : kind === 'milestone'
-      ? boot.milestones
-      : kind === 'project'
-        ? boot.projects
-        : kind === 'group'
-          ? boot.groups
-          : kind === 'category'
-            ? boot.categories
-            : boot.marks;
-
-const find = (boot: Bootstrap, kind: Kind, id: string): Entity | undefined =>
-  listOf(boot, kind).find((x) => x.id === id);
-
 const LIST_KEY = {
   task: 'tasks',
   milestone: 'milestones',
+  release: 'releases',
+  stage: 'stages',
+  heading: 'headings',
   project: 'projects',
   group: 'groups',
   category: 'categories',
   mark: 'marks',
-} as const;
+} as const satisfies Record<Kind, keyof Bootstrap>;
+
+const listOf = (boot: Bootstrap, kind: Kind): Entity[] => boot[LIST_KEY[kind]];
+
+const find = (boot: Bootstrap, kind: Kind, id: string): Entity | undefined =>
+  listOf(boot, kind).find((x) => x.id === id);
 
 /** Ersetzt ein Objekt und baut den Index neu. */
 function replace(boot: Bootstrap, kind: Kind, updated: Entity): { boot: Bootstrap; ws: Workspace } {

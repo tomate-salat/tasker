@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, beforeEach, describe, it } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import type { Milestone, Task } from '../shared/model.js';
+import type { Milestone, Release, ReleaseStage, Task } from '../shared/model.js';
 import { createDbCtx, type DbCtx } from './db.js';
 import {
   Conflict,
@@ -18,6 +18,7 @@ import {
   hiddenMismatches,
   loadArchive,
   loadBootstrap,
+  loadChangelog,
   loadTrash,
   move,
   patch,
@@ -1015,43 +1016,27 @@ describe('Milestone in ein anderes Projekt', () => {
     assert.equal(project(other.id), a.id, 'was nicht am Milestone hängt, bleibt');
   });
 
-  it('nicht, wenn er aktiv ist und dort schon ein anderer aktiv ist', () => {
+  it('auch wenn er aktiv ist und dort schon ein anderer aktiv ist', () => {
     const a = mkProject();
     const b = create(ctx, 'project', { name: 'Website' }) as { id: string };
     mkMilestone({ projectId: b.id, title: 'Dort', status: 'progress' });
     const m = mkMilestone({ projectId: a.id, title: 'Hier', status: 'progress' });
-    assert.throws(() => patch(ctx, 'milestone', m.id, m.version, { projectId: b.id }), /Dort/);
-    assert.equal(loadBootstrap(ctx).milestones.find((x) => x.id === m.id)?.projectId, a.id);
+    patch(ctx, 'milestone', m.id, m.version, { projectId: b.id });
+    assert.equal(loadBootstrap(ctx).milestones.find((x) => x.id === m.id)?.projectId, b.id);
   });
 });
 
-describe('Nur ein aktiver Milestone je Projekt', () => {
-  it('ein zweiter lässt sich nicht auf In Progress setzen', () => {
+describe('Mehrere aktive Milestones je Projekt', () => {
+  it('ein zweiter lässt sich auf In Progress setzen – beim Ändern wie beim Anlegen', () => {
     const p = mkProject();
     mkMilestone({ projectId: p.id, title: 'Läuft', status: 'progress' });
-    const m = mkMilestone({ projectId: p.id, title: 'Nächster' });
-    assert.throws(() => patch(ctx, 'milestone', m.id, m.version, { status: 'progress' }), /Läuft/);
-    const now = loadBootstrap(ctx).milestones.find((x) => x.id === m.id);
-    assert.equal(now?.status, 'open');
-    assert.equal(now?.version, m.version, 'die Änderung fällt ganz zurück');
-  });
-
-  it('auch nicht beim Anlegen', () => {
-    const p = mkProject();
-    mkMilestone({ projectId: p.id, title: 'Läuft', status: 'progress' });
-    assert.throws(() => mkMilestone({ projectId: p.id, title: 'Neu', status: 'progress' }), /Läuft/);
-  });
-
-  it('in einem anderen Projekt, erledigt oder archiviert zählt nicht', () => {
-    const p = mkProject();
-    const q = create(ctx, 'project', { name: 'Website' }) as { id: string };
-    mkMilestone({ projectId: q.id, title: 'Anderes Projekt', status: 'progress' });
-    mkMilestone({ projectId: p.id, title: 'Fertig', status: 'done' });
-    const old = mkMilestone({ projectId: p.id, title: 'Alt', status: 'progress' });
-    archive(ctx, 'milestone', old.id);
     const m = mkMilestone({ projectId: p.id, title: 'Nächster' });
     patch(ctx, 'milestone', m.id, m.version, { status: 'progress' });
-    assert.equal(loadBootstrap(ctx).milestones.find((x) => x.id === m.id)?.status, 'progress');
+    mkMilestone({ projectId: p.id, title: 'Dritter', status: 'progress' });
+    assert.deepEqual(
+      loadBootstrap(ctx).milestones.map((x) => x.status),
+      ['progress', 'progress', 'progress'],
+    );
   });
 });
 
@@ -1201,5 +1186,222 @@ describe('Platz im Spiel (Tisch)', () => {
     applySteps(ctx, undo);
     assert.equal(one(a.id).status, 'progress');
     assert.deepEqual([one(a.id).playOrder, one(b.id).playOrder], [1, 2]);
+  });
+});
+
+describe('Releases', () => {
+  const mkRelease = (o: Record<string, unknown>) => create(ctx, 'release', o) as Release;
+  const mkStage = (o: Record<string, unknown>) => create(ctx, 'stage', o) as ReleaseStage;
+  const stagesOf = (id: string) =>
+    loadBootstrap(ctx).stages.filter((s) => s.releaseId === id).map((s) => s.name);
+  const releaseOf = (id: string) => loadBootstrap(ctx).milestones.find((m) => m.id === id)?.releaseId;
+
+  it('ein Release hat Version, Titel und eigene Kanäle', () => {
+    const p = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.4.0', title: 'Zirkus' });
+    const s = mkStage({ releaseId: r.id, name: 'itch-Seite' });
+    assert.match(r.id, /^r/);
+    assert.match(s.id, /^s/);
+    assert.equal(r.name, '0.4.0');
+    assert.equal(s.doneAt, null);
+
+    const at = '2026-10-10T12:00:00.000Z';
+    const done = patch(ctx, 'stage', s.id, s.version, { doneAt: at }) as ReleaseStage;
+    assert.equal(done.doneAt, at);
+    assert.deepEqual(loadBootstrap(ctx).releases.map((x) => x.name), ['0.4.0']);
+  });
+
+  it('ein neues Release übernimmt die Kanäle des vorherigen im Projekt, nicht abgehakt', () => {
+    const p = mkProject();
+    const other = mkProject();
+    const a = mkRelease({ projectId: p.id, name: '0.1' });
+    mkStage({ releaseId: mkRelease({ projectId: other.id, name: 'fremd' }).id, name: 'Epic' });
+    const itch = mkStage({ releaseId: a.id, name: 'itch-Seite' });
+    mkStage({ releaseId: a.id, name: 'Steam-Demo' });
+    patch(ctx, 'stage', itch.id, itch.version, { doneAt: '2026-10-10T12:00:00.000Z' });
+
+    const b = mkRelease({ projectId: p.id, name: '0.2' });
+    assert.deepEqual(stagesOf(b.id), ['itch-Seite', 'Steam-Demo']);
+    assert.ok(loadBootstrap(ctx).stages.filter((s) => s.releaseId === b.id).every((s) => !s.doneAt));
+  });
+
+  it('ein Milestone gehört zu einem Release des eigenen Projekts', () => {
+    const p = mkProject();
+    const other = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1' });
+    const foreign = mkRelease({ projectId: other.id, name: '9.9' });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    assert.equal(m.releaseId, null);
+
+    const inside = patch(ctx, 'milestone', m.id, m.version, { releaseId: r.id }) as Milestone;
+    assert.equal(inside.releaseId, r.id);
+    assert.throws(() => patch(ctx, 'milestone', m.id, inside.version, { releaseId: foreign.id }), /anderen Projekt/);
+    assert.throws(() => patch(ctx, 'milestone', m.id, inside.version, { releaseId: 'rGibtEsNicht' }), /gibt es nicht/);
+  });
+
+  it('beim Projektwechsel bleibt das Release zurück – Rückgängig holt es wieder', () => {
+    const p = mkProject();
+    const other = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1' });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const inside = patch(ctx, 'milestone', m.id, m.version, { releaseId: r.id }) as Milestone;
+
+    const { undo } = applySteps(ctx, [
+      { op: 'patch', kind: 'milestone', id: m.id, version: inside.version, changes: { projectId: other.id } },
+    ]);
+    assert.equal(releaseOf(m.id), null);
+    applySteps(ctx, undo);
+    assert.equal(releaseOf(m.id), r.id);
+  });
+
+  it('ein gelöschtes Release lässt seine Milestones los und kommt mit Kanälen und Milestones zurück', () => {
+    const p = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1', title: 'Zirkus' });
+    mkStage({ releaseId: r.id, name: 'itch-Seite' });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const free = mkMilestone({ projectId: p.id, title: 'Frei' });
+    patch(ctx, 'milestone', m.id, m.version, { releaseId: r.id });
+
+    const { trashId } = remove(ctx, 'release', r.id);
+    assert.equal(releaseOf(m.id), null);
+    assert.deepEqual(stagesOf(r.id), []);
+    assert.equal(loadTrash(ctx).find((e) => e.id === trashId)?.title, '0.1 · Zirkus');
+
+    restoreTrash(ctx, trashId);
+    assert.equal(releaseOf(m.id), r.id);
+    assert.equal(releaseOf(free.id), null);
+    assert.deepEqual(stagesOf(r.id), ['itch-Seite']);
+  });
+
+  it('ein Milestone aus dem Papierkorb kommt ohne Release zurück, wenn es das nicht mehr gibt', () => {
+    const p = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1' });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    patch(ctx, 'milestone', m.id, m.version, { releaseId: r.id });
+
+    const gone = remove(ctx, 'milestone', m.id);
+    remove(ctx, 'release', r.id);
+    restoreTrash(ctx, gone.trashId);
+    assert.equal(releaseOf(m.id), null);
+  });
+
+  it('ein Kanal kommt nur zurück, wenn es sein Release noch gibt', () => {
+    const p = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1' });
+    const s = mkStage({ releaseId: r.id, name: 'itch-Seite' });
+
+    const gone = remove(ctx, 'stage', s.id);
+    assert.deepEqual(stagesOf(r.id), []);
+    restoreTrash(ctx, gone.trashId);
+    assert.deepEqual(stagesOf(r.id), ['itch-Seite']);
+
+    const again = remove(ctx, 'stage', s.id);
+    remove(ctx, 'release', r.id);
+    assert.throws(() => restoreTrash(ctx, again.trashId), /Release dazu/);
+  });
+
+  it('ein gelöschtes Projekt kommt mit Releases, Kanälen und Zuordnung zurück', () => {
+    const p = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1' });
+    mkStage({ releaseId: r.id, name: 'itch-Seite' });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    patch(ctx, 'milestone', m.id, m.version, { releaseId: r.id });
+
+    const { trashId } = remove(ctx, 'project', p.id);
+    assert.deepEqual(loadBootstrap(ctx).releases, []);
+    restoreTrash(ctx, trashId);
+    assert.deepEqual(stagesOf(r.id), ['itch-Seite']);
+    assert.equal(releaseOf(m.id), r.id);
+  });
+});
+
+describe('Changelog', () => {
+  const mkRelease = (o: Record<string, unknown>) => create(ctx, 'release', o) as Release;
+  const taskOf = (id: string) => loadChangelog(ctx, release.id).tasks.find((t) => t.id === id)!;
+  let p: { id: string };
+  let release: Release;
+  let m: Milestone;
+
+  beforeEach(() => {
+    p = mkProject();
+    release = mkRelease({ projectId: p.id, name: '0.1' });
+    m = mkMilestone({ projectId: p.id, title: 'M' });
+    patch(ctx, 'milestone', m.id, m.version, { releaseId: release.id });
+  });
+
+  it('ein neuer Eintrag reiht sich hinter allen Einträgen und Überschriften des Projekts ein', () => {
+    const a = mkTask({ projectId: p.id, milestoneId: m.id, title: 'A' });
+    const b = mkTask({ projectId: p.id, milestoneId: m.id, title: 'B' });
+    assert.equal(a.changelog, '');
+    assert.equal(a.changelogSkip, false);
+
+    const first = patch(ctx, 'task', a.id, a.version, { changelog: 'Clowns' }) as Task;
+    const h = create(ctx, 'heading', { releaseId: release.id, title: 'Neu' }) as { order: number };
+    const second = patch(ctx, 'task', b.id, b.version, { changelog: 'Boss' }) as Task;
+    assert.deepEqual([first.changelogOrder, h.order, second.changelogOrder], [1, 2, 3]);
+
+    // Den Text ändern lässt den Platz, wie er ist.
+    const again = patch(ctx, 'task', a.id, first.version, { changelog: 'Drei Clowns' }) as Task;
+    assert.equal(again.changelogOrder, 1);
+    assert.deepEqual(loadBootstrap(ctx).headings.map((x) => x.title), ['Neu']);
+  });
+
+  it('sammelt die Aufgaben der Milestones des Releases – auch Unteraufgaben und Archiviertes', () => {
+    const other = mkMilestone({ projectId: p.id, title: 'Ohne Release' });
+    const a = mkTask({ projectId: p.id, milestoneId: m.id, title: 'A', status: 'done' });
+    const kid = mkTask({ projectId: p.id, parentId: a.id, title: 'Kind' });
+    const gone = mkTask({ projectId: p.id, milestoneId: m.id, title: 'Archiviert', status: 'done' });
+    mkTask({ projectId: p.id, milestoneId: other.id, title: 'Fremd' });
+    mkTask({ projectId: p.id, title: 'Lose' });
+    archive(ctx, 'task', gone.id);
+
+    const data = loadChangelog(ctx, release.id);
+    assert.deepEqual(data.tasks.map((t) => t.title).sort(), ['A', 'Archiviert', 'Kind']);
+    assert.equal(taskOf(gone.id).archived, true);
+    assert.equal(taskOf(kid.id).archived, false);
+    assert.deepEqual(data.milestones.map((x) => [x.title, x.archived]), [['M', false]]);
+
+    // Auch der archivierte Milestone bleibt mit seinen Aufgaben im Changelog.
+    archive(ctx, 'milestone', m.id);
+    const after = loadChangelog(ctx, release.id);
+    assert.deepEqual(after.milestones.map((x) => [x.title, x.archived]), [['M', true]]);
+    assert.equal(after.tasks.length, 3);
+    assert.ok(after.tasks.every((t) => t.archived));
+    assert.throws(() => loadChangelog(ctx, 'rGibtEsNicht'), NotFound);
+  });
+
+  it('eine archivierte Aufgabe lässt sich über Schritte entscheiden – und zurücknehmen', () => {
+    const a = mkTask({ projectId: p.id, milestoneId: m.id, title: 'A', status: 'done' });
+    archive(ctx, 'task', a.id);
+    const { undo } = applySteps(ctx, [
+      { op: 'patch', kind: 'task', id: a.id, version: taskOf(a.id).version, changes: { changelogSkip: true } },
+    ]);
+    assert.equal(taskOf(a.id).changelogSkip, true);
+    applySteps(ctx, undo);
+    assert.equal(taskOf(a.id).changelogSkip, false);
+  });
+
+  it('eine Kopie übernimmt den Eintrag nicht', () => {
+    const a = mkTask({ projectId: p.id, milestoneId: m.id, title: 'A' });
+    patch(ctx, 'task', a.id, a.version, { changelog: 'Clowns' });
+    const copy = duplicate(ctx, a.id);
+    assert.equal(taskOf(copy.id).changelog, '');
+    assert.equal(taskOf(copy.id).changelogOrder, 0);
+  });
+
+  it('die Überschriften gehen mit dem Release in den Papierkorb und kommen mit ihm zurück', () => {
+    create(ctx, 'heading', { releaseId: release.id, title: 'Neu' });
+    const { trashId } = remove(ctx, 'release', release.id);
+    assert.deepEqual(loadBootstrap(ctx).headings, []);
+    restoreTrash(ctx, trashId);
+    assert.deepEqual(loadBootstrap(ctx).headings.map((x) => x.title), ['Neu']);
+  });
+
+  it('ein Release lässt sich archivieren und zurückholen', () => {
+    const at = '2026-10-10T12:00:00.000Z';
+    const gone = patch(ctx, 'release', release.id, release.version, { archivedAt: at }) as Release;
+    assert.equal(gone.archivedAt, at);
+    const back = patch(ctx, 'release', release.id, gone.version, { archivedAt: null }) as Release;
+    assert.equal(back.archivedAt, null);
   });
 });

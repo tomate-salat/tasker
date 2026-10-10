@@ -10,6 +10,7 @@ import type {
   Undoable,
 } from '@shared/api.js';
 import type { LogEntry } from '@shared/burnup.js';
+import type { ChangelogData } from '@shared/changelog.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data, Milestone, Task } from '@shared/model.js';
 import type { RefStub } from '@shared/refs.js';
@@ -215,6 +216,9 @@ export const api = {
   status: () => request<{ database: string; boots: number; firstBootAt: string }>('/api/status'),
 
   bootstrap: () => request<Bootstrap>('/api/bootstrap'),
+
+  /** Milestones und Aufgaben eines Releases samt Archiviertem – die Grundlage des Changelogs. */
+  changelog: (releaseId: string) => request<ChangelogData>(`/api/changelog/${releaseId}`),
 
   create: <T>(kind: Kind, input: Record<string, unknown>) => post<T>(`/api/kind/${kind}`, input),
 

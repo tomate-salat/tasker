@@ -5,6 +5,6 @@ import { randomBytes } from 'node:crypto';
  * Das ist beim Lesen von Logs und beim Debuggen in der Datenbankdatei viel wert
  * und kostet nichts.
  */
-export type IdPrefix = 'p' | 'c' | 'k' | 'g' | 'm' | 't' | 'd' | 'x' | 'o';
+export type IdPrefix = 'p' | 'c' | 'k' | 'g' | 'r' | 's' | 'h' | 'm' | 't' | 'd' | 'x' | 'o';
 
 export const newId = (prefix: IdPrefix): string => prefix + randomBytes(9).toString('base64url');

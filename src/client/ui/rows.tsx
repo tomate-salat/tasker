@@ -5,6 +5,7 @@ import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
 import { categoryColorIndex, isCollapsed, type OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
+import { releaseLabel } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { drawingsOf } from '../api.js';
 import { useStore } from '../store.js';
@@ -198,6 +199,7 @@ export function MilestoneRow({
 }) {
   const { selected, select, collapsed, toggle, editing } = useStore();
   const open = !collapsed[milestone.id];
+  const release = ws.release(milestone.releaseId);
   const waiting = milestone.deps
     .map((id) => ws.milestone(id))
     .filter((m): m is Milestone => !!m && m.status !== 'done');
@@ -245,6 +247,11 @@ export function MilestoneRow({
         {GRAPH_ICON}
       </button>
       <DrawingBadge ownerId={milestone.id} />
+      {release && (
+        <span className="chip rel-chip" title={`Gehört zu Release ${releaseLabel(release)}`}>
+          ✦ {release.name || release.title || 'Release'}
+        </span>
+      )}
       <span className="ms-spacer" />
 
       {waiting.length > 0 && (

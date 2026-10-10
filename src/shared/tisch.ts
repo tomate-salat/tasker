@@ -4,16 +4,16 @@ import { isArchived, isDone, type Milestone, type Task } from './model.js';
 import type { Workspace } from './workspace.js';
 
 /**
- * Der „Tisch“ (Wunsch des Nutzers): die Arbeit am aktiven Milestone als
- * Kartenspiel. Aktiv ist ein Milestone mit Status „In Progress“ – je Projekt
- * höchstens einer. Die Zonen ergeben sich aus Status und Abhängigkeiten, nichts
+ * Der „Tisch“ (Wunsch des Nutzers): die Arbeit an den aktiven Milestones als
+ * Kartenspiel. Aktiv ist ein Milestone mit Status „In Progress“ – seit den
+ * Releases dürfen es je Projekt mehrere sein, ihre Karten liegen gemeinsam auf
+ * dem Tisch. Die Zonen ergeben sich aus Status und Abhängigkeiten, nichts
  * davon wird eigens gespeichert.
  */
 
 /**
  * Die Milestones eines Projekts auf „In Progress“, eingeplante zuerst in
- * Plan-Reihenfolge. Normal ist es höchstens einer; mehrere kann es nur aus der
- * Zeit vor der Regel geben (oder durch Wiederherstellen aus Archiv und Papierkorb).
+ * Plan-Reihenfolge.
  */
 export function activeMilestones(ws: Workspace, projectId: string): Milestone[] {
   return ws.milestones
@@ -21,13 +21,7 @@ export function activeMilestones(ws: Workspace, projectId: string): Milestone[] 
     .sort((a, b) => Number(b.planned) - Number(a.planned) || (a.planned ? a.qorder - b.qorder : a.order - b.order));
 }
 
-/** Der aktive Milestone des Projekts – bei mehreren der oberste im Plan. */
-export const activeMilestone = (ws: Workspace, projectId: string): Milestone | null =>
-  activeMilestones(ws, projectId)[0] ?? null;
-
-/** Ein anderer aktiver Milestone im selben Projekt – solange es ihn gibt, bleibt „In Progress“ für `m` gesperrt. */
-export const progressLockedBy = (ws: Workspace, m: Milestone): Milestone | null =>
-  activeMilestones(ws, m.projectId).find((x) => x.id !== m.id) ?? null;
+const listOf = (m: Milestone | Milestone[]): Milestone[] => (Array.isArray(m) ? m : [m]);
 
 export type TischLayout = {
   /** Wurzelaufgaben mit offenen Voraussetzungen oder Status „Blockiert“ – Stapel wie einzelne. */
@@ -50,10 +44,13 @@ export type TischLayout = {
  * - „In Progress“ geht vor „gesperrt“: was schon läuft, liegt im Spiel.
  * - Gesperrte Unteraufgaben bleiben in ihrer Schublade und stehen nicht
  *   zusätzlich oben – das zeigt die Oberfläche.
+ *
+ * Mehrere Milestones teilen sich die Zonen: in „Offen“ und „Gesperrt“ stehen
+ * sie nacheinander, „Im Spiel“ und der Erledigt-Stapel mischen sich.
  */
-export function tischLayout(ws: Workspace, m: Milestone): TischLayout {
+export function tischLayout(ws: Workspace, m: Milestone | Milestone[]): TischLayout {
   const out: TischLayout = { locked: [], open: [], play: [], pile: [] };
-  for (const root of ws.msRoots(m)) {
+  for (const root of listOf(m).flatMap((x) => ws.msRoots(x))) {
     if (ws.isDoc(root)) continue;
     const all = [root, ...ws.desc(root)];
     for (const t of all) if (isDone(t)) out.pile.push(t);
@@ -101,8 +98,8 @@ export const stackReady = (ws: Workspace, t: Task): boolean =>
 /* ------------------------------------------------------------ Ablage */
 
 /**
- * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers, nach Codecks): was im
- * Milestone erledigt wurde, je Woche. Wochen laufen von Montag bis Sonntag in
+ * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers, nach Codecks): was in
+ * den Milestones auf dem Tisch erledigt wurde, je Woche. Wochen laufen von Montag bis Sonntag in
  * der Zeitzone des Geräts – der Server kennt nur UTC.
  */
 export type DoneWeek = {
@@ -139,14 +136,14 @@ function weeksBefore(start: string, weeks: number): string {
   return day(new Date(y, m - 1, d - 7 * weeks));
 }
 
-export function doneShelf(ws: Workspace, m: Milestone, now: Date = new Date()): DoneShelf {
+export function doneShelf(ws: Workspace, m: Milestone | Milestone[], now: Date = new Date()): DoneShelf {
   // Erledigt Archiviertes bleibt liegen – sonst schrumpften alte Wochen beim Aufräumen.
   const done: Task[] = [];
   const walk = (t: Task): void => {
     if (isDone(t)) done.push(t);
     for (const k of ws.countedKids(t.id)) walk(k);
   };
-  for (const root of ws.msCounted(m)) if (!root.doc) walk(root);
+  for (const root of listOf(m).flatMap((x) => ws.msCounted(x))) if (!root.doc) walk(root);
 
   // Ohne Zeitpunkt ist es gerade eben erledigt worden – siehe `tischLayout`.
   const at = (t: Task): number => (t.doneAt ? new Date(t.doneAt).getTime() : now.getTime());

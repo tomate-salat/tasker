@@ -3,11 +3,10 @@ import { describe, it } from 'node:test';
 import { Builder } from './testing.js';
 import { Workspace } from './workspace.js';
 import {
-  activeMilestone,
+  activeMilestones,
   doneRefusal,
   doneShelf,
   playRefusal,
-  progressLockedBy,
   stackReady,
   tischLayout,
   weekStart,
@@ -16,27 +15,38 @@ import {
 const ids = (list: { id: string }[]): string[] => list.map((x) => x.id);
 
 describe('Tisch', () => {
-  it('aktiv ist der Milestone auf In Progress, bei mehreren der oberste im Plan', () => {
-    const ws = new Builder()
-      .project('p')
-      .milestone('m1', 'p', { planned: true, qorder: 2, status: 'progress' })
-      .milestone('m2', 'p', { planned: true, qorder: 1, status: 'progress' })
-      .milestone('m3', 'p', { status: 'progress' })
-      .build();
-    assert.equal(activeMilestone(ws, 'p')?.id, 'm2');
-    assert.equal(progressLockedBy(ws, ws.milestone('m1')!)?.id, 'm2');
-  });
-
-  it('ohne anderen aktiven Milestone ist In Progress frei', () => {
+  it('aktiv sind alle Milestones auf In Progress, in der Reihenfolge des Plans', () => {
     const ws = new Builder()
       .project('p')
       .project('q')
-      .milestone('m1', 'p', { status: 'progress' })
-      .milestone('m2', 'q')
-      .milestone('m3', 'p', { status: 'progress', archivedAt: '2026-01-01T00:00:00Z' })
+      .milestone('m1', 'p', { planned: true, qorder: 2, status: 'progress' })
+      .milestone('m2', 'p', { planned: true, qorder: 1, status: 'progress' })
+      .milestone('m3', 'p', { status: 'progress' })
+      .milestone('m4', 'p', { planned: true, qorder: 0 })
+      .milestone('m5', 'q', { status: 'progress' })
+      .milestone('m6', 'p', { status: 'progress', archivedAt: '2026-01-01T00:00:00Z' })
       .build();
-    assert.equal(progressLockedBy(ws, ws.milestone('m2')!), null);
-    assert.equal(progressLockedBy(ws, ws.milestone('m1')!), null);
+    assert.deepEqual(ids(activeMilestones(ws, 'p')), ['m2', 'm1', 'm3']);
+  });
+
+  it('mehrere Milestones teilen sich die Zonen', () => {
+    const ws = new Builder()
+      .project('p')
+      .milestone('m1', 'p', { status: 'progress' })
+      .milestone('m2', 'p', { status: 'progress' })
+      .task('a', 'p', { milestoneId: 'm1' })
+      .task('b', 'p', { milestoneId: 'm2' })
+      .task('c', 'p', { milestoneId: 'm1', status: 'progress', playOrder: 2 })
+      .task('d', 'p', { milestoneId: 'm2', status: 'progress', playOrder: 1 })
+      .task('e', 'p', { milestoneId: 'm2', status: 'done', doneAt: '2026-01-02T10:00:00Z' })
+      .task('f', 'p', { milestoneId: 'm1', status: 'done', doneAt: '2026-01-03T10:00:00Z' })
+      .build();
+    const l = tischLayout(ws, [ws.milestone('m1')!, ws.milestone('m2')!]);
+    assert.deepEqual(ids(l.open), ['a', 'b']);
+    assert.deepEqual(ids(l.play), ['d', 'c']);
+    assert.deepEqual(ids(l.pile), ['f', 'e']);
+    assert.deepEqual(ids(tischLayout(ws, ws.milestone('m2')!).open), ['b']);
+    assert.equal(doneShelf(ws, [ws.milestone('m1')!, ws.milestone('m2')!]).weeks[0]?.cards.length, 2);
   });
 
   it('verteilt die Karten auf die Zonen', () => {

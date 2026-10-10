@@ -1,0 +1,476 @@
+/* Der Reiter „Releases“ – siehe Releases.tsx. */
+
+.rl {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 24px 40px;
+  overflow-y: auto;
+}
+
+.rl-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.rl-empty {
+  max-width: 440px;
+  margin: 48px auto 0;
+  text-align: center;
+}
+
+.rl-empty-title {
+  margin: 0 0 6px;
+  font: 700 20px/1.2 var(--display);
+}
+
+.rl-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.rl-card.gone {
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------------ Kopf */
+
+.rl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 10px;
+}
+
+/* Felder sehen aus wie Text, bis man hineingeht. */
+.rl-in {
+  min-width: 0;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.rl-in:hover {
+  border-color: var(--line);
+}
+
+.rl-in:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.rl-in::placeholder,
+.rl-intro::placeholder,
+.rl-add::placeholder,
+.rl-row-in::placeholder {
+  color: var(--faint);
+}
+
+.rl-version {
+  width: 9ch;
+  font: 700 18px/1.2 var(--display);
+}
+
+.rl-title {
+  flex: 1;
+  color: var(--muted);
+}
+
+.rl-status {
+  flex: none;
+  padding: 2px 9px;
+  font-size: 12px;
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--sunk);
+}
+
+.rl-status.s-progress {
+  color: var(--pts);
+  background: var(--pts-soft);
+}
+
+.rl-status.s-ready,
+.rl-status.s-released {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------------------------------------------------------------- Stages */
+
+.rl-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 14px 14px;
+}
+
+.rl-lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.rl-lbl {
+  width: 118px;
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.rl-ms,
+.rl-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.rl-ms.now {
+  border-color: var(--accent);
+}
+
+.rl-ms.done .rl-ms-t,
+.rl-stage.done .rl-stage-name {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.rl-ms-t {
+  padding: 2px 0;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.rl-ms-t:disabled {
+  cursor: default;
+}
+
+.rl-ms-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.rl-stage-name {
+  width: 14ch;
+  padding: 1px 4px;
+}
+
+.rl-x {
+  flex: none;
+  padding: 2px 5px;
+  font-size: 11px;
+  color: var(--faint);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rl-x:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+.rl-add,
+.rl-row-in {
+  min-width: 0;
+  padding: 4px 8px;
+  font: 13px var(--body);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+}
+
+.rl-add {
+  width: 22ch;
+}
+
+.rl-add:focus,
+.rl-row-in:focus {
+  border-style: solid;
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* ------------------------------------------------------------- Changelog */
+
+.rl-log {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.rl-log > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.rl-log > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rl-log > summary::before {
+  content: '▸';
+  color: var(--faint);
+}
+
+.rl-log[open] > summary::before {
+  content: '▾';
+}
+
+.rl-log-t {
+  font: 600 14px var(--body);
+  color: var(--ink);
+}
+
+.rl-warn {
+  padding: 1px 8px;
+  font-size: 12px;
+  color: var(--p2);
+  background: var(--pts-soft);
+  border-radius: 6px;
+}
+
+.rl-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.rl-card > .rl-note {
+  padding: 0 14px 14px;
+}
+
+.rl-intro {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 8px;
+  font: 13px/1.5 var(--body);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.rl-intro:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.rl-items {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rl-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  font-size: 14px;
+  border-radius: 6px;
+}
+
+.rl-item:hover {
+  background: var(--hover);
+}
+
+.rl-item.dragging {
+  opacity: 0.4;
+}
+
+/* Die Einfügemarke beim Ziehen. */
+.rl-item.drop-before::before,
+.rl-item.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.rl-item.drop-before::before {
+  top: -1px;
+}
+
+.rl-item.drop-after::after {
+  bottom: -1px;
+}
+
+.rl-item.heading {
+  margin-top: 8px;
+}
+
+.rl-grip {
+  flex: none;
+  padding: 2px 4px;
+  color: var(--faint);
+  cursor: grab;
+  user-select: none;
+  border-radius: 4px;
+}
+
+.rl-grip:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.rl-entry,
+.rl-heading {
+  flex: 1;
+}
+
+.rl-heading {
+  font-weight: 600;
+}
+
+.rl-item.pending .rl-entry {
+  color: var(--faint);
+}
+
+.rl-pill {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--sunk);
+  border-radius: 6px;
+}
+
+.rl-ref {
+  flex: none;
+  padding: 1px 4px;
+  font: 12px var(--mono);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rl-ref:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.rl-ref:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.rl-log-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rl-log-actions .btn {
+  padding: 5px 11px;
+  font-size: 13px;
+}
+
+.rl-sub {
+  margin: 16px 0 4px;
+  font: 600 11px var(--body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.rl-skipped > summary {
+  cursor: pointer;
+}
+
+.rl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.rl-row-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rl-row-in {
+  flex: 1.4;
+  border-style: solid;
+  border-color: var(--line);
+}
+
+/* --------------------------------------- Anderswo: Chip am Milestone, Inspektor */
+
+.rel-chip {
+  flex: none;
+  margin-left: 6px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.cl-in {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font: 13px var(--body);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.cl-in:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.cl-in.off {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+@media (max-width: 760px) {
+  .rl {
+    padding: 10px 16px 32px;
+  }
+
+  .rl-head {
+    flex-wrap: wrap;
+  }
+
+  .rl-lbl {
+    width: 100%;
+  }
+
+  .rl-row {
+    flex-wrap: wrap;
+  }
+}

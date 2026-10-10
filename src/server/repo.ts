@@ -6,6 +6,9 @@ import type {
   Milestone,
   Prio,
   Project,
+  Release,
+  ReleaseHeading,
+  ReleaseStage,
   Status,
   Task,
 } from '../shared/model.js';
@@ -18,6 +21,7 @@ import type {
   TrashRow as TrashRowData,
   Undoable,
 } from '../shared/api.js';
+import type { ChangelogData } from '../shared/changelog.js';
 import { convertibleItems, convertibleSections, replaceItems } from '../shared/checklist.js';
 import { parentStatusAfter } from '../shared/parentStatus.js';
 import { refsIn, type RefStub } from '../shared/refs.js';
@@ -52,6 +56,9 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
   const milestones = all<MilestoneRow>(
     'SELECT * FROM milestone WHERE archived_at IS NULL ORDER BY sort_order',
   );
+  const releases = all<ReleaseRow>('SELECT * FROM "release" ORDER BY sort_order');
+  const stages = all<StageRow>('SELECT * FROM release_stage ORDER BY sort_order');
+  const headings = all<HeadingRow>('SELECT * FROM release_heading ORDER BY sort_order');
   const tasks = all<TaskRow>(
     `SELECT t.* FROM task t WHERE ${ACTIVE_TASK} ORDER BY t.sort_order, t.id`,
   );
@@ -128,6 +135,9 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     marks: marks.map(toMark),
     groups: groups.map(toGroup),
     milestones: milestones.map((m) => toMilestone(m, depsOfMs.get(m.id) ?? [])),
+    releases: releases.map(toRelease),
+    stages: stages.map(toStage),
+    headings: headings.map(toHeading),
     tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
     archivedTasks: loadArchivedInPlace(ctx),
     stubs,
@@ -156,6 +166,51 @@ function loadArchivedInPlace(ctx: DbCtx): Task[] {
     )
     .all() as TaskRow[];
   return rows.map((t) => toTask(t, [], []));
+}
+
+/**
+ * Woraus das Changelog eines Releases entsteht: seine Milestones und alle
+ * Aufgaben darunter – auch archivierte. Erledigtes wird hier regelmäßig
+ * archiviert und gehört trotzdem ins Changelog, deshalb reicht der aktive
+ * Bestand aus `loadBootstrap` dafür nicht.
+ */
+export function loadChangelog(ctx: DbCtx, releaseId: string): ChangelogData {
+  if (!readRow(ctx, 'release', releaseId)) throw new NotFound();
+  const milestones = ctx.sqlite
+    .prepare(
+      `SELECT id, ref, title, status, archived_at FROM milestone
+        WHERE release_id = ? ORDER BY queue_order, id`,
+    )
+    .all(releaseId) as { id: string; ref: number; title: string; status: Status; archived_at: string | null }[];
+  const tasks = ctx.sqlite
+    .prepare(
+      `WITH RECURSIVE sub(id) AS (
+         SELECT t.id FROM task t JOIN milestone m ON m.id = t.milestone_id
+          WHERE m.release_id = ? AND t.parent_id IS NULL
+         UNION
+         SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id
+       )
+       SELECT t.* FROM task t JOIN sub ON sub.id = t.id ORDER BY t.sort_order, t.id`,
+    )
+    .all(releaseId) as TaskRow[];
+  return {
+    milestones: milestones.map((m) => ({
+      id: m.id, ref: m.ref, title: m.title, status: m.status, archived: !!m.archived_at,
+    })),
+    tasks: tasks.map((t) => ({
+      id: t.id,
+      ref: t.ref,
+      version: t.version,
+      parentId: t.parent_id,
+      milestoneId: t.milestone_id,
+      title: t.title,
+      status: t.status as Status,
+      changelog: t.changelog ?? '',
+      changelogSkip: !!t.changelog_skip,
+      changelogOrder: t.changelog_order ?? 0,
+      archived: !!t.archived_at || !!t.hidden_by,
+    })),
+  };
 }
 
 /** Ob ein Objekt zum aktiven Bestand gehört, den `loadBootstrap` ausliefert. */
@@ -314,6 +369,9 @@ const TABLE: Record<Kind, string> = {
   category: 'category',
   mark: 'mark',
   group: '"group"',
+  release: '"release"',
+  stage: 'release_stage',
+  heading: 'release_heading',
   milestone: 'milestone',
   task: 'task',
 };
@@ -323,6 +381,9 @@ const PREFIX: Record<Kind, IdPrefix> = {
   category: 'c',
   mark: 'k',
   group: 'g',
+  release: 'r',
+  stage: 's',
+  heading: 'h',
   milestone: 'm',
   task: 't',
 };
@@ -333,10 +394,13 @@ const COLUMN: Record<string, string> = {
   parentId: 'parent_id',
   milestoneId: 'milestone_id',
   groupId: 'group_id',
+  releaseId: 'release_id',
   categoryId: 'category_id',
   markId: 'mark_id',
   coverImageId: 'cover_image_id',
   playOrder: 'play_order',
+  changelogSkip: 'changelog_skip',
+  changelogOrder: 'changelog_order',
   order: 'sort_order',
   qorder: 'queue_order',
   startDate: 'start_date',
@@ -425,11 +489,22 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(nowIso(), id);
     }
     if (kind === 'task') adoptMarks(ctx, [id]);
-    if (kind === 'milestone' && values['status'] === 'progress') assertSingleActive(ctx, id);
     // Jedes Projekt ist für seine Markierungen selbst zuständig, fängt aber mit
     // denselben zwei an wie der Prototyp.
     if (kind === 'project') {
       for (const [emoji, name] of DEFAULT_MARKS) create(ctx, 'mark', { projectId: id, emoji, name });
+    }
+    // Ein neues Release fängt mit den Kanälen des vorherigen im Projekt an, noch nicht abgehakt.
+    if (kind === 'release') {
+      const names = ctx.sqlite
+        .prepare(
+          `SELECT s.name FROM release_stage s WHERE s.release_id = (
+             SELECT id FROM "release" WHERE project_id = ? AND id <> ?
+              ORDER BY sort_order DESC LIMIT 1
+           ) ORDER BY s.sort_order`,
+        )
+        .all(values['projectId'], id) as { name: string }[];
+      for (const { name } of names) create(ctx, 'stage', { releaseId: id, name });
     }
 
     return read(ctx, kind, id);
@@ -449,6 +524,32 @@ export function patch(
     if (current['version'] !== version) throw new Conflict(read(ctx, kind, id));
 
     const { tags, deps, ...fields } = changes;
+
+    if (kind === 'milestone') {
+      const projectId = (fields['projectId'] as string | undefined) ?? (current['project_id'] as string);
+      if (typeof fields['releaseId'] === 'string') {
+        // Ein Release sammelt nur Milestones seines eigenen Projekts.
+        const release = readRow(ctx, 'release', fields['releaseId']);
+        if (!release) throw new Error('Dieses Release gibt es nicht mehr');
+        if (release['project_id'] !== projectId) {
+          throw new Error('Das Release gehört zu einem anderen Projekt');
+        }
+      } else if (projectId !== current['project_id'] && fields['releaseId'] === undefined) {
+        // Beim Projektwechsel bleibt das Release zurück.
+        fields['releaseId'] = null;
+      }
+    }
+
+    // Ein neuer Eintrag fürs Changelog reiht sich in der Liste hinten ein – außer der Platz kommt mit.
+    if (
+      kind === 'task' &&
+      typeof fields['changelog'] === 'string' &&
+      fields['changelog'].trim() &&
+      !String(current['changelog'] ?? '').trim() &&
+      fields['changelogOrder'] === undefined
+    ) {
+      fields['changelogOrder'] = nextChangelogOrder(ctx, String(current['project_id']));
+    }
 
     // Wer ins Spiel kommt, reiht sich auf dem Tisch hinten ein – außer der Platz kommt mit.
     if (
@@ -495,15 +596,6 @@ export function patch(
       }
     }
 
-    // Je Projekt ist höchstens ein Milestone „In Progress“ – er ist der aktive auf dem Tisch.
-    if (
-      kind === 'milestone' &&
-      ((fields['status'] === 'progress' && current['status'] !== 'progress') ||
-        (typeof fields['projectId'] === 'string' && fields['projectId'] !== current['project_id']))
-    ) {
-      assertSingleActive(ctx, id);
-    }
-
     // „Erledigt“ führt den Zeitpunkt mit, damit Burnup und Archiv ihn haben.
     if (kind === 'task' && typeof fields['status'] === 'string') {
       const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
@@ -515,6 +607,25 @@ export function patch(
   })();
 }
 
+/**
+ * Der nächste freie Platz im Changelog – hinter allen Einträgen und
+ * Überschriften des Projekts. Je Projekt statt je Release: so bleibt ein
+ * Eintrag hinten, auch wenn sein Milestone das Release wechselt.
+ */
+const nextChangelogOrder = (ctx: DbCtx, projectId: string): number =>
+  (
+    ctx.sqlite
+      .prepare(
+        `SELECT COALESCE(MAX(n), 0) + 1 AS n FROM (
+           SELECT MAX(changelog_order) AS n FROM task WHERE project_id = ?
+           UNION ALL
+           SELECT MAX(h.sort_order) FROM release_heading h JOIN "release" r ON r.id = h.release_id
+            WHERE r.project_id = ?
+         )`,
+      )
+      .get(projectId, projectId) as { n: number }
+  ).n;
+
 /** Der nächste freie Platz in „Im Spiel“ – hinter allem, was im Projekt je dort lag. */
 const nextPlayOrder = (ctx: DbCtx, projectId: string): number =>
   (
@@ -522,24 +633,6 @@ const nextPlayOrder = (ctx: DbCtx, projectId: string): number =>
       .prepare('SELECT COALESCE(MAX(play_order), 0) + 1 AS n FROM task WHERE project_id = ?')
       .get(projectId) as { n: number }
   ).n;
-
-/**
- * Wirft, wenn neben diesem Milestone schon ein anderer im Projekt „In Progress“
- * ist. Läuft in der Transaktion der Änderung – die fällt dann ganz zurück.
- */
-function assertSingleActive(ctx: DbCtx, id: string): void {
-  const row = readRow(ctx, 'milestone', id);
-  if (!row || row['status'] !== 'progress' || row['archived_at']) return;
-  const other = ctx.sqlite
-    .prepare(
-      `SELECT title FROM milestone
-         WHERE project_id = ? AND id <> ? AND status = 'progress' AND archived_at IS NULL LIMIT 1`,
-    )
-    .get(row['project_id'], id) as { title: string } | undefined;
-  if (other) {
-    throw new Error(`In diesem Projekt ist schon „${other.title || 'Ohne Titel'}“ In Progress`);
-  }
-}
 
 /**
  * Zieht den Status der Eltern-Aufgaben nach, nachdem sich der von `childId`
@@ -1047,7 +1140,11 @@ function stampVersions(ctx: DbCtx, steps: Step[]): Step[] {
  * Spalten, die die Kopie nicht erbt: Kennung, Verweis-Nummer (vergibt der
  * Trigger neu), Titel, Zeitstempel, Version.
  */
-const FRESH_ON_COPY = new Set(['id', 'ref', 'parent_id', 'title', 'created_at', 'updated_at', 'version']);
+const FRESH_ON_COPY = new Set([
+  'id', 'ref', 'parent_id', 'title', 'created_at', 'updated_at', 'version',
+  // Der Eintrag im Changelog gehört zum Original – in der Kopie stünde er doppelt.
+  'changelog', 'changelog_skip', 'changelog_order',
+]);
 
 const milestoneRoots = (ctx: DbCtx, milestoneId: string): string[] =>
   (
@@ -1261,6 +1358,8 @@ function patchBack(
   const back = Object.fromEntries(Object.keys(changes).map((k) => [k, before[k]]));
   // Mit dem Status kommt auch der Platz im Spiel zurück – sonst läge die Karte danach hinten.
   if (kind === 'task' && 'status' in changes) back['playOrder'] = before['playOrder'];
+  // Der Projektwechsel löst den Milestone aus seinem Release – zurück gehört er wieder hinein.
+  if (kind === 'milestone' && 'projectId' in changes) back['releaseId'] = before['releaseId'];
   patch(ctx, kind, id, version, changes);
   return { op: 'patch', kind, id, version: versionOf(ctx, kind, id), changes: back };
 }
@@ -1334,7 +1433,9 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
         ? detachRoots(ctx, 'milestone_id', id)
         : kind === 'group'
           ? detachRoots(ctx, 'group_id', id)
-          : [];
+          : kind === 'release'
+            ? detachMilestones(ctx, id)
+            : [];
 
     const taskIds =
       kind === 'task'
@@ -1353,6 +1454,11 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
     const marks = owned('mark');
     const groups = owned('"group"');
     const milestones = owned('milestone');
+    // Die Kanäle gehen mit ihrem Release – beim Projekt die aller seiner Releases.
+    const releases = owned('"release"');
+    const releaseIds = [...releases.map((r) => r['id'] as string), ...(kind === 'release' ? [id] : [])];
+    const stages = releaseIds.length ? rowsFor(ctx, 'release_stage', 'release_id', releaseIds) : [];
+    const headings = releaseIds.length ? rowsFor(ctx, 'release_heading', 'release_id', releaseIds) : [];
     // Dazu der Milestone selbst: Protokoll und Zeichnungen gehen mit ihm und kommen mit ihm zurück.
     const milestoneIds = [...milestones.map((m) => m['id'] as string), ...(kind === 'milestone' ? [id] : [])];
 
@@ -1360,11 +1466,14 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
       kind,
       row,
       where,
-      /** Die gelösten Wurzelaufgaben – beim Wiederherstellen kehren sie zurück. */
+      /** Die gelösten Wurzelaufgaben (beim Release: Milestones) – beim Wiederherstellen kehren sie zurück. */
       moved: detached,
       categories,
       marks,
       groups,
+      releases,
+      stages,
+      headings,
       milestones,
       milestoneLog: milestoneIds.length ? rowsFor(ctx, 'milestone_log', 'milestone_id', milestoneIds) : [],
       tasks: taskIds.length ? rowsIn(ctx, 'task', taskIds) : [],
@@ -1385,7 +1494,9 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
       .run(
         trashId,
         kind === 'category' || kind === 'mark' ? 'task' : kind,
-        String(row['title'] ?? row['name'] ?? ''),
+        kind === 'release'
+          ? [row['name'], row['title']].filter(Boolean).join(' · ')
+          : String(row['title'] ?? row['name'] ?? ''),
         (row['project_id'] as string | null) ?? null,
         JSON.stringify(payload),
         nowIso(),
@@ -1477,6 +1588,10 @@ type TrashPayload = {
   categories?: Record<string, unknown>[];
   marks?: Record<string, unknown>[];
   groups?: Record<string, unknown>[];
+  /** Bei einem Projekt seine Releases; die Kanäle auch bei einem einzelnen Release. */
+  releases?: Record<string, unknown>[];
+  stages?: Record<string, unknown>[];
+  headings?: Record<string, unknown>[];
   milestones?: Record<string, unknown>[];
   milestoneLog?: Record<string, unknown>[];
   tasks: Record<string, unknown>[];
@@ -1536,6 +1651,11 @@ export function restoreTrash(
         }
       }
     }
+    // Dasselbe für das Release eines Milestones – der Milestone kommt dann ohne zurück.
+    if (p.kind === 'milestone' && !exists('"release"', p.row['release_id'])) p.row['release_id'] = null;
+    if ((p.kind === 'stage' || p.kind === 'heading') && !exists('"release"', p.row['release_id'])) {
+      throw new Error('Das Release dazu liegt im Papierkorb – stell zuerst das Release wieder her');
+    }
     insertRows(ctx, p.kind === 'drawing' ? 'drawing' : TABLE[p.kind], [p.row]);
     // Aus dem Papierkorb geholt reiht sich ein Milestone hinten ein (Prototyp:
     // `qorder = order = 1e6`); „Rückgängig“ stellt dagegen den alten Platz her.
@@ -1544,6 +1664,9 @@ export function restoreTrash(
     insertRows(ctx, 'category', p.categories ?? []);
     insertRows(ctx, 'mark', p.marks ?? []);
     insertRows(ctx, '"group"', p.groups ?? []);
+    insertRows(ctx, '"release"', p.releases ?? []);
+    insertRows(ctx, 'release_stage', p.stages ?? []);
+    insertRows(ctx, 'release_heading', p.headings ?? []);
     insertRows(ctx, 'milestone', p.milestones ?? []);
     insertRows(ctx, 'milestone_log', p.milestoneLog ?? []);
     insertRows(ctx, 'task', parentsFirst(p.tasks));
@@ -1570,6 +1693,16 @@ export function restoreTrash(
               AND parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL`,
         )
         .run(p.row['id'], nowIso(), JSON.stringify(p.moved));
+    }
+
+    // Die Milestones des Releases ebenso – sofern sie inzwischen in keinem anderen stecken.
+    if (p.kind === 'release' && p.moved?.length) {
+      ctx.sqlite
+        .prepare(
+          `UPDATE milestone SET release_id = ?, updated_at = ?, version = version + 1
+            WHERE id IN (SELECT value FROM json_each(?)) AND release_id IS NULL AND project_id = ?`,
+        )
+        .run(p.row['id'], nowIso(), JSON.stringify(p.moved), pid);
     }
 
     ctx.sqlite.prepare('DELETE FROM trash WHERE id = ?').run(trashId);
@@ -1746,6 +1879,12 @@ function read(ctx: DbCtx, kind: Kind, id: string): unknown {
       return toMark(row as unknown as MarkRow);
     case 'group':
       return toGroup(row as unknown as GroupRow);
+    case 'release':
+      return toRelease(row as unknown as ReleaseRow);
+    case 'stage':
+      return toStage(row as unknown as StageRow);
+    case 'heading':
+      return toHeading(row as unknown as HeadingRow);
     case 'milestone':
       return toMilestone(row as unknown as MilestoneRow, depsOf(ctx, 'milestone', id));
     case 'task':
@@ -1799,6 +1938,22 @@ function detachRoots(ctx: DbCtx, column: 'milestone_id' | 'group_id', id: string
   return roots;
 }
 
+/**
+ * Löst die Milestones von ihrem Release: wie Aufgaben bei einem Milestone
+ * bleiben sie bestehen. Gibt die gelösten IDs zurück.
+ */
+function detachMilestones(ctx: DbCtx, releaseId: string): string[] {
+  const ids = (
+    ctx.sqlite.prepare('SELECT id FROM milestone WHERE release_id = ?').all(releaseId) as { id: string }[]
+  ).map((r) => r.id);
+  if (ids.length) {
+    ctx.sqlite
+      .prepare('UPDATE milestone SET release_id = NULL, updated_at = ?, version = version + 1 WHERE release_id = ?')
+      .run(nowIso(), releaseId);
+  }
+  return ids;
+}
+
 const projectTaskIds = (ctx: DbCtx, id: string): string[] =>
   (ctx.sqlite.prepare('SELECT id FROM task WHERE project_id = ?').all(id) as { id: string }[]).map(
     (r) => r.id,
@@ -1845,6 +2000,11 @@ function targetProject(ctx: DbCtx, t: MoveTarget): string | null {
 const PROJECT_COLORS = ['#7A4FA0', '#B04A6A', '#3E8A8A', '#6B7A2A', '#4A5BB0'];
 
 function nextOrder(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): number {
+  if (kind === 'heading') {
+    const release = readRow(ctx, 'release', String(input['releaseId']));
+    if (!release) throw new NotFound();
+    return nextChangelogOrder(ctx, String(release['project_id']));
+  }
   if (kind === 'project') {
     return (
       (ctx.sqlite.prepare('SELECT coalesce(max(sort_order), -1) AS m FROM project').get() as {
@@ -1866,7 +2026,12 @@ function nextOrder(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): numb
         ? [kind, 'project_id = ?', input['projectId']]
         : kind === 'group'
           ? ['"group"', 'project_id = ?', input['projectId']]
-          : ['milestone', 'project_id = ?', input['projectId']];
+          : kind === 'release'
+            ? ['"release"', 'project_id = ?', input['projectId']]
+            : kind === 'stage'
+              ? ['release_stage', 'release_id = ?', input['releaseId']]
+              // `heading` ist oben schon abgehandelt.
+              : ['milestone', 'project_id = ?', input['projectId']];
 
   const row = ctx.sqlite
     .prepare(`SELECT coalesce(max(sort_order), -1) AS m FROM ${table} WHERE ${where}`)
@@ -1950,8 +2115,16 @@ type MarkRow = {
   cover_image_id: string | null;
 };
 type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number };
+type ReleaseRow = {
+  id: string; version: number; project_id: string; name: string; title: string; desc: string;
+  sort_order: number; archived_at: string | null;
+};
+type StageRow = {
+  id: string; version: number; release_id: string; name: string; sort_order: number; done_at: string | null;
+};
+type HeadingRow = { id: string; version: number; release_id: string; title: string; sort_order: number };
 type MilestoneRow = {
-  id: string; ref: number; version: number; project_id: string; title: string; desc: string; planned: number; status: string;
+  id: string; ref: number; version: number; project_id: string; release_id: string | null; title: string; desc: string; planned: number; status: string;
   sort_order: number; queue_order: number; start_date: string | null; end_date: string | null;
   end_auto: number; archived_at: string | null;
 };
@@ -1960,7 +2133,7 @@ type TaskRow = {
   group_id: string | null; doc: number; title: string; desc: string; prio: number; status: string;
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
   ready: number; archived_at: string | null; hidden_by: string | null; cover_image_id: string | null;
-  play_order: number;
+  play_order: number; changelog: string; changelog_skip: number; changelog_order: number;
 };
 
 const toProject = (r: ProjectRow): Project => ({
@@ -1982,11 +2155,26 @@ const toGroup = (r: GroupRow): Group => ({
   id: r.id, version: r.version, projectId: r.project_id, title: r.title, order: r.sort_order,
 });
 
+const toRelease = (r: ReleaseRow): Release => ({
+  id: r.id, version: r.version, projectId: r.project_id, name: r.name, title: r.title, desc: r.desc,
+  order: r.sort_order, archivedAt: r.archived_at,
+});
+
+const toStage = (r: StageRow): ReleaseStage => ({
+  id: r.id, version: r.version, releaseId: r.release_id, name: r.name, order: r.sort_order,
+  doneAt: r.done_at,
+});
+
+const toHeading = (r: HeadingRow): ReleaseHeading => ({
+  id: r.id, version: r.version, releaseId: r.release_id, title: r.title, order: r.sort_order,
+});
+
 const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
   id: r.id,
   ref: r.ref,
   version: r.version,
   projectId: r.project_id,
+  releaseId: r.release_id ?? null,
   title: r.title,
   desc: r.desc,
   planned: !!r.planned,
@@ -2020,6 +2208,9 @@ const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   ready: !!r.ready,
   coverImageId: r.cover_image_id ?? null,
   playOrder: r.play_order ?? 0,
+  changelog: r.changelog ?? '',
+  changelogSkip: !!r.changelog_skip,
+  changelogOrder: r.changelog_order ?? 0,
   archivedAt: r.archived_at,
   tags,
   deps,

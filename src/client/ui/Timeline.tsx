@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { releaseGroups, releaseLabel, type ReleaseGroup } from '@shared/release.js';
 import { dateFromWeeks, isoWeek, schedule, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
@@ -14,6 +15,11 @@ type Segment = { cls: string; from: number; to: number; title: string };
  * Gerechnet wird immer über alle Projekte – du arbeitest allein, also liegen
  * die Milestones hintereinander. Der Projektfilter wählt nur aus, welche
  * Zeilen davon sichtbar sind.
+ *
+ * Gehört ein Milestone zu einem Release, stehen die Zeilen nach Release
+ * gruppiert: über jeder Gruppe ein Band über ihren ganzen Zeitraum, mit einer
+ * Marke am Ende – dann ist das Release fertig. Was zu keinem gehört, steht je
+ * Projekt darunter. Ohne Releases sieht der Zeitplan aus wie im Prototyp.
  */
 export function Timeline({ ws }: { ws: Workspace }) {
   const state = useStore();
@@ -24,6 +30,8 @@ export function Timeline({ ws }: { ws: Workspace }) {
   const list = all.filter((x) => ids.has(x.milestone.projectId));
 
   if (!list.length) return <div className="empty-state">Keine Milestones im Plan.</div>;
+  const groups = releaseGroups(ws, list);
+  const grouped = groups.some((g) => g.release);
 
   // Die Achse umfasst alles, was Platz braucht – auch Vergangenes und auch
   // Milestones aus anderen Projekten, damit die Balken vergleichbar bleiben.
@@ -49,6 +57,13 @@ export function Timeline({ ws }: { ws: Workspace }) {
         er dort – so steuerst du den Zeitplan; der blassere Teil des Balkens ist die bereits
         vergangene Zeit, die Restarbeit wird ab heute gerechnet. Die Dauer ergibt sich aus den
         offenen Aufgaben und deinem Tempo. Vorbereitete Milestones im Backlog zählen nicht mit.
+        {grouped && (
+          <>
+            {' '}
+            Milestones eines <b>Releases</b> stehen zusammen; die Marke ✦ am Ende des Bandes zeigt,
+            wann sein letzter Milestone fertig ist.
+          </>
+        )}
       </p>
 
       <div className="tl-axis">
@@ -63,19 +78,93 @@ export function Timeline({ ws }: { ws: Workspace }) {
         </div>
       </div>
 
-      {list.map((x) => (
-        <Row
-          key={x.milestone.id}
-          ws={ws}
-          x={x}
-          velocity={velocity}
-          span={span}
-          pos={pos}
-          showProject={scope === 'all'}
-          showToday={minW < 0}
-          onSelect={() => select(x.milestone.id)}
-        />
+      {groups.map((g) => (
+        <div key={`${g.projectId}:${g.release?.id ?? ''}`} className={grouped ? 'tl-group' : undefined}>
+          {grouped && (
+            <GroupHead
+              ws={ws}
+              g={g}
+              span={span}
+              pos={pos}
+              showProject={scope === 'all'}
+              showToday={minW < 0}
+              onOpen={() => state.setView('releases')}
+            />
+          )}
+          {g.rows.map((x) => (
+            <Row
+              key={x.milestone.id}
+              ws={ws}
+              x={x}
+              velocity={velocity}
+              span={span}
+              pos={pos}
+              showProject={scope === 'all' && !grouped}
+              showToday={minW < 0}
+              onSelect={() => select(x.milestone.id)}
+            />
+          ))}
+        </div>
       ))}
+    </div>
+  );
+}
+
+/** Die Kopfzeile einer Gruppe: das Release mit seinem Band – oder „Ohne Release“. */
+function GroupHead({
+  ws,
+  g,
+  span,
+  pos,
+  showProject,
+  showToday,
+  onOpen,
+}: {
+  ws: Workspace;
+  g: ReleaseGroup;
+  span: number;
+  pos: (w: number) => number;
+  showProject: boolean;
+  showToday: boolean;
+  onOpen: () => void;
+}) {
+  const project = ws.project(g.projectId);
+  const prefix = showProject ? `${project?.name ?? ''} · ` : '';
+  if (!g.release) {
+    return (
+      <div className="tl-row tl-grouphead loose">
+        <div className="tl-name">{prefix}Ohne Release</div>
+      </div>
+    );
+  }
+  const from = Math.max(g.start, 0);
+  return (
+    <div className="tl-row tl-grouphead">
+      <div className="tl-name">
+        <span className="ico rel" aria-hidden="true">
+          ✦
+        </span>
+        <button className="linkish" onClick={onOpen} title="Zu den Releases">
+          {prefix}
+          {releaseLabel(g.release)}
+        </button>
+      </div>
+      <div className="tl-dates">{g.done ? '✓ fertig' : `fertig ${day(dateFromWeeks(g.end))}`}</div>
+      <div className="tl-track" style={{ '--wk': `${100 / span}%` } as CSSProperties}>
+        {showToday && <span className="tl-today" style={{ left: `${pos(0)}%` }} title="Heute" />}
+        {!g.done && g.end > from && (
+          <>
+            <i
+              className="tl-band"
+              style={{ left: `${pos(from)}%`, width: `${pos(g.end) - pos(from)}%` }}
+              title={`${g.rows.length} ${g.rows.length === 1 ? 'Milestone' : 'Milestones'} bis ${day(dateFromWeeks(g.end))}`}
+            />
+            <span className="tl-mark" style={{ left: `${pos(g.end)}%` }} title={`Release fertig ${day(dateFromWeeks(g.end))}`}>
+              ✦
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }

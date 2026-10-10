@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import type { Step } from '@shared/api.js';
 import { blockers, isBlocked } from '@shared/blocking.js';
@@ -7,7 +7,7 @@ import { plannedMilestones } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule } from '@shared/schedule.js';
 import {
-  activeMilestone,
+  activeMilestones,
   doneRefusal,
   doneShelf,
   type DoneShelf,
@@ -28,9 +28,11 @@ import { burst, float, glide, land, pop, reduced, refuse, shake, thump, unlock, 
 import './tisch.css';
 
 /**
- * Der Tisch (Wunsch des Nutzers): der aktive Milestone des Projekts als
+ * Der Tisch (Wunsch des Nutzers): die aktiven Milestones des Projekts als
  * Kartenspiel, von oben nach unten – was noch kommt, oben, was man gerade in der
- * Hand hat, unten:
+ * Hand hat, unten. Sind mehrere aktiv, liegen ihre Karten gemeinsam da; jede
+ * trägt dann die Farbe und den Namen ihres Milestones (`MsTag`), und im Kopf
+ * lässt sich der Tisch auf einen einschränken.
  *
  * - **Gesperrt:** Karten mit offenen Voraussetzungen, angekettet.
  * - **Offen:** die große Fläche in der Mitte, dazu alle Stapel.
@@ -78,6 +80,31 @@ function writeOpen(open: Record<string, boolean>): void {
  * in der ganzen App der offene Inspektor.
  */
 const useFocus = create<{ id: string | null }>(() => ({ id: null }));
+
+/* ------------------------------------------------------ Herkunft der Karten */
+
+/** Farbtöne für die Milestones auf dem Tisch, in der Reihenfolge des Plans. */
+const MS_HUES = [162, 265, 28, 330, 205, 95];
+const msHue = (i: number): number => MS_HUES[i % MS_HUES.length] as number;
+
+/**
+ * Je Milestone auf dem Tisch seine Farbe – nur gefüllt, wenn mehrere aktiv
+ * sind. Bei einem einzigen sieht der Tisch aus wie immer.
+ */
+const MsCtx = createContext<Map<string, number>>(new Map());
+
+/** Der Streifen an einer Karte: von welchem Milestone sie kommt. */
+function MsTag({ ws, task }: { ws: Workspace; task: Task }) {
+  const hues = useContext(MsCtx);
+  const m = hues.size ? ws.milestoneOf(task) : null;
+  const hue = m ? hues.get(m.id) : undefined;
+  if (!m || hue === undefined) return null;
+  return (
+    <span className="tms" style={{ '--ms-h': hue } as React.CSSProperties} title={`Milestone: ${m.title || 'Ohne Titel'}`}>
+      {m.title || 'Ohne Titel'}
+    </span>
+  );
+}
 
 /* ------------------------------------------------------ Laufendes Ablegen */
 
@@ -139,23 +166,34 @@ export function Tisch({ ws }: { ws: Workspace }) {
       <div className="tisch tisch-empty">
         <EmptyTable />
         <p className="tisch-empty-title">Der Tisch gehört zu einem Projekt</p>
-        <p className="muted">Wähl links ein Projekt aus – dann liegt hier sein aktiver Milestone.</p>
+        <p className="muted">Wähl links ein Projekt aus – dann liegen hier seine aktiven Milestones.</p>
       </div>
     );
   }
 
-  const m = activeMilestone(ws, scope);
-  if (!m) return <NoActive ws={ws} projectId={scope} />;
+  const ms = activeMilestones(ws, scope);
+  if (!ms.length) return <NoActive ws={ws} projectId={scope} />;
   return (
     <>
-      <Table ws={ws} m={m} menu={menu} />
+      <Table ws={ws} all={ms} menu={menu} />
       {menu.node}
     </>
   );
 }
 
-function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
-  const layout = tischLayout(ws, m);
+function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu }) {
+  // Bei mehreren aktiven Milestones lässt sich der Tisch im Kopf auf einen einschränken.
+  const [only, setOnly] = useState<string | null>(null);
+  const ms = all.filter((x) => x.id === only);
+  const shown = ms.length ? ms : all;
+  const shownKey = shown.map((x) => x.id).join(',');
+  const hues = useMemo(
+    () => new Map(all.length > 1 ? all.map((x, i): [string, number] => [x.id, msHue(i)]) : []),
+    // Die Farbe hängt am Platz im Plan – nicht daran, ob sich sonst etwas geändert hat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all.map((x) => x.id).join(',')],
+  );
+  const layout = tischLayout(ws, shown);
   const [open, setOpen] = useState(readOpen);
   const root = useRef<HTMLDivElement>(null);
   const pileRef = useRef<HTMLDivElement>(null);
@@ -168,7 +206,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   // Die Ablage: der aufgedeckte Erledigt-Stapel, je Woche. Das Wochenziel ist
   // das Tempo aus den Einstellungen (Aufgaben pro Woche).
   const goal = useStore((s) => s.settings.velocity);
-  const done = doneShelf(ws, m);
+  const done = doneShelf(ws, shown);
   const [shelf, setShelf] = useState(false);
   const shelfOpen = shelf && done.weeks.length > 0;
   // Beim Schließen werden die Karten erst wieder eingesammelt (Wunsch des
@@ -195,16 +233,16 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   const weekRef = useRef<HTMLSpanElement>(null);
 
   // Mit der Karte, die das Wochenziel voll macht, fliegen die Funken – nicht
-  // beim Öffnen des Tisches und nicht beim Wechsel des Milestones.
+  // beim Öffnen des Tisches und nicht beim Wechsel der Milestones.
   const reached = done.thisWeek >= goal;
-  const was = useRef({ id: m.id, reached });
+  const was = useRef({ id: shownKey, reached });
   useEffect(() => {
-    if (reached && !was.current.reached && was.current.id === m.id && pileRef.current) {
+    if (reached && !was.current.reached && was.current.id === shownKey && pileRef.current) {
       burst(pileRef.current);
       float(weekRef.current ?? pileRef.current, '★ Wochenziel');
     }
-    was.current = { id: m.id, reached };
-  }, [reached, m.id]);
+    was.current = { id: shownKey, reached };
+  }, [reached, shownKey]);
 
   const toggle = (id: string, value?: boolean): void => {
     setOpen((cur) => {
@@ -231,7 +269,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   useTischKeys(root, ws);
 
   const drop = (zone: DropZone) => (e: React.DragEvent, at: number | null) =>
-    void onDrop(zone, e, root.current, reveal, m, at);
+    void onDrop(zone, e, root.current, reveal, shown, at);
 
   // „Offen“ sortiert nur um, was dort schon liegt. Im Spiel bekommt auch eine
   // Karte ihren Platz, die gerade erst hineinkommt – nur nicht, was gar nicht
@@ -253,8 +291,19 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
   const empty = !layout.locked.length && !layout.open.length && !layout.play.length && !layout.pile.length;
 
   return (
+    <MsCtx.Provider value={hues}>
     <div className="tisch" ref={root}>
-      <Head ws={ws} m={m} />
+      {all.map((x) => (
+        <Head
+          key={x.id}
+          ws={ws}
+          m={x}
+          hue={hues.get(x.id)}
+          only={only === x.id}
+          dimmed={ms.length > 0 && only !== x.id}
+          onOnly={() => setOnly((cur) => (cur === x.id ? null : x.id))}
+        />
+      ))}
 
       {/* Gesperrt und Offen in einem Rahmen – darüber legt sich die Ablage. */}
       <div className={`tisch-top ${shelfOpen ? 'shelf-open' : ''}`}>
@@ -283,7 +332,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
           {!layout.open.length && (
             <p className="tzone-hint muted">
               {empty
-                ? 'Noch keine Karten – leg im Plan Tasks in diesen Milestone.'
+                ? 'Noch keine Karten – leg im Plan Tasks in einen aktiven Milestone.'
                 : 'Alles ausgespielt. Zieh eine Karte hierher, um sie zurückzulegen.'}
             </p>
           )}
@@ -354,6 +403,7 @@ function Table({ ws, m, menu }: { ws: Workspace; m: Milestone; menu: Menu }) {
         </DropArea>
       </div>
     </div>
+    </MsCtx.Provider>
   );
 }
 
@@ -460,7 +510,7 @@ function Shelf({
       <header className="tshelf-head">
         <h2>✓ Erledigt</h2>
         <span className="muted">
-          {total} {total === 1 ? 'Karte' : 'Karten'} in diesem Milestone
+          {total} {total === 1 ? 'Karte' : 'Karten'} auf diesem Tisch
         </span>
         {shelf.streak >= 2 && (
           <span className="tbadge" title="Wochen in Folge mit mindestens einer erledigten Karte">
@@ -571,14 +621,34 @@ function ShelfCard({
 
 /* --------------------------------------------------------------- Kopf */
 
-function Head({ ws, m }: { ws: Workspace; m: Milestone }) {
+function Head({
+  ws,
+  m,
+  hue,
+  only,
+  dimmed,
+  onOnly,
+}: {
+  ws: Workspace;
+  m: Milestone;
+  /** Die Farbe des Milestones – nur wenn mehrere auf dem Tisch liegen. */
+  hue: number | undefined;
+  /** Der Tisch zeigt gerade nur diesen. */
+  only: boolean;
+  /** Der Tisch zeigt gerade nur einen anderen. */
+  dimmed: boolean;
+  onOnly: () => void;
+}) {
   const velocity = useStore((s) => s.settings.velocity);
   const selected = useStore((s) => s.selected);
   const stats = milestoneStats(ws, m);
   const pct = milestoneProgressPct(ws, m);
   const when = dueText(ws, m, velocity);
   return (
-    <header className="tisch-head">
+    <header
+      className={`tisch-head ${hue === undefined ? '' : 'multi'} ${dimmed ? 'dimmed' : ''}`}
+      style={hue === undefined ? undefined : ({ '--ms-h': hue } as React.CSSProperties)}
+    >
       <button
         className={`tisch-ms ${selected === m.id ? 'sel' : ''}`}
         onClick={() => useStore.getState().select(m.id)}
@@ -600,6 +670,16 @@ function Head({ ws, m }: { ws: Workspace; m: Milestone }) {
         {stats.done}/{stats.total}
       </span>
       {when && <span className={`tisch-due ${when.late ? 'late' : ''}`}>{when.text}</span>}
+      {hue !== undefined && (
+        <button
+          className="tisch-only"
+          aria-pressed={only}
+          title={only ? 'Wieder alle aktiven Milestones zeigen' : 'Nur die Karten dieses Milestones zeigen'}
+          onClick={onOnly}
+        >
+          {only ? 'Alle zeigen' : 'Nur dieser'}
+        </button>
+      )}
     </header>
   );
 }
@@ -697,6 +777,8 @@ function TischCard({
       data-tkey={`${where}:${task.id}`}
       data-zone={where}
     >
+      {/* In der Schublade steht die Herkunft schon am Stapel. */}
+      {where !== 'drawer' && <MsTag ws={ws} task={task} />}
       <div
         className={[
           'tcard',
@@ -993,9 +1075,9 @@ function DropArea({
 /** Was das Ablegen zwischen zwei Karten tut – `same`: die Karte liegt dort schon. */
 type Sort = (() => Promise<void>) | 'same';
 
-function sortAt(ws: Workspace, m: Milestone, zone: DropZone, tasks: Task[], at: number): Sort | null {
+function sortAt(ws: Workspace, ms: Milestone[], zone: DropZone, tasks: Task[], at: number): Sort | null {
   const store = useStore.getState();
-  const layout = tischLayout(ws, m);
+  const layout = tischLayout(ws, ms);
   const dragged = new Set(tasks.map((t) => t.id));
   const sameOrder = (a: Task[], b: Task[]): boolean => a.length === b.length && a.every((t, i) => t.id === b[i]?.id);
 
@@ -1014,12 +1096,17 @@ function sortAt(ws: Workspace, m: Milestone, zone: DropZone, tasks: Task[], at: 
   }
 
   if (zone === 'open') {
+    // Sortiert wird innerhalb eines Milestones: liegen mehrere auf dem Tisch,
+    // zählen nur die Karten des eigenen – in einen anderen wandert hier nichts.
+    const m = ws.milestone((tasks[0] as Task).milestoneId);
+    if (!m || tasks.some((t) => t.milestoneId !== m.id)) return null;
+    const own = (t: Task): boolean => t.milestoneId === m.id;
     // „Offen“ zeigt die Wurzeln des Milestones in der Reihenfolge des Plans –
     // dazwischen liegen dort auch die gesperrten, ausgespielten und erledigten.
     const roots = ws.msRoots(m).filter((t) => !dragged.has(t.id));
     const open = layout.open.filter((t) => !dragged.has(t.id));
-    const next = open[at];
-    const last = open[open.length - 1];
+    const next = open.slice(at).find(own);
+    const last = open.filter(own).pop();
     const index = next ? roots.indexOf(next) : last ? roots.indexOf(last) + 1 : roots.length;
     const after = [...roots];
     after.splice(index, 0, ...tasks);
@@ -1038,7 +1125,7 @@ async function onDrop(
   e: React.DragEvent,
   root: HTMLElement | null,
   reveal: (t: Task) => void,
-  m: Milestone,
+  ms: Milestone[],
   /** Der Platz zwischen den Karten der Zone – `null`: einfach in die Zone. */
   at: number | null,
 ): Promise<void> {
@@ -1070,7 +1157,7 @@ async function onDrop(
         : null;
   // Zwischen zwei Karten abgelegt wird sortiert. In „Offen“ bleibt der Status
   // dabei, wie er ist – sonst machte das Umsortieren aus „Unklar“ ein „Offen“.
-  const sort = refusal || at === null ? null : sortAt(ws, m, zone, tasks, at);
+  const sort = refusal || at === null ? null : sortAt(ws, ms, zone, tasks, at);
   const changing = sort ? [] : tasks.filter((t) => t.status !== status);
 
   if (refusal || sort === 'same' || (!sort && !changing.length)) {

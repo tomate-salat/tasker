@@ -13,7 +13,17 @@ const isoDay = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss YYYY-MM-DD sein')
   .nullable();
 
-export const KINDS = ['project', 'category', 'mark', 'group', 'milestone', 'task'] as const;
+export const KINDS = [
+  'project',
+  'category',
+  'mark',
+  'group',
+  'release',
+  'stage',
+  'heading',
+  'milestone',
+  'task',
+] as const;
 export type Kind = (typeof KINDS)[number];
 export const kindSchema = z.enum(KINDS);
 
@@ -22,6 +32,12 @@ export const createSchemas = {
   category: z.object({ projectId: id, name: title }),
   mark: z.object({ projectId: id, emoji: z.string().min(1).max(8), name: title }),
   group: z.object({ projectId: id, title }),
+  // `name` ist die Versionsbezeichnung („0.4.0“). Die Kanäle bringt das neue
+  // Release vom vorherigen im Projekt mit.
+  release: z.object({ projectId: id, name: title.optional(), title: title.optional(), desc: desc.optional() }),
+  stage: z.object({ releaseId: id, name: title }),
+  // Eine Überschrift im Changelog; sie reiht sich hinten ein.
+  heading: z.object({ releaseId: id, title: title.optional() }),
   milestone: z.object({
     projectId: id,
     title,
@@ -59,12 +75,21 @@ export const patchSchemas = {
     .object({ emoji: z.string().min(1).max(8), name: title, order: z.number(), coverImageId: id.nullable() })
     .partial(),
   group: z.object({ title, order: z.number() }).partial(),
+  // Archiviert wird wie beim Kanal über den Zeitpunkt – `null` holt zurück.
+  release: z
+    .object({ name: title, title, desc, order: z.number(), archivedAt: z.iso.datetime().nullable() })
+    .partial(),
+  heading: z.object({ title, order: z.number() }).partial(),
+  // Abgehakt wird über den Zeitpunkt – `null` nimmt den Haken zurück.
+  stage: z.object({ name: title, order: z.number(), doneAt: z.iso.datetime().nullable() }).partial(),
   milestone: z
     .object({
       title,
       desc,
-      /** „In anderes Projekt“: der Milestone nimmt seine Wurzelaufgaben mit. */
+      /** „In anderes Projekt“: der Milestone nimmt seine Wurzelaufgaben mit, sein Release bleibt zurück. */
       projectId: id,
+      /** Nur ein Release aus dem eigenen Projekt. */
+      releaseId: id.nullable(),
       planned: z.boolean(),
       status: z.enum(TASK_STATUS),
       order: z.number(),
@@ -88,6 +113,11 @@ export const patchSchemas = {
       coverImageId: id.nullable(),
       /** Platz in „Im Spiel“ auf dem Tisch. */
       playOrder: z.number().int(),
+      /** Die Zeile fürs Changelog; `changelogSkip` heißt: bewusst keine. */
+      changelog: title,
+      changelogSkip: z.boolean(),
+      /** Platz in der Liste des Releases. */
+      changelogOrder: z.number(),
       doc: z.boolean(),
       tags: z.array(tag),
       deps: z.array(id),

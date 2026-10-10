@@ -76,6 +76,7 @@ function toData(d: Dump['data']): Data {
       ref: i + 1,
       version: 1,
       projectId: m['project'] as string,
+      releaseId: null,
       title: m['title'] as string,
       desc: m['desc'] as string,
       planned: m['planned'] as boolean,
@@ -88,6 +89,10 @@ function toData(d: Dump['data']): Data {
       archivedAt: (m['archived'] as string | null) ?? null,
       deps: m['deps'] as string[],
     })),
+    // Releases kennt der Prototyp nicht.
+    releases: [],
+    stages: [],
+    headings: [],
     tasks: d.tasks.map((t, i) => ({
       id: t['id'] as string,
       ref: d.milestones.length + i + 1,
@@ -112,6 +117,9 @@ function toData(d: Dump['data']): Data {
       ready: String(t['group'] ?? '').startsWith('k:'),
       coverImageId: null,
       playOrder: 0,
+      changelog: '',
+      changelogSkip: false,
+      changelogOrder: 0,
       archivedAt: (t['archived'] as string | null) ?? null,
       tags: t['tags'] as string[],
       deps: t['deps'] as string[],

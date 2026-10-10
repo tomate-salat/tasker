@@ -10,6 +10,10 @@
  * Unteraufgaben bzw. die Tasks der obersten Ebene stehen immer da, auch ohne
  * Pfeile. Was nur daneben hängt, fehlt.
  *
+ * Auch Releases sind Knoten: ein Pfeil von einem Milestone zu einem Release
+ * heißt „das Release benötigt den Milestone“ und ist zugleich die Zuordnung
+ * (`releaseId` am Milestone). Seine Kanäle hakt man im Knoten ab.
+ *
  * Die Pfeile sind die `deps` selbst – ein Pfeil von A nach B heißt „B benötigt
  * A“. Gespeichert wird zusätzlich, wo die Knoten liegen und wie die Pfeile aus
  * „Neu anordnen“ verlaufen (`graphElk.ts`) – je Ausgangspunkt. Wird ein Knoten
@@ -42,12 +46,13 @@ import {
   type NodeProps,
   type OnBeforeDelete,
 } from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { dependsOn } from '@shared/blocking.js';
 import { dependencyScope, type Pos } from '@shared/graphLayout.js';
-import { isArchived, isDone, type Milestone, type Task } from '@shared/model.js';
+import { isArchived, isDone, type Milestone, type Release, type Task } from '@shared/model.js';
 import { draftMilestones, plannedMilestones } from '@shared/outline.js';
 import { milestoneDone, milestoneProgressPct } from '@shared/progress.js';
+import { RELEASE_STATUS_LABEL, releaseLabel, releaseStatus } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { useBackClose } from '../back.js';
@@ -59,12 +64,27 @@ import { Inspector } from './Inspector.js';
 import { useMenu, type MenuItem } from './Menu.js';
 import { milestoneMenu, taskMenu } from './rowMenu.js';
 
-type Item = Task | Milestone;
+type Item = Task | Milestone | Release;
 type ItemNode = Node<{ item: Item; sub: string; done: boolean; focus: boolean }, 'item'>;
 type RoutedEdge = Edge<{ route?: Pos[] }, 'routed'>;
+/** `member`: kein `deps`-Eintrag, sondern die Zuordnung eines Milestones zu seinem Release. */
+type Link = { source: string; target: string; member?: true };
 
 const isMs = (x: Item): x is Milestone => 'planned' in x;
-const kindOf = (x: Item): 'task' | 'milestone' => (isMs(x) ? 'milestone' : 'task');
+/** Nur Tasks und Milestones tragen eine Verweis-Nummer. */
+const isRel = (x: Item): x is Release => !('ref' in x);
+const kindOf = (x: Task | Milestone): 'task' | 'milestone' => (isMs(x) ? 'milestone' : 'task');
+const titleOf = (x: Item): string => (isRel(x) ? releaseLabel(x) : x.title || 'Ohne Titel');
+const doneOf = (ws: Workspace, x: Item): boolean =>
+  isRel(x) ? releaseStatus(ws, x) === 'released' : isMs(x) ? milestoneDone(ws, x) : isDone(x);
+/** Das Zeichen eines Releases – wie ◆ beim Milestone. */
+const REL_GLYPH = '✦';
+
+/** Welcher Release-Knoten gerade bearbeitet wird – die Knoten lesen es selbst. */
+const EditCtx = createContext<{ editing: string | null; setEditing: (id: string | null) => void }>({
+  editing: null,
+  setEditing: () => {},
+});
 /** Der Datentyp beim Ziehen aus der Liste aufs Board. */
 const DRAG_TYPE = 'application/x-tasker-graph';
 /** Größe eines Knotens – so breit wie die Karten der Kartenansicht. */
@@ -96,10 +116,16 @@ export default function DepGraph() {
 
 /**
  * Wann darf `target` auf `source` warten? Ein Milestone wartet nur auf
- * Milestones, Kreise und Doppelte gibt es nicht. Gibt den Grund zurück, wenn nicht.
+ * Milestones, Kreise und Doppelte gibt es nicht. In ein Release führen nur
+ * Milestones, heraus führt nichts. Gibt den Grund zurück, wenn nicht.
  */
 function refusal(ws: Workspace, source: Item, target: Item): string | null {
   if (source.id === target.id) return 'Ein Eintrag kann nicht auf sich selbst warten.';
+  if (isRel(source)) return 'Auf ein Release kann nichts warten.';
+  if (isRel(target)) {
+    if (!isMs(source)) return 'In ein Release gehören nur Milestones.';
+    return source.releaseId === target.id ? 'Der Milestone gehört schon zu diesem Release.' : null;
+  }
   if (isMs(target) && !isMs(source)) return 'Ein Milestone kann nur auf Milestones warten.';
   if (target.deps.includes(source.id)) return 'Diese Abhängigkeit gibt es schon.';
   if (dependsOn(ws, source, target.id)) return 'Das ergäbe einen Kreis.';
@@ -107,22 +133,29 @@ function refusal(ws: Workspace, source: Item, target: Item): string | null {
 }
 
 function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; focusId: string }) {
-  const { openGraph, patch, say, undo, select, selected } = useStore();
+  const { openGraph, patch, say, undo, select, selected, addRelease, remove } = useStore();
   const menu = useMenu();
   const flow = useReactFlow();
-  const focus = ws.task(focusId) ?? ws.milestone(focusId);
+  const focus: Item | null = ws.task(focusId) ?? ws.milestone(focusId) ?? ws.release(focusId);
+  const [editing, setEditing] = useState<string | null>(null);
+  const editCtx = useMemo(() => ({ editing, setEditing }), [editing]);
 
   // Alles Aktive des Projekts; Doku-Seiten sind keine Aufgaben.
   const items = useMemo(() => {
     const tasks = ws.tasks.filter((t) => t.projectId === projectId && ws.isActive(t) && !ws.isDoc(t));
     const milestones = ws.milestones.filter((m) => m.projectId === projectId && !isArchived(m));
-    return new Map<string, Item>([...milestones, ...tasks].map((x) => [x.id, x]));
+    const releases = ws.releases.filter((r) => r.projectId === projectId && !isArchived(r));
+    return new Map<string, Item>([...releases, ...milestones, ...tasks].map((x) => [x.id, x]));
   }, [ws, projectId]);
 
   const links = useMemo(() => {
-    const out: { source: string; target: string }[] = [];
+    const out: Link[] = [];
     for (const x of items.values()) {
+      if (isRel(x)) continue;
       for (const d of x.deps) if (items.has(d)) out.push({ source: d, target: x.id });
+      if (isMs(x) && x.releaseId && items.has(x.releaseId)) {
+        out.push({ source: x.id, target: x.releaseId, member: true });
+      }
     }
     return out;
   }, [items]);
@@ -194,12 +227,13 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
 
   // Der Ausschnitt: ein Task mit seinen direkten Unteraufgaben; ein Milestone
   // mit all seinen Tasks der obersten Ebene und den tieferen, die Abhängigkeiten
-  // haben – die direkten jeweils auch ohne Pfeile. Dazu alles, was sie
-  // benötigen und was auf sie wartet.
+  // haben – die direkten jeweils auch ohne Pfeile; ein Release mit seinen
+  // Milestones. Dazu alles, was sie benötigen und was auf sie wartet.
   const scope = useMemo(() => {
     const seeds = [focusId];
     const m = ws.milestone(focusId);
-    if (!m) seeds.push(...ws.kids(focusId).map((k) => k.id));
+    if (ws.release(focusId)) seeds.push(...ws.releaseMilestones(focusId).map((x) => x.id));
+    else if (!m) seeds.push(...ws.kids(focusId).map((k) => k.id));
     else {
       const linked = new Set(links.flatMap((l) => [l.source, l.target]));
       for (const r of ws.msRoots(m)) {
@@ -270,7 +304,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
             data: {
               item,
               sub: subtitle(ws, item),
-              done: isMs(item) ? milestoneDone(ws, item) : isDone(item),
+              done: doneOf(ws, item),
               focus: id === focusId,
             },
           };
@@ -285,8 +319,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
       const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
       return links.filter((l) => onBoard.has(l.source) && onBoard.has(l.target)).map((l): RoutedEdge => {
         const id = edgeKey(l.source, l.target);
-        const src = items.get(l.source)!;
-        const done = isMs(src) ? milestoneDone(ws, src) : isDone(src);
+        const done = doneOf(ws, items.get(l.source)!);
         return {
           id,
           type: 'routed',
@@ -294,7 +327,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
           source: l.source,
           target: l.target,
           selected: selected.has(id),
-          className: done ? 'done' : '',
+          className: [done ? 'done' : '', l.member ? 'member' : ''].filter(Boolean).join(' '),
           markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
         };
       });
@@ -344,7 +377,9 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         say(why);
         return;
       }
-      void patch(kindOf(t), t.id, { deps: [...t.deps, s.id] });
+      // Der Pfeil in ein Release ist die Zuordnung; steckte der Milestone in einem anderen, zieht er um.
+      if (isRel(t)) void patch('milestone', s.id, { releaseId: t.id });
+      else if (!isRel(s)) void patch(kindOf(t), t.id, { deps: [...t.deps, s.id] });
     },
     [items, ws, patch, say],
   );
@@ -365,7 +400,9 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
       }
       for (const [targetId, sources] of byTarget) {
         const t = items.get(targetId);
-        if (t) await patch(kindOf(t), t.id, { deps: t.deps.filter((d) => !sources.has(d)) });
+        if (!t) continue;
+        if (isRel(t)) for (const id of sources) await patch('milestone', id, { releaseId: null });
+        else await patch(kindOf(t), t.id, { deps: t.deps.filter((d) => !sources.has(d)) });
       }
 
       setAdded((prev) => {
@@ -399,7 +436,8 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     const t = items.get(target);
     if (!t) return;
     setAdded((prev) => new Set(prev).add(source).add(target));
-    void patch(kindOf(t), t.id, { deps: t.deps.filter((d) => d !== source) });
+    if (isRel(t)) void patch('milestone', source, { releaseId: null });
+    else void patch(kindOf(t), t.id, { deps: t.deps.filter((d) => d !== source) });
   };
 
   /* ----------------------------------------------------------- Inspektor */
@@ -444,6 +482,28 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     place((prev) => ({ ...prev, [id]: { x: Math.round(p.x - CARD_W / 2), y: Math.round(p.y - 30) } }));
   };
 
+  /**
+   * Legt ein Release an und öffnet es gleich zum Benennen: an der Stelle auf dem
+   * Bildschirm, sonst rechts neben allem, was schon liegt – dort, wo ein Release
+   * im Graphen hingehört, und ohne etwas zu verdecken.
+   */
+  const newRelease = async (at?: { x: number; y: number }): Promise<void> => {
+    const id = await addRelease(projectId);
+    if (!id) return;
+    const placed = boardIds.filter((x) => pos?.[x]);
+    const click = at ? flow.screenToFlowPosition(at) : null;
+    const p = click
+      ? { x: Math.round(click.x - CARD_W / 2), y: Math.round(click.y - 30) }
+      : {
+          x: placed.length ? Math.max(...placed.map((x) => pos![x]!.x + sized(x).width)) + 80 : 0,
+          y: placed.length ? Math.min(...placed.map((x) => pos![x]!.y)) : 0,
+        };
+    setAdded((prev) => new Set(prev).add(id));
+    place((prev) => ({ ...prev, [id]: p }));
+    setEditing(id);
+    if (!click) void flow.setCenter(p.x + CARD_W / 2, p.y + CARD_H / 2, { zoom: flow.getZoom(), duration: 300 });
+  };
+
   /** „Neu anordnen“: alles auf dem Board mit ELK, samt Pfeilverläufen. */
   const relayout = (): void => {
     void elkLayout(boardIds.map(sized), links)
@@ -464,6 +524,32 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   const nodeMenu = (id: string, inList = false): MenuItem[] => {
     const item = items.get(id);
     if (!item) return [];
+    if (isRel(item)) {
+      return [
+        {
+          label: 'Bearbeiten',
+          kbd: inList ? undefined : 'Doppelklick',
+          disabled: !onBoard.has(id),
+          onSelect: () => setEditing(id),
+        },
+        { label: 'Graph anzeigen', disabled: id === focusId, onSelect: () => openGraph({ projectId, focusId: id }) },
+        {
+          label: 'Vom Board nehmen',
+          disabled: scope.has(id) || !onBoard.has(id),
+          onSelect: () => takeOff([id]),
+        },
+        { sep: true },
+        {
+          label: 'Release löschen',
+          danger: true,
+          onSelect: () => {
+            // Ohne das Release, von dem aus es offen ist, zeigt das Board nichts mehr.
+            if (id === focusId) openGraph(null);
+            void remove('release', id);
+          },
+        },
+      ];
+    }
     return [
       { label: 'Details anzeigen', kbd: inList ? undefined : 'Doppelklick', onSelect: () => showDetail(id) },
       {
@@ -480,13 +566,21 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
     const s = items.get(source);
     const t = items.get(target);
     if (!s || !t) return [];
+    if (isRel(t)) {
+      return [
+        { head: `„${titleOf(s)}“ gehört zu Release „${titleOf(t)}“` },
+        { label: 'Aus dem Release nehmen', danger: true, onSelect: () => removeLink(source, target) },
+      ];
+    }
     return [
-      { head: `„${t.title || 'Ohne Titel'}“ benötigt „${s.title || 'Ohne Titel'}“` },
+      { head: `„${titleOf(t)}“ benötigt „${titleOf(s)}“` },
       { label: 'Abhängigkeit entfernen', danger: true, onSelect: () => removeLink(source, target) },
     ];
   };
 
-  const paneMenu = (): MenuItem[] => [
+  const paneMenu = (at: { x: number; y: number }): MenuItem[] => [
+    { label: 'Neues Release', onSelect: () => void newRelease(at) },
+    { sep: true },
     { label: 'Neu anordnen', disabled: !boardIds.length, onSelect: relayout },
     { label: 'Alles einpassen', onSelect: () => void flow.fitView({ duration: 300 }) },
   ];
@@ -529,14 +623,17 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         <strong className="graph-title">
           Abhängigkeiten{' '}
           <span className="muted">
-            · {focus && isMs(focus) ? '◆ ' : ''}
-            {focus?.title || 'Ohne Titel'}
+            · {focus && isMs(focus) ? '◆ ' : focus && isRel(focus) ? `${REL_GLYPH} ` : ''}
+            {focus ? titleOf(focus) : 'Ohne Titel'}
           </span>
         </strong>
         <span className="graph-help muted">
           Aus der Liste aufs Board ziehen · vom rechten Punkt zum nächsten Eintrag ziehen = „benötigt“ ·
-          Entf löscht den gewählten Pfeil · Doppelklick zeigt Details
+          Milestone → Release = gehört dazu · Entf löscht den gewählten Pfeil · Doppelklick zeigt Details
         </span>
+        <button className="btn" onClick={() => void newRelease()} title="Ein neues Release aufs Board legen">
+          + Release
+        </button>
         <button className="btn" onClick={relayout} disabled={!boardIds.length}>
           Neu anordnen
         </button>
@@ -569,6 +666,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
           onDrop={onDrop}
         >
           {pos && (
+            <EditCtx.Provider value={editCtx}>
             <ReactFlow<ItemNode, RoutedEdge>
               nodes={nodes}
               edges={edges}
@@ -580,7 +678,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
               onConnect={onConnect}
               isValidConnection={isValidConnection}
               onBeforeDelete={onBeforeDelete}
-              onNodeDoubleClick={(_, n) => showDetail(n.id)}
+              onNodeDoubleClick={(_, n) => (ws.release(n.id) ? setEditing(n.id) : showDetail(n.id))}
               onNodeContextMenu={(e, n) => {
                 e.preventDefault();
                 menu.openAtPoint(e.clientX, e.clientY, nodeMenu(n.id));
@@ -591,7 +689,7 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
               }}
               onPaneContextMenu={(e) => {
                 e.preventDefault();
-                menu.openAtPoint(e.clientX, e.clientY, paneMenu());
+                menu.openAtPoint(e.clientX, e.clientY, paneMenu({ x: e.clientX, y: e.clientY }));
               }}
               zoomOnDoubleClick={false}
               // Linke Taste zieht ein Auswahlrechteck auf, die mittlere verschiebt.
@@ -610,10 +708,11 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
               <Controls showInteractive={false} />
               <MiniMap pannable zoomable />
             </ReactFlow>
+            </EditCtx.Provider>
           )}
           {pos && !boardIds.length && (
             <p className="graph-empty muted">
-              Noch leer. Tasks und Milestones aus der Liste links hierher ziehen.
+              Noch leer. Tasks, Milestones und Releases aus der Liste links hierher ziehen.
             </p>
           )}
         </div>
@@ -680,6 +779,7 @@ function RoutedEdgeView(p: EdgeProps<RoutedEdge>) {
 
 /** Wo ein Eintrag hängt – als zweite Zeile im Knoten. */
 function subtitle(ws: Workspace, x: Item): string {
+  if (isRel(x)) return RELEASE_STATUS_LABEL[releaseStatus(ws, x)];
   if (isMs(x)) return x.planned ? 'Milestone' : 'Milestone · vorbereitet';
   const parent = ws.task(x.parentId);
   if (parent) return `unter ${parent.title || 'Ohne Titel'}`;
@@ -688,6 +788,7 @@ function subtitle(ws: Workspace, x: Item): string {
 }
 
 function Glyph({ ws, item }: { ws: Workspace; item: Item }) {
+  if (isRel(item)) return <span className="ico rel">{REL_GLYPH}</span>;
   if (isMs(item)) return <span className="ico ms">◆</span>;
   const mark = ws.mark(item.markId);
   return <span className="mk-emoji">{mark ? mark.emoji : DEFAULT_MARK.emoji}</span>;
@@ -702,6 +803,7 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
   const ws = useStore((s) => s.ws);
   const { item, sub, done, focus } = data;
   if (!ws) return null;
+  if (isRel(item)) return <ReleaseNodeView ws={ws} release={item} sub={sub} done={done} focus={focus} />;
   return (
     <div
       className={[
@@ -741,6 +843,179 @@ function ItemNodeView({ data }: NodeProps<ItemNode>) {
   );
 }
 
+/**
+ * Ein Release: Version und Titel, darunter die Kanäle zum Abhaken. Anders als
+ * bei den Karten lässt sich hier etwas anklicken – die Kanäle sind nirgends
+ * sonst auf dem Board. Ein Doppelklick macht den Knoten zum Formular.
+ */
+function ReleaseNodeView({
+  ws,
+  release,
+  sub,
+  done,
+  focus,
+}: {
+  ws: Workspace;
+  release: Release;
+  sub: string;
+  done: boolean;
+  focus: boolean;
+}) {
+  const { patch, addStage, remove } = useStore();
+  const { editing, setEditing } = useContext(EditCtx);
+  const stages = ws.releaseStages(release.id);
+  const milestones = ws.releaseMilestones(release.id).length;
+  const edit = editing === release.id;
+  const [fresh, setFresh] = useState('');
+
+  const addFresh = (): void => {
+    const name = fresh.trim();
+    if (!name) return;
+    setFresh('');
+    inTurn(() => addStage(release.id, name));
+  };
+
+  return (
+    <div className={['tcard gn gn-rel', done ? 'done' : '', focus ? 'holds' : '', edit ? 'edit' : ''].filter(Boolean).join(' ')}>
+      <Handle type="target" position={Position.Left} />
+      <div className="tcard-markbar">
+        <span className="ico rel">{REL_GLYPH}</span>
+        <span className="tcard-markname">Release · {sub}</span>
+      </div>
+      {edit ? (
+        // `nodrag`/`nopan`: im Formular gehören Maus und Tasten den Feldern, nicht dem Board.
+        <div
+          className="gn-rel-form nodrag nopan nowheel"
+          onDoubleClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.stopPropagation();
+            setEditing(null);
+          }}
+        >
+          <ReleaseField
+            value={release.name}
+            placeholder="Version"
+            label="Version"
+            autoFocus
+            onCommit={(name) => inTurn(() => patch('release', release.id, { name }))}
+          />
+          <ReleaseField
+            value={release.title}
+            placeholder="Titel"
+            label="Titel"
+            onCommit={(title) => inTurn(() => patch('release', release.id, { title }))}
+          />
+          {stages.map((s) => (
+            <div className="gn-rel-row" key={s.id}>
+              <ReleaseField
+                value={s.name}
+                placeholder="Kanal"
+                label="Kanal"
+                onCommit={(name) => inTurn(() => patch('stage', s.id, { name }))}
+              />
+              <button
+                className="gn-rel-x"
+                title="Kanal entfernen"
+                aria-label={`Kanal ${s.name} entfernen`}
+                onClick={() => inTurn(() => remove('stage', s.id, 'Kanal entfernt'))}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <input
+            className="gn-rel-in"
+            value={fresh}
+            placeholder="+ Kanal, z. B. itch-Seite"
+            aria-label="Neuer Kanal"
+            onChange={(e) => setFresh(e.target.value)}
+            onBlur={addFresh}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addFresh();
+            }}
+          />
+          <button className="btn gn-rel-done" onClick={() => setEditing(null)}>
+            Fertig
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="tcard-head">
+            <span className="tcard-title">{release.name || <em>Ohne Version</em>}</span>
+          </div>
+          {release.title && <div className="gn-rel-sub">{release.title}</div>}
+          <div className="gn-rel-stages nodrag">
+            {stages.map((s) => (
+              <label className={`gn-rel-stage ${s.doneAt ? 'done' : ''}`} key={s.id}>
+                <input
+                  type="checkbox"
+                  checked={!!s.doneAt}
+                  onChange={() => void patch('stage', s.id, { doneAt: s.doneAt ? null : new Date().toISOString() })}
+                />
+                <span>{s.name || 'Ohne Namen'}</span>
+              </label>
+            ))}
+            {!stages.length && <span className="gn-rel-none">Noch keine Kanäle</span>}
+          </div>
+          <div className="tcard-foot">
+            <div className="tcard-meta">
+              <span className="gn-ms-status">
+                {milestones} {milestones === 1 ? 'Milestone' : 'Milestones'}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Änderungen aus dem Formular laufen nacheinander: jede beruht auf der Version,
+ * die die vorige hinterlassen hat. Wer von „Version“ gleich nach „Titel“
+ * springt, verlöre sonst die zweite an die noch laufende erste.
+ */
+let formQueue: Promise<unknown> = Promise.resolve();
+const inTurn = (run: () => Promise<unknown>): void => {
+  formQueue = formQueue.then(run, run);
+};
+
+/** Ein Feld im Release-Knoten: übernimmt beim Verlassen und mit Enter. */
+function ReleaseField({
+  value,
+  placeholder,
+  label,
+  autoFocus,
+  onCommit,
+}: {
+  value: string;
+  placeholder: string;
+  label: string;
+  autoFocus?: boolean;
+  onCommit: (value: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const commit = (): void => {
+    if (text.trim() !== value) onCommit(text.trim());
+  };
+  return (
+    <input
+      className="gn-rel-in"
+      value={text}
+      placeholder={placeholder}
+      aria-label={label}
+      autoFocus={autoFocus}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+    />
+  );
+}
+
 /* ------------------------------------------------------------ Die Liste */
 
 type ListRow = { item: Item; depth: number };
@@ -749,9 +1024,17 @@ type ListRow = { item: Item; depth: number };
  * Alle aktiven Einträge des Projekts als Baum: die Milestones mit ihren Tasks,
  * danach die Tasks ohne Milestone – je mit ihren Unteraufgaben eingerückt.
  */
-/** Ein Eintrag mit allem darunter: ein Milestone mit seinen Tasks, ein Task mit seinen Unteraufgaben. */
+/**
+ * Ein Eintrag mit allem darunter: ein Milestone mit seinen Tasks, ein Task mit
+ * seinen Unteraufgaben. Ein Release zeigt nur seine Milestones – deren Tasks
+ * stehen weiter unten bei ihnen.
+ */
 function subtree(ws: Workspace, item: Item): ListRow[] {
   const out: ListRow[] = [{ item, depth: 0 }];
+  if (isRel(item)) {
+    for (const m of ws.releaseMilestones(item.id)) out.push({ item: m, depth: 1 });
+    return out;
+  }
   const walk = (list: Task[], depth: number): void => {
     for (const t of list) {
       out.push({ item: t, depth });
@@ -770,7 +1053,12 @@ function listRows(ws: Workspace, projectId: string): { head: string; rows: ListR
     .filter((t) => t.projectId === projectId && !t.parentId && !t.milestoneId && !t.doc && ws.isActive(t))
     .sort((a, b) => Number(b.ready) - Number(a.ready) || a.order - b.order);
 
+  const releases = ws.releases
+    .filter((r) => r.projectId === projectId && !isArchived(r))
+    .sort((a, b) => a.order - b.order);
+
   return [
+    { head: 'Releases', rows: releases.flatMap((r) => subtree(ws, r)) },
     { head: 'Milestones im Plan', rows: milestones(plannedMilestones(ws, projectId)) },
     { head: 'Vorbereitete Milestones', rows: milestones(draftMilestones(ws, projectId)) },
     { head: 'Ready & Backlog', rows: tree(loose) },
@@ -813,9 +1101,9 @@ function ItemList({
     if (!q) return null;
     const ids = new Set<string>();
     for (const x of items.values()) {
-      if (!norm(x.title).includes(q)) continue;
+      if (!norm(titleOf(x)).includes(q)) continue;
       ids.add(x.id);
-      if (isMs(x)) continue;
+      if (isMs(x) || isRel(x)) continue;
       for (const a of ws.ancestors(x)) ids.add(a.id);
       const ms = ws.milestoneOf(x);
       if (ms) ids.add(ms.id);
@@ -828,8 +1116,8 @@ function ItemList({
       <input
         type="search"
         className="graph-q"
-        placeholder="Task oder Milestone suchen …"
-        aria-label="Task oder Milestone suchen"
+        placeholder="Task, Milestone oder Release suchen …"
+        aria-label="Task, Milestone oder Release suchen"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -840,13 +1128,14 @@ function ItemList({
           return (
             <div key={s.head}>
               <div className="graph-sec">{s.head}</div>
-              {rows.map(({ item, depth }) => {
-                const done = isMs(item) ? milestoneDone(ws, item) : isDone(item);
+              {rows.map(({ item, depth }, i) => {
+                const done = doneOf(ws, item);
                 const on = onBoard.has(item.id);
                 return (
                   <div
-                    key={item.id}
-                    className={`graph-row ${isMs(item) ? 'ms' : ''} ${done ? 'done' : ''} ${on ? 'on' : ''}`}
+                    // Ein Milestone steht zweimal in der Liste: unter seinem Release und für sich.
+                    key={`${item.id}:${i}`}
+                    className={`graph-row ${isMs(item) || isRel(item) ? 'ms' : ''} ${done ? 'done' : ''} ${on ? 'on' : ''}`}
                     style={{ paddingLeft: 10 + depth * 16 }}
                     draggable
                     onDragStart={(e) => {
@@ -863,7 +1152,7 @@ function ItemList({
                     }
                   >
                     <Glyph ws={ws} item={item} />
-                    <span className="graph-row-t">{item.title || 'Ohne Titel'}</span>
+                    <span className="graph-row-t">{titleOf(item)}</span>
                     {on && <span className="graph-on" aria-label="auf dem Board" />}
                   </div>
                 );

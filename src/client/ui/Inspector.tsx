@@ -12,8 +12,8 @@ import {
   statusSegments,
   total,
 } from '@shared/progress.js';
+import { releaseLabel } from '@shared/release.js';
 import { schedule } from '@shared/schedule.js';
-import { progressLockedBy } from '@shared/tisch.js';
 import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
@@ -46,7 +46,7 @@ import { markdownParts, checkboxClick, subtaskClick } from './markdown.js';
 import { focusAtEnd, insertCommand, useSmartEditor } from './editor.js';
 import { replaceText } from './caretMenu.js';
 import { refClick, useRefResolver } from './refs.js';
-import { categorySub, docMenu, markSub, milestoneMenu, taskMenu } from './rowMenu.js';
+import { categorySub, docMenu, markSub, milestoneMenu, releaseSub, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
 
 /** Fortschrittskette links, Sonderstatus rechts – zusammen eine Auswahl. */
@@ -389,7 +389,49 @@ function TaskHead({
         ))}
         <TagInput ws={ws} task={task} />
       </MetaRow>
+
+      {!doc && ws.milestoneOf(task) && <ChangelogRow task={task} />}
     </>
+  );
+}
+
+/**
+ * Die Zeile fürs Changelog des Releases. Drei Zustände: leer heißt „noch nicht
+ * entschieden“, ein Text ist der Eintrag, „Technisch“ heißt bewusst keiner.
+ * Nur an Aufgaben in einem Milestone – nur über ihn kommen sie in ein Release.
+ */
+function ChangelogRow({ task }: { task: Task }) {
+  const patch = useStore((s) => s.patch);
+  const [text, setText] = useState(task.changelog);
+  useEffect(() => setText(task.changelog), [task.id, task.changelog]);
+  const commit = (): void => {
+    const next = text.trim();
+    if (next === task.changelog) return;
+    // Wer eine Zeile schreibt, hat sich damit für einen Eintrag entschieden.
+    void patch('task', task.id, { changelog: next, ...(next && task.changelogSkip ? { changelogSkip: false } : {}) });
+  };
+  return (
+    <MetaRow k="changelog" label="Changelog">
+      <input
+        className={`cl-in ${task.changelogSkip ? 'off' : ''}`}
+        value={text}
+        placeholder={task.changelogSkip ? 'Kein Eintrag – zu technisch' : 'Zeile fürs Changelog – noch nicht entschieden'}
+        aria-label="Zeile fürs Changelog"
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+      />
+      <button
+        className={`prop ${task.changelogSkip ? '' : 'empty'}`}
+        aria-pressed={task.changelogSkip}
+        title="Kein Eintrag im Changelog – etwa weil zu technisch"
+        onClick={() => void patch('task', task.id, { changelogSkip: !task.changelogSkip })}
+      >
+        Technisch
+      </button>
+    </MetaRow>
   );
 }
 
@@ -438,14 +480,10 @@ function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
 
 /* ------------------------------------------------------- Kopf: Milestone */
 
-/** Je Projekt ist nur ein Milestone „In Progress“ – bei allen anderen ist der Knopf gesperrt. */
-function activeLock(ws: Workspace, m: Milestone): Partial<Record<Status, string>> {
-  const other = progressLockedBy(ws, m);
-  return other ? { progress: `„${other.title || 'Ohne Titel'}“ ist schon In Progress – nur einer kann aktiv sein` } : {};
-}
-
 function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone }) {
   const { patch, settings, setMilestoneStatus } = useStore();
+  const menu = useMenu();
+  const release = ws.release(milestone.releaseId);
   const stats = milestoneStats(ws, milestone);
   const plan = schedule(ws, { velocity: settings.velocity });
   const line = plan.byId.get(milestone.id) ?? null;
@@ -471,7 +509,6 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
           item={milestone}
           groups={[MS_KEYS]}
           labels={MS_STATUS}
-          locked={activeLock(ws, milestone)}
         />
         {stats.tasksDone && !stats.isDone && (
           <span className="hint ms-hint">
@@ -511,6 +548,13 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
           }
         />
       </MetaRow>
+
+      <MetaRow k="release" label="Release">
+        <PropButton menu={menu} empty={!release} title="Release" items={() => releaseSub(ws, milestone)}>
+          {release ? `✦ ${releaseLabel(release)}` : 'Keines'}
+        </PropButton>
+      </MetaRow>
+      {menu.node}
     </>
   );
 }

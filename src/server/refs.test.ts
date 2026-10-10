@@ -99,8 +99,8 @@ describe('Verweis-Nummern', () => {
     assert.deepEqual([refOf('task', a.id), refOf('milestone', m.id), refOf('task', b.id)], [1, 2, 3]);
 
     const after = (ctx.sqlite.prepare('SELECT * FROM task ORDER BY id').all() as Record<string, unknown>[]).map(
-      // `ready`, `cover_image_id` und `play_order` kommen mit späteren Migrationen dazu.
-      ({ ref: _ref, ready: _ready, cover_image_id: _cover, play_order: _play, ...rest }) => rest,
+      // `ready`, `cover_image_id`, `play_order` und die Changelog-Spalten kommen mit späteren Migrationen dazu.
+      ({ ref: _ref, ready: _ready, cover_image_id: _cover, play_order: _play, changelog: _cl, changelog_skip: _cs, changelog_order: _co, ...rest }) => rest,
     );
     assert.deepEqual(after, before);
 

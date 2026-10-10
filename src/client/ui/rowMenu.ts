@@ -1,5 +1,6 @@
 import { convertibleItems } from '@shared/checklist.js';
 import {
+  isArchived,
   isDone,
   TASK_STATUS,
   type Group,
@@ -22,7 +23,7 @@ import {
   type OutlineView,
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
-import { progressLockedBy } from '@shared/tisch.js';
+import { releaseLabel } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import {
@@ -169,8 +170,6 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       sub: (['open', 'progress', 'done'] as const).map((s) => ({
         label: MS_STATUS[s],
         check: m.status === s,
-        // Je Projekt ist nur einer aktiv.
-        disabled: s === 'progress' && !!progressLockedBy(ws, m),
         onSelect: () => void store.setMilestoneStatus(m.id, s),
       })),
     },
@@ -188,6 +187,7 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       disabled: !canMoveRow(ws, m, 1),
       onSelect: () => void moveRowBy(ws, m, 1),
     },
+    { label: 'Release', sub: releaseSub(ws, m) },
     {
       label: 'In anderes Projekt',
       sub: ws.projects.map((p) => ({
@@ -388,6 +388,28 @@ const statusSub = (t: Task): MenuItem[] =>
     check: t.status === s,
     onSelect: () => void useStore.getState().patch('task', t.id, { status: s }),
   }));
+
+/** Zu welchem Release ein Milestone gehört – oder gleich ein neues daraus. */
+export function releaseSub(ws: Workspace, m: Milestone): MenuItem[] {
+  const store = useStore.getState();
+  const releases = ws.releases
+    .filter((r) => r.projectId === m.projectId && (!isArchived(r) || r.id === m.releaseId))
+    .sort((a, b) => a.order - b.order);
+  return [
+    {
+      label: 'Kein Release',
+      check: !m.releaseId,
+      onSelect: () => void store.patch('milestone', m.id, { releaseId: null }),
+    },
+    ...releases.map((r) => ({
+      label: releaseLabel(r),
+      check: r.id === m.releaseId,
+      onSelect: () => void store.patch('milestone', m.id, { releaseId: r.id }),
+    })),
+    { sep: true },
+    { label: 'Neues Release daraus anlegen', onSelect: () => void store.releaseFromMilestone(m.id) },
+  ];
+}
 
 export function categorySub(ws: Workspace, t: Task): MenuItem[] {
   const store = useStore.getState();

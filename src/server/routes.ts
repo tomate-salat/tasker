@@ -62,6 +62,7 @@ import {
   inBootstrap,
   loadArchive,
   loadBootstrap,
+  loadChangelog,
   move,
   patch,
   remove,
@@ -104,6 +105,9 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     if (!q.success) return c.json({ error: 'Ungültige Abfrage.' }, 400);
     return c.json(loadArchive(ctx, q.data));
   });
+
+  // Milestones und Aufgaben eines Releases samt Archiviertem – daraus baut der Client das Changelog.
+  app.get('/changelog/:releaseId', (c) => run(c, bus, () => loadChangelog(ctx, c.req.param('releaseId'))));
 
   app.get('/trash', (c) => c.json({ entries: loadTrash(ctx), days: TRASH_DAYS }));
 
@@ -508,7 +512,9 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     if (!body.success) return fail(c, body.error);
     return run(c, bus, () => create(ctx, kind, body.data as Record<string, unknown>), {
       status: 201,
-      event: (object) => ({ type: 'upsert', kind, object }),
+      // Ein neues Release bringt die Kanäle des vorherigen mit – das ist kein Einzelstück.
+      event: (object) =>
+        kind === 'release' ? { type: 'reload', reason: 'Release angelegt' } : { type: 'upsert', kind, object },
     });
   });
 

@@ -56,6 +56,44 @@ export type Group = {
   order: number;
 };
 
+/** Fasst Milestones zu einer Version zusammen – siehe PHASE-2.md, „Releases“. */
+export type Release = {
+  id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
+  projectId: string;
+  /** Die Versionsbezeichnung, freier Text wie „0.4.0“ – `version` ist schon vergeben. */
+  name: string;
+  title: string;
+  /** Die Einleitung fürs Changelog. */
+  desc: string;
+  order: number;
+  archivedAt: string | null;
+};
+
+/** Eine Veröffentlichung je Kanal (itch-Seite, Steam-Demo, …). */
+export type ReleaseStage = {
+  id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
+  releaseId: string;
+  name: string;
+  order: number;
+  /** Gesetzt, sobald auf diesem Kanal veröffentlicht ist. */
+  doneAt: string | null;
+};
+
+/** Eine Überschrift im Changelog eines Releases – steht zwischen den Einträgen der Tasks. */
+export type ReleaseHeading = {
+  id: string;
+  /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
+  version: number;
+  releaseId: string;
+  title: string;
+  /** Platz in der Liste, gemeinsam mit `Task.changelogOrder`. */
+  order: number;
+};
+
 export type Milestone = {
   id: string;
   /** Kurze, feste Nummer für Verweise im Text ($142) – gemeinsame Folge mit den Tasks. */
@@ -63,6 +101,8 @@ export type Milestone = {
   /** Zählt bei jeder Änderung hoch – Grundlage der Konflikterkennung. */
   version: number;
   projectId: string;
+  /** Das Release, zu dem dieser Milestone gehört – höchstens eines. */
+  releaseId: string | null;
   title: string;
   desc: string;
   planned: boolean;
@@ -103,6 +143,12 @@ export type Task = {
   coverImageId: string | null;
   /** Platz in „Im Spiel“ auf dem Tisch; bei Gleichstand gilt die Baumreihenfolge. */
   playOrder: number;
+  /** Die Zeile fürs Changelog des Releases; leer heißt: noch nicht entschieden. */
+  changelog: string;
+  /** Bewusst kein Eintrag im Changelog. */
+  changelogSkip: boolean;
+  /** Platz in der Liste des Releases, gemeinsam mit den Überschriften. */
+  changelogOrder: number;
   archivedAt: string | null;
   tags: string[];
   /** IDs anderer Tasks, von denen dieser abhängt. */
@@ -115,6 +161,9 @@ export type Data = {
   marks: Mark[];
   groups: Group[];
   milestones: Milestone[];
+  releases: Release[];
+  stages: ReleaseStage[];
+  headings: ReleaseHeading[];
   tasks: Task[];
   /**
    * Archivierte Aufgaben, deren Ort noch aktiv ist, samt ihren Unteraufgaben.

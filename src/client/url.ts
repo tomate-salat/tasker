@@ -42,11 +42,11 @@ const parse = (): Place | null => {
 
 /**
  * Ansichten, die ein eigener Ort sind und keine Sicht auf die Liste: Archiv,
- * Papierkorb, Galerie und Tisch. Eine Auswahl sagt dort nichts darüber, wo man ist –
+ * Papierkorb, Galerie, Tisch und Releases. Eine Auswahl sagt dort nichts darüber, wo man ist –
  * die Ansicht muss also in der Adresse stehen und darf beim Laden nicht durch
  * den Ort der Auswahl ersetzt werden.
  */
-const PLACES: View[] = ['archive', 'trash', 'bilder', 'tisch'];
+const PLACES: View[] = ['archive', 'trash', 'bilder', 'tisch', 'releases'];
 
 /** Braucht die Adresse die Ansicht, oder ergibt sie sich aus der Auswahl? */
 const needsView = (s: S): boolean => {

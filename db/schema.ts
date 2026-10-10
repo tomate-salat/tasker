@@ -91,6 +91,71 @@ export const marks = sqliteTable(
   (t) => [index('mark_project_idx').on(t.projectId)],
 );
 
+/* ------------------------------------------------------------------ Releases */
+
+/**
+ * Ein Release fasst Milestones zu einer Version zusammen (siehe PHASE-2.md,
+ * „Releases“). Seine Stages sind die zugeordneten Milestones – über
+ * `milestone.release_id` – und je Kanal eine Zeile in `release_stage`.
+ */
+export const releases = sqliteTable(
+  'release',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /**
+     * Die Versionsbezeichnung, freier Text wie „0.4.0“ – gerechnet wird damit
+     * nicht. Heißt `name`, weil `version` schon die Konflikterkennung ist.
+     */
+    name: text('name').notNull().default(''),
+    title: text('title').notNull().default(''),
+    /** Die Einleitung fürs Changelog. */
+    desc: text('desc').notNull().default(''),
+    order: integer('sort_order').notNull().default(0),
+    archivedAt: text('archived_at'),
+    ...tracked,
+  },
+  (t) => [index('release_project_idx').on(t.projectId)],
+);
+
+/** Eine Veröffentlichung je Kanal (itch-Seite, Steam-Demo, …), einzeln abhakbar. */
+export const releaseStages = sqliteTable(
+  'release_stage',
+  {
+    id: text('id').primaryKey(),
+    releaseId: text('release_id')
+      .notNull()
+      .references(() => releases.id, { onDelete: 'cascade' }),
+    name: text('name').notNull().default(''),
+    order: integer('sort_order').notNull().default(0),
+    /** Gesetzt, sobald auf diesem Kanal veröffentlicht ist. */
+    doneAt: text('done_at'),
+    ...tracked,
+  },
+  (t) => [index('release_stage_release_idx').on(t.releaseId)],
+);
+
+/**
+ * Überschriften im Changelog eines Releases. Sie teilen sich die Reihenfolge
+ * mit den Einträgen der Tasks (`task.changelog_order`): beides zusammen ist
+ * die Liste, die der Nutzer von Hand ordnet.
+ */
+export const releaseHeadings = sqliteTable(
+  'release_heading',
+  {
+    id: text('id').primaryKey(),
+    releaseId: text('release_id')
+      .notNull()
+      .references(() => releases.id, { onDelete: 'cascade' }),
+    title: text('title').notNull().default(''),
+    order: integer('sort_order').notNull().default(0),
+    ...tracked,
+  },
+  (t) => [index('release_heading_release_idx').on(t.releaseId)],
+);
+
 /* ---------------------------------------------------------------- Milestones */
 
 export const milestones = sqliteTable(
@@ -100,6 +165,8 @@ export const milestones = sqliteTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    /** Das Release, zu dem dieser Milestone gehört – höchstens eines. */
+    releaseId: text('release_id').references(() => releases.id, { onDelete: 'set null' }),
     /** Kurze, feste Nummer für Verweise im Text – siehe `refSeq`. */
     ref: integer('ref'),
     title: text('title').notNull(),
@@ -119,6 +186,7 @@ export const milestones = sqliteTable(
   },
   (t) => [
     index('milestone_project_idx').on(t.projectId),
+    index('milestone_release_idx').on(t.releaseId),
     uniqueIndex('milestone_ref_idx').on(t.ref),
   ],
 );
@@ -187,6 +255,15 @@ export const tasks = sqliteTable(
      * quer über alle Stapel. Wer ins Spiel kommt, reiht sich hinten ein.
      */
     playOrder: integer('play_order').notNull().default(0),
+    /**
+     * Die Zeile fürs Changelog des Releases, in Spielersprache. Leer und ohne
+     * `changelogSkip` heißt: noch nicht entschieden.
+     */
+    changelog: text('changelog').notNull().default(''),
+    /** Bewusst kein Eintrag – etwa weil zu technisch. */
+    changelogSkip: integer('changelog_skip', { mode: 'boolean' }).notNull().default(false),
+    /** Platz in der Liste des Releases – gemeinsam mit `release_heading.sort_order`. */
+    changelogOrder: integer('changelog_order').notNull().default(0),
     /** Gesetzt nur beim ausdrücklich archivierten Eintrag. */
     archivedAt: text('archived_at'),
     /**
@@ -463,6 +540,9 @@ export type Project = typeof projects.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Mark = typeof marks.$inferSelect;
 export type Milestone = typeof milestones.$inferSelect;
+export type Release = typeof releases.$inferSelect;
+export type ReleaseStage = typeof releaseStages.$inferSelect;
+export type ReleaseHeading = typeof releaseHeadings.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type TaskTag = typeof taskTags.$inferSelect;

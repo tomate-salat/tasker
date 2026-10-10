@@ -5,6 +5,9 @@ import {
   type Mark,
   type Milestone,
   type Project,
+  type Release,
+  type ReleaseHeading,
+  type ReleaseStage,
   type Task,
   isArchived,
   isDone,
@@ -24,6 +27,9 @@ export class Workspace {
   readonly marks: Mark[];
   readonly groups: Group[];
   readonly milestones: Milestone[];
+  readonly releases: Release[];
+  readonly stages: ReleaseStage[];
+  readonly headings: ReleaseHeading[];
   readonly tasks: Task[];
 
   private readonly taskById = new Map<string, Task>();
@@ -32,6 +38,11 @@ export class Workspace {
   private readonly projectById = new Map<string, Project>();
   private readonly categoryById = new Map<string, Category>();
   private readonly markById = new Map<string, Mark>();
+  private readonly releaseById = new Map<string, Release>();
+  /** Kanäle je Release, nach order sortiert. */
+  private readonly stagesOfRelease = new Map<string, ReleaseStage[]>();
+  /** Aktive Milestones je Release, in der Reihenfolge der Planung. */
+  private readonly milestonesOfRelease = new Map<string, Milestone[]>();
   /** Nur aktive Kinder, nach order sortiert. */
   private readonly kidsOf = new Map<string, Task[]>();
   /** Auch archivierte Kinder. */
@@ -49,6 +60,9 @@ export class Workspace {
     this.marks = data.marks;
     this.groups = data.groups;
     this.milestones = data.milestones;
+    this.releases = data.releases;
+    this.stages = data.stages;
+    this.headings = data.headings;
     this.tasks = data.tasks;
 
     for (const p of data.projects) this.projectById.set(p.id, p);
@@ -56,6 +70,13 @@ export class Workspace {
     for (const k of data.marks) this.markById.set(k.id, k);
     for (const g of data.groups) this.groupById.set(g.id, g);
     for (const m of data.milestones) this.milestoneById.set(m.id, m);
+    for (const r of data.releases) this.releaseById.set(r.id, r);
+    for (const s of data.stages) push(this.stagesOfRelease, s.releaseId, s);
+    for (const m of data.milestones) {
+      if (m.releaseId && !isArchived(m)) push(this.milestonesOfRelease, m.releaseId, m);
+    }
+    for (const list of this.stagesOfRelease.values()) list.sort(byOrder);
+    for (const list of this.milestonesOfRelease.values()) list.sort((a, b) => a.qorder - b.qorder);
     for (const t of data.tasks) this.taskById.set(t.id, t);
 
     for (const t of data.tasks) {
@@ -90,6 +111,13 @@ export class Workspace {
   category = (id: string | null): Category | null =>
     id ? (this.categoryById.get(id) ?? null) : null;
   mark = (id: string | null): Mark | null => (id ? (this.markById.get(id) ?? null) : null);
+  release = (id: string | null): Release | null => (id ? (this.releaseById.get(id) ?? null) : null);
+
+  /** Die Kanäle eines Releases in Reihenfolge. */
+  releaseStages = (id: string): ReleaseStage[] => this.stagesOfRelease.get(id) ?? [];
+
+  /** Die aktiven Milestones eines Releases, in der Reihenfolge der Planung. */
+  releaseMilestones = (id: string): Milestone[] => this.milestonesOfRelease.get(id) ?? [];
 
   /** Aktive Unteraufgaben in Reihenfolge. */
   kids = (id: string): Task[] => this.kidsOf.get(id) ?? [];

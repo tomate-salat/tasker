@@ -120,6 +120,20 @@
       "when": 1791361855565,
       "tag": "0016_zeichnung_vorschau",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1791620082424,
+      "tag": "0017_releases",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791621391854,
+      "tag": "0018_changelog",
+      "breakpoints": true
     }
   ]
 }

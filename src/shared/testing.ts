@@ -9,6 +9,9 @@ export class Builder {
     marks: [],
     groups: [],
     milestones: [],
+    releases: [],
+    stages: [],
+    headings: [],
     tasks: [],
   };
   private n = 0;
@@ -43,6 +46,7 @@ export class Builder {
       ref: this.ref++,
       version: 1,
       projectId,
+      releaseId: null,
       title: id,
       desc: '',
       planned: false,
@@ -56,6 +60,17 @@ export class Builder {
       deps: [],
       ...o,
     });
+    return this;
+  }
+
+  release(id: string, projectId: string, name = id): this {
+    this.data.releases.push({
+      id, version: 1, projectId, name, title: '', desc: '', order: this.data.releases.length, archivedAt: null });
+    return this;
+  }
+
+  stage(id: string, releaseId: string, doneAt: string | null = null): this {
+    this.data.stages.push({ id, version: 1, releaseId, name: id, order: this.data.stages.length, doneAt });
     return this;
   }
 
@@ -80,6 +95,9 @@ export class Builder {
       ready: false,
       coverImageId: null,
       playOrder: 0,
+      changelog: '',
+      changelogSkip: false,
+      changelogOrder: 0,
       archivedAt: null,
       tags: [],
       deps: [],

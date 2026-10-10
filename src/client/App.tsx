@@ -17,6 +17,7 @@ import { MultiDetail } from './ui/MultiDetail.js';
 import { Sidebar } from './ui/Sidebar.js';
 import { Gallery } from './ui/Gallery.js';
 import { Timeline } from './ui/Timeline.js';
+import { Releases } from './ui/Releases.js';
 import { ArchiveBar, ArchiveView, TrashBar, TrashView } from './ui/archive.js';
 import { useGlobalKeys } from './ui/keys.js';
 import { Outline } from './ui/views.js';
@@ -210,6 +211,7 @@ function Shell({
             <Outline ws={ws} view={view} />
           )}
           {view === 'timeline' && <Timeline ws={ws} />}
+          {view === 'releases' && <Releases ws={ws} />}
           {view === 'bilder' && <Gallery />}
           {view === 'archive' && <ArchiveView />}
           {view === 'trash' && <TrashView ws={ws} />}
@@ -381,6 +383,8 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   if (view === 'trash') return <TrashBar ws={ws} />;
   // Der Tisch zeigt immer den ganzen aktiven Milestone – Filter gelten dort nicht.
   if (view === 'tisch') return null;
+  // Die Releases bringen ihre eigene Leiste mit.
+  if (view === 'releases') return null;
 
   // Wie im Prototyp: über dem Zeitplan steht allein das Tempo, sonst die Filter.
   if (view === 'timeline') {
