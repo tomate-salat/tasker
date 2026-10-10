@@ -78,9 +78,9 @@ export const VIEW_LABEL: Record<View, string> = {
  * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
  * „Bilder“ ebenso: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
  * „Tisch“ (Wunsch des Nutzers) steht als erster: der aktive Milestone als Kartenspiel.
- * „Releases“ steht hinter dem Zeitplan: Versionen, Kanäle und Changelog.
+ * „Releases“ steht hinter dem Backlog, die Doku dafür hinter dem Zeitplan (Wunsch des Nutzers).
  */
-export const TABS: View[] = ['tisch', 'plan', 'ready', 'backlog', 'docs', 'timeline', 'releases', 'bilder', 'archive'];
+export const TABS: View[] = ['tisch', 'plan', 'ready', 'backlog', 'releases', 'timeline', 'docs', 'bilder', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help' | 'search';
 

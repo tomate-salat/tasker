@@ -140,13 +140,19 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
   const [editing, setEditing] = useState<string | null>(null);
   const editCtx = useMemo(() => ({ editing, setEditing }), [editing]);
 
+  // Vom Release aus geht es nur um Milestones und Releases: Tasks lassen sich
+  // dort nicht einhängen, also stehen sie weder in der Liste noch auf dem Board.
+  const coarse = !!ws.release(focusId);
+
   // Alles Aktive des Projekts; Doku-Seiten sind keine Aufgaben.
   const items = useMemo(() => {
-    const tasks = ws.tasks.filter((t) => t.projectId === projectId && ws.isActive(t) && !ws.isDoc(t));
+    const tasks = coarse
+      ? []
+      : ws.tasks.filter((t) => t.projectId === projectId && ws.isActive(t) && !ws.isDoc(t));
     const milestones = ws.milestones.filter((m) => m.projectId === projectId && !isArchived(m));
     const releases = ws.releases.filter((r) => r.projectId === projectId && !isArchived(r));
     return new Map<string, Item>([...releases, ...milestones, ...tasks].map((x) => [x.id, x]));
-  }, [ws, projectId]);
+  }, [ws, projectId, coarse]);
 
   const links = useMemo(() => {
     const out: Link[] = [];
@@ -712,7 +718,8 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
           )}
           {pos && !boardIds.length && (
             <p className="graph-empty muted">
-              Noch leer. Tasks, Milestones und Releases aus der Liste links hierher ziehen.
+              Noch leer. {coarse ? 'Milestones' : 'Tasks, Milestones'} und Releases aus der Liste links hierher
+              ziehen.
             </p>
           )}
         </div>
@@ -1029,8 +1036,10 @@ type ListRow = { item: Item; depth: number };
  * seinen Unteraufgaben. Ein Release zeigt nur seine Milestones – deren Tasks
  * stehen weiter unten bei ihnen.
  */
-function subtree(ws: Workspace, item: Item): ListRow[] {
+function subtree(ws: Workspace, item: Item, coarse = false): ListRow[] {
   const out: ListRow[] = [{ item, depth: 0 }];
+  // Ohne Tasks steht ein Milestone für sich.
+  if (coarse && !isRel(item)) return out;
   if (isRel(item)) {
     for (const m of ws.releaseMilestones(item.id)) out.push({ item: m, depth: 1 });
     return out;
@@ -1045,13 +1054,16 @@ function subtree(ws: Workspace, item: Item): ListRow[] {
   return out;
 }
 
-function listRows(ws: Workspace, projectId: string): { head: string; rows: ListRow[] }[] {
+/** `coarse`: nur Releases und Milestones – vom Release aus lässt sich sonst nichts aufs Board legen. */
+function listRows(ws: Workspace, projectId: string, coarse: boolean): { head: string; rows: ListRow[] }[] {
   const tree = (roots: Task[]): ListRow[] =>
     roots.flatMap((t) => subtree(ws, t));
-  const milestones = (list: Milestone[]): ListRow[] => list.flatMap((m) => subtree(ws, m));
-  const loose = ws.tasks
-    .filter((t) => t.projectId === projectId && !t.parentId && !t.milestoneId && !t.doc && ws.isActive(t))
-    .sort((a, b) => Number(b.ready) - Number(a.ready) || a.order - b.order);
+  const milestones = (list: Milestone[]): ListRow[] => list.flatMap((m) => subtree(ws, m, coarse));
+  const loose = coarse
+    ? []
+    : ws.tasks
+        .filter((t) => t.projectId === projectId && !t.parentId && !t.milestoneId && !t.doc && ws.isActive(t))
+        .sort((a, b) => Number(b.ready) - Number(a.ready) || a.order - b.order);
 
   const releases = ws.releases
     .filter((r) => r.projectId === projectId && !isArchived(r))
@@ -1091,9 +1103,11 @@ function ItemList({
   const [query, setQuery] = useState('');
   const sections = useMemo(() => {
     const focus = items.get(focusId);
+    const coarse = !!focus && isRel(focus);
     const pinned = focus ? [{ head: 'Geöffnet', rows: subtree(ws, focus), pinned: true }] : [];
-    return [...pinned, ...listRows(ws, projectId)];
+    return [...pinned, ...listRows(ws, projectId, coarse)];
   }, [ws, projectId, items, focusId]);
+  const what = ws.release(focusId) ? 'Milestone oder Release' : 'Task, Milestone oder Release';
 
   // Beim Suchen bleiben die Treffer mit ihren Eltern stehen, damit der Baum lesbar bleibt.
   const keep = useMemo(() => {
@@ -1116,8 +1130,8 @@ function ItemList({
       <input
         type="search"
         className="graph-q"
-        placeholder="Task, Milestone oder Release suchen …"
-        aria-label="Task, Milestone oder Release suchen"
+        placeholder={`${what} suchen …`}
+        aria-label={`${what} suchen`}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />

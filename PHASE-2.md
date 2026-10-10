@@ -722,7 +722,7 @@ voneinander abhängen.
 Kanäle zum Abhaken, darunter das Changelog. Zugeordnet wird im Graphen und über ein Feld „Release“
 im Inspektor des Milestones; im Plan trägt ein Milestone seine Version als Chip.
 
-**Umgesetzt (10.10.2026), Schritt 3:** `Releases.tsx`, Reiter hinter dem Zeitplan. Festlegungen
+**Umgesetzt (10.10.2026), Schritt 3:** `Releases.tsx`, Reiter hinter dem Backlog – er hat auf Wunsch des Nutzers den Platz mit „Doku“ getauscht. Festlegungen
 dabei:
 
 - Das jüngste Release steht oben. Unter „Alle Projekte“ stehen die Releases aller Projekte mit
