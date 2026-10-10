@@ -180,11 +180,11 @@ function ReleaseCard({
   // Was sich noch zuordnen lässt: die aktiven Milestones des Projekts, die nicht schon hier sind.
   const candidates = (): MenuItem[] => {
     const list = ws.milestones
-      .filter((m) => m.projectId === release.projectId && !isArchived(m) && m.releaseId !== release.id)
+      .filter((m) => m.projectId === release.projectId && !isArchived(m) && ws.releaseOf(m)?.id !== release.id)
       .sort((a, b) => Number(b.planned) - Number(a.planned) || a.qorder - b.qorder);
     if (!list.length) return [{ head: 'Kein weiterer Milestone im Projekt' }];
     return list.map((m) => {
-      const other = ws.release(m.releaseId);
+      const other = ws.releaseOf(m);
       return {
         label: `◆ ${m.title || 'Ohne Titel'}${other ? ` · bisher in ${other.name || other.title || 'anderem Release'}` : ''}`,
         onSelect: () => void patch('milestone', m.id, { releaseId: release.id }),
@@ -256,7 +256,15 @@ function ReleaseCard({
                 <span className="rl-ms-sub">
                   {m.archived ? 'archiviert' : live ? `${milestoneProgressPct(ws, live)} %` : ''}
                 </span>
-                {live && (
+                {m.inherited && (
+                  <span
+                    className="rl-ms-via"
+                    title="Nicht zugeordnet – zählt mit, weil ein Milestone des Releases ihn benötigt"
+                  >
+                    über Abhängigkeit
+                  </span>
+                )}
+                {live && !m.inherited && (
                   <button
                     className="rl-x"
                     title="Aus dem Release nehmen"

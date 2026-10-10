@@ -17,7 +17,15 @@ export type ChangelogTask = Pick<
   archived: boolean;
 };
 
-export type ChangelogMilestone = { id: string; ref: number; title: string; status: Status; archived: boolean };
+export type ChangelogMilestone = {
+  id: string;
+  ref: number;
+  title: string;
+  status: Status;
+  archived: boolean;
+  /** Nicht zugeordnet, sondern über eine Abhängigkeit mitgezählt – siehe `effectiveReleases`. */
+  inherited: boolean;
+};
 
 /** Was `GET /api/changelog/<release>` liefert. */
 export type ChangelogData = { milestones: ChangelogMilestone[]; tasks: ChangelogTask[] };

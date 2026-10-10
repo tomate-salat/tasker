@@ -1370,6 +1370,28 @@ describe('Changelog', () => {
     assert.throws(() => loadChangelog(ctx, 'rGibtEsNicht'), NotFound);
   });
 
+  it('was ein Milestone des Releases benötigt, zählt mit – samt seinen Aufgaben', () => {
+    const before = mkMilestone({ projectId: p.id, title: 'Davor' });
+    const loose = mkMilestone({ projectId: p.id, title: 'Lose' });
+    patch(ctx, 'milestone', m.id, loadBootstrap(ctx).milestones.find((x) => x.id === m.id)!.version, {
+      deps: [before.id],
+    });
+    mkTask({ projectId: p.id, milestoneId: before.id, title: 'Aus der Kette' });
+    mkTask({ projectId: p.id, milestoneId: loose.id, title: 'Fremd' });
+    mkTask({ projectId: p.id, milestoneId: m.id, title: 'Eigen' });
+
+    const data = loadChangelog(ctx, release.id);
+    assert.deepEqual(
+      data.milestones.map((x) => [x.title, x.inherited]).sort(),
+      [['Davor', true], ['M', false]],
+    );
+    assert.deepEqual(data.tasks.map((t) => t.title).sort(), ['Aus der Kette', 'Eigen']);
+
+    // Auch archiviert bleibt der mitgezählte Milestone dabei.
+    archive(ctx, 'milestone', before.id);
+    assert.deepEqual(loadChangelog(ctx, release.id).tasks.map((t) => t.title).sort(), ['Aus der Kette', 'Eigen']);
+  });
+
   it('eine archivierte Aufgabe lässt sich über Schritte entscheiden – und zurücknehmen', () => {
     const a = mkTask({ projectId: p.id, milestoneId: m.id, title: 'A', status: 'done' });
     archive(ctx, 'task', a.id);

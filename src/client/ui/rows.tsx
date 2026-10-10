@@ -199,7 +199,7 @@ export function MilestoneRow({
 }) {
   const { selected, select, collapsed, toggle, editing } = useStore();
   const open = !collapsed[milestone.id];
-  const release = ws.release(milestone.releaseId);
+  const release = ws.releaseOf(milestone);
   const waiting = milestone.deps
     .map((id) => ws.milestone(id))
     .filter((m): m is Milestone => !!m && m.status !== 'done');
@@ -248,7 +248,14 @@ export function MilestoneRow({
       </button>
       <DrawingBadge ownerId={milestone.id} />
       {release && (
-        <span className="chip rel-chip" title={`Gehört zu Release ${releaseLabel(release)}`}>
+        <span
+          className="chip rel-chip"
+          title={
+            milestone.releaseId
+              ? `Gehört zu Release ${releaseLabel(release)}`
+              : `Zählt zu Release ${releaseLabel(release)} – ein Milestone des Releases benötigt ihn`
+          }
+        >
           ✦ {release.name || release.title || 'Release'}
         </span>
       )}

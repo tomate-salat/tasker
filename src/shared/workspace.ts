@@ -13,6 +13,8 @@ import {
   isDone,
 } from './model.js';
 
+import { effectiveReleases } from './releaseOf.js';
+
 /**
  * Ein Index über die Daten. Der Prototyp hat für jede Frage die Task-Liste
  * durchsucht; das ist bei 20 Aufgaben egal und bei 5000 nicht mehr. Hier wird
@@ -41,8 +43,10 @@ export class Workspace {
   private readonly releaseById = new Map<string, Release>();
   /** Kanäle je Release, nach order sortiert. */
   private readonly stagesOfRelease = new Map<string, ReleaseStage[]>();
-  /** Aktive Milestones je Release, in der Reihenfolge der Planung. */
+  /** Aktive Milestones je Release, in der Reihenfolge der Planung – auch die über Abhängigkeiten mitgezählten. */
   private readonly milestonesOfRelease = new Map<string, Milestone[]>();
+  /** Je Milestone das Release, zu dem er zählt – siehe `effectiveReleases`. */
+  private readonly releaseOfMilestone: Map<string, string>;
   /** Nur aktive Kinder, nach order sortiert. */
   private readonly kidsOf = new Map<string, Task[]>();
   /** Auch archivierte Kinder. */
@@ -72,8 +76,10 @@ export class Workspace {
     for (const m of data.milestones) this.milestoneById.set(m.id, m);
     for (const r of data.releases) this.releaseById.set(r.id, r);
     for (const s of data.stages) push(this.stagesOfRelease, s.releaseId, s);
+    this.releaseOfMilestone = effectiveReleases(data.milestones, data.releases);
     for (const m of data.milestones) {
-      if (m.releaseId && !isArchived(m)) push(this.milestonesOfRelease, m.releaseId, m);
+      const releaseId = this.releaseOfMilestone.get(m.id);
+      if (releaseId && !isArchived(m)) push(this.milestonesOfRelease, releaseId, m);
     }
     for (const list of this.stagesOfRelease.values()) list.sort(byOrder);
     for (const list of this.milestonesOfRelease.values()) list.sort((a, b) => a.qorder - b.qorder);
@@ -116,7 +122,13 @@ export class Workspace {
   /** Die Kanäle eines Releases in Reihenfolge. */
   releaseStages = (id: string): ReleaseStage[] => this.stagesOfRelease.get(id) ?? [];
 
-  /** Die aktiven Milestones eines Releases, in der Reihenfolge der Planung. */
+  /**
+   * Das Release, zu dem ein Milestone zählt: das zugeordnete (`releaseId`) –
+   * oder das, dessen Milestones ihn über Abhängigkeiten benötigen.
+   */
+  releaseOf = (m: Milestone): Release | null => this.release(this.releaseOfMilestone.get(m.id) ?? null);
+
+  /** Die aktiven Milestones eines Releases, in der Reihenfolge der Planung – auch die mitgezählten. */
   releaseMilestones = (id: string): Milestone[] => this.milestonesOfRelease.get(id) ?? [];
 
   /** Aktive Unteraufgaben in Reihenfolge. */

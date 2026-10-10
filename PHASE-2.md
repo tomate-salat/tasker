@@ -665,6 +665,15 @@ können (etwa Steam-Demo und itch-Seite). **Stand: alle sieben Schritte umgesetz
   einzeln abhakbar und untereinander parallel. Ein neues Release übernimmt die Kanäle des
   vorherigen im Projekt; eine eigene Plattform-Verwaltung gibt es nicht.
 - Ein Milestone gehört zu **höchstens einem** Release, sonst stünde ein Task in zwei Changelogs.
+- **Die Kette zählt mit** (Wunsch des Nutzers, 10.10.2026): Benötigt ein Milestone des Releases
+  einen anderen, zählt der zum Release – und ebenso alles, was der wiederum benötigt. Gerechnet,
+  nicht gespeichert (`effectiveReleases` in `src/shared/releaseOf.ts`, auf Client und Server
+  dieselbe Funktion); `milestone.release_id` bleibt die ausdrückliche Zuordnung. Regeln: die
+  ausdrückliche Zuordnung geht vor, und an ihr endet die Kette; von zwei Releases gebraucht,
+  zählt ein Milestone zum früheren; über die Projektgrenze zählt nichts mit. Es zählen nur die
+  Abhängigkeiten zwischen Milestones, nicht die zwischen einzelnen Aufgaben. Mitgezählte tragen
+  überall den Hinweis „über Abhängigkeit“ und lassen sich nicht einzeln herausnehmen – dafür
+  entfernt man die Abhängigkeit oder ordnet sie einem anderen Release zu.
 - Der Status wird berechnet, nicht gespeichert: geplant → in Arbeit → bereit (alle Milestones
   fertig) → veröffentlicht (alle Kanäle abgehakt).
 - Abhängigkeiten **zwischen Releases** gibt es nicht; ihre Reihenfolge reicht.

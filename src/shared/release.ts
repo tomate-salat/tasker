@@ -57,7 +57,7 @@ export function releaseGroups(ws: Workspace, list: ScheduledMilestone[]): Releas
   const groups = new Map<string, ReleaseGroup>();
   for (const x of list) {
     const m = x.milestone;
-    const release = ws.release(m.releaseId);
+    const release = ws.releaseOf(m);
     const key = `${m.projectId}:${release?.id ?? ''}`;
     const end = x.late ? Math.max(x.end, x.forecastEnd) : x.end;
     const g = groups.get(key);

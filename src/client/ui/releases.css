@@ -166,6 +166,13 @@
   color: var(--muted);
 }
 
+.rl-ms-via {
+  padding: 0 4px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--faint);
+}
+
 .rl-stage-name {
   width: 14ch;
   padding: 1px 4px;

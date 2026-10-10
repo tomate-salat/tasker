@@ -25,6 +25,7 @@ import type { ChangelogData } from '../shared/changelog.js';
 import { convertibleItems, convertibleSections, replaceItems } from '../shared/checklist.js';
 import { parentStatusAfter } from '../shared/parentStatus.js';
 import { refsIn, type RefStub } from '../shared/refs.js';
+import { effectiveReleases } from '../shared/releaseOf.js';
 import type { DbCtx } from './db.js';
 import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
 import { purgeImagesFor, untrashImage } from './images.js';
@@ -169,33 +170,63 @@ function loadArchivedInPlace(ctx: DbCtx): Task[] {
 }
 
 /**
- * Woraus das Changelog eines Releases entsteht: seine Milestones und alle
- * Aufgaben darunter – auch archivierte. Erledigtes wird hier regelmäßig
+ * Woraus das Changelog eines Releases entsteht: seine Milestones – auch die,
+ * die es nur über Abhängigkeiten braucht – und alle Aufgaben darunter, auch
+ * archivierte. Erledigtes wird hier regelmäßig
  * archiviert und gehört trotzdem ins Changelog, deshalb reicht der aktive
  * Bestand aus `loadBootstrap` dafür nicht.
  */
 export function loadChangelog(ctx: DbCtx, releaseId: string): ChangelogData {
-  if (!readRow(ctx, 'release', releaseId)) throw new NotFound();
-  const milestones = ctx.sqlite
+  const release = readRow(ctx, 'release', releaseId);
+  if (!release) throw new NotFound();
+  const projectId = release['project_id'];
+
+  // Wer zum Release zählt, ergibt sich aus Zuordnung und Abhängigkeiten – über alle
+  // Milestones des Projekts, auch archivierte.
+  const all = ctx.sqlite
     .prepare(
-      `SELECT id, ref, title, status, archived_at FROM milestone
-        WHERE release_id = ? ORDER BY queue_order, id`,
+      `SELECT id, ref, title, status, archived_at, release_id FROM milestone
+        WHERE project_id = ? ORDER BY queue_order, id`,
     )
-    .all(releaseId) as { id: string; ref: number; title: string; status: Status; archived_at: string | null }[];
+    .all(projectId) as {
+    id: string; ref: number; title: string; status: Status; archived_at: string | null; release_id: string | null;
+  }[];
+  const depsOf = groupValues(
+    ctx.sqlite
+      .prepare(
+        `SELECT d.from_id, d.to_id FROM dependency d JOIN milestone m ON m.id = d.from_id
+          WHERE d.kind = 'milestone' AND m.project_id = ?`,
+      )
+      .all(projectId) as { from_id: string; to_id: string }[],
+    (r) => r.from_id,
+    (r) => r.to_id,
+  );
+  const releases = ctx.sqlite
+    .prepare('SELECT id, sort_order FROM "release" WHERE project_id = ?')
+    .all(projectId) as { id: string; sort_order: number }[];
+  const member = effectiveReleases(
+    all.map((m) => ({
+      id: m.id, projectId: String(projectId), releaseId: m.release_id, deps: depsOf.get(m.id) ?? [],
+    })),
+    releases.map((r) => ({ id: r.id, projectId: String(projectId), order: r.sort_order })),
+  );
+  const milestones = all.filter((m) => member.get(m.id) === releaseId);
+
   const tasks = ctx.sqlite
     .prepare(
       `WITH RECURSIVE sub(id) AS (
-         SELECT t.id FROM task t JOIN milestone m ON m.id = t.milestone_id
-          WHERE m.release_id = ? AND t.parent_id IS NULL
+         SELECT t.id FROM task t
+          WHERE t.milestone_id IN (SELECT value FROM json_each(?)) AND t.parent_id IS NULL
          UNION
          SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id
        )
        SELECT t.* FROM task t JOIN sub ON sub.id = t.id ORDER BY t.sort_order, t.id`,
     )
-    .all(releaseId) as TaskRow[];
+    .all(JSON.stringify(milestones.map((m) => m.id))) as TaskRow[];
   return {
     milestones: milestones.map((m) => ({
       id: m.id, ref: m.ref, title: m.title, status: m.status, archived: !!m.archived_at,
+      inherited: m.release_id !== releaseId,
     })),
     tasks: tasks.map((t) => ({
       id: t.id,

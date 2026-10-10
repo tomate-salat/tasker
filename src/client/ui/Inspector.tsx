@@ -483,7 +483,9 @@ function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
 function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone }) {
   const { patch, settings, setMilestoneStatus } = useStore();
   const menu = useMenu();
-  const release = ws.release(milestone.releaseId);
+  const release = ws.releaseOf(milestone);
+  // Nicht zugeordnet, aber von einem Milestone des Releases benötigt – dann zählt er mit.
+  const viaDeps = !!release && !milestone.releaseId;
   const stats = milestoneStats(ws, milestone);
   const plan = schedule(ws, { velocity: settings.velocity });
   const line = plan.byId.get(milestone.id) ?? null;
@@ -554,8 +556,20 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
       </MetaRow>
 
       <MetaRow k="release" label="Release">
-        <PropButton menu={menu} empty={!release} title="Release" items={() => releaseSub(ws, milestone)}>
-          {release ? `✦ ${releaseLabel(release)}` : 'Keines'}
+        <PropButton
+          menu={menu}
+          empty={!release || viaDeps}
+          title={viaDeps ? 'Release – zählt mit, weil ein Milestone des Releases ihn benötigt' : 'Release'}
+          items={() => releaseSub(ws, milestone)}
+        >
+          {release ? (
+            <span className={viaDeps ? 'inherited-val' : ''}>
+              ✦ {releaseLabel(release)}
+              {viaDeps ? ' · über Abhängigkeit' : ''}
+            </span>
+          ) : (
+            'Keines'
+          )}
         </PropButton>
       </MetaRow>
       {menu.node}
