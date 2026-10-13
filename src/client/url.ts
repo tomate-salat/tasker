@@ -1,3 +1,4 @@
+import { deepLinkPath } from '@shared/deeplink.js';
 import type { OutlineFilter } from '@shared/outline.js';
 import { pushEntry, replaceEntry } from './back.js';
 import { ambiguousView, archiveWorkspace, homeView, useStore, VIEWS, type View } from './store.js';
@@ -75,6 +76,19 @@ const intent = (s: S): string =>
   [s.scope, s.view, s.selected, ...FILTER_KEYS.map((k) => s.filter[k] ?? '')].join('|');
 
 const here = (): string => location.pathname + location.search;
+
+/**
+ * Die installierte App wurde über `web+tasker://…` geöffnet: der Browser ruft
+ * dann `/?open=<Verweis>` auf (Manifest, `protocol_handlers`). Gibt den Ort
+ * zurück, an den das führt – `/`, wenn der Verweis keiner ist – oder `null`,
+ * wenn die Adresse gar keinen trägt.
+ */
+function linkedPlace(url: string): string | null {
+  const link = new URL(url, location.origin).searchParams.get('open');
+  return link === null ? null : (deepLinkPath(link) ?? '/');
+}
+
+type LaunchQueue = { setConsumer(consumer: (launch: { targetURL?: string }) => void): void };
 
 export function syncUrl(): void {
   let checked = true;
@@ -175,7 +189,21 @@ export function syncUrl(): void {
   const BROWSE_MS = 1000;
   let lastSelectAt = 0;
 
+  // Über einen Verweis von außen gestartet: die Adresse wird zum Ort, bevor sie gelesen wird.
+  const linked = linkedPlace(location.href);
+  if (linked) replaceEntry(linked);
+
   apply();
+
+  // Läuft die App schon, lädt sie für einen Verweis nicht neu (Manifest,
+  // `launch_handler`) – der Browser reicht ihn hier herein.
+  (window as { launchQueue?: LaunchQueue }).launchQueue?.setConsumer((launch) => {
+    const place = launch.targetURL ? linkedPlace(launch.targetURL) : null;
+    if (!place || place === here()) return;
+    pushEntry(place);
+    apply();
+  });
+
   window.addEventListener('popstate', () => {
     lastSelectAt = 0;
     // Nur eine Überlagerung geschlossen (`back.ts`) – der Ort ist derselbe.
