@@ -15,6 +15,7 @@ import {
   folderPatch,
   folderSort,
   graphLayout,
+  intakeTask,
   kindSchema,
   moveBody,
   purgeBody,
@@ -85,6 +86,9 @@ import { getGraph, getSettings, putGraph, putSettings } from './settings.js';
  * Jede erfolgreiche Änderung meldet sich anschließend im Änderungs-Strom
  * (`GET /events`), damit ein zweiter Tab nicht auf einem alten Stand sitzt.
  */
+/** Das Label an hereingereichten Aufgaben – dasselbe wie über MCP (`mcp.ts`). */
+const INTAKE_TAG = 'ai-created';
+
 /** Längere Kante eines Zeichnungsbilds, wenn der Client keine nennt. */
 const DRAWING_EDGE = 1600;
 
@@ -503,6 +507,34 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   );
 
   /* ------------------------------------------------------- Objektrouten */
+
+  /**
+   * Eine Aufgabe von außen hereinreichen – der eine Weg, auf dem ein Token
+   * etwas anlegen können muss (das Godot-Addon: ein Bug zum Node, an dem man
+   * gerade arbeitet). Sie landet wie über MCP lose im Backlog unter
+   * „Unsortiert“ und trägt dasselbe Label; einsortiert wird in der App.
+   *
+   * Eigener Pfad statt `/kind/task`: dort ließe sich mit dem Anlegen auch der
+   * Ort bestimmen.
+   */
+  app.post('/intake/task', async (c) => {
+    const body = intakeTask.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    const input = {
+      ...body.data,
+      parentId: null,
+      milestoneId: null,
+      groupId: null,
+      ready: false,
+      doc: false,
+      status: 'open',
+      tags: [INTAKE_TAG],
+    };
+    return run(c, bus, () => create(ctx, 'task', input), {
+      status: 201,
+      event: (object) => ({ type: 'upsert', kind: 'task', object }),
+    });
+  });
 
   app.post('/kind/:kind', async (c) => {
     const kind = parseKind(c.req.param('kind'));

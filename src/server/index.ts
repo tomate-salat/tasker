@@ -100,10 +100,15 @@ app.all('/mcp', async (c) => {
  */
 const TOKEN_ROUTES = /^\/api\/(bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
 const TOKEN_READ_ROUTES = /^\/api\/(settings|zeichnungsbild|bilder\/[^/]+)$/;
+/** Nur POST: eine Aufgabe hereinreichen, die der Server selbst im Backlog ablegt. */
+const TOKEN_POST_ROUTES = /^\/api\/intake\/task$/;
 
 app.use('/api/*', async (c, next) => {
   const path = c.req.path;
-  const forToken = TOKEN_ROUTES.test(path) || (c.req.method === 'GET' && TOKEN_READ_ROUTES.test(path));
+  const forToken =
+    TOKEN_ROUTES.test(path) ||
+    (c.req.method === 'GET' && TOKEN_READ_ROUTES.test(path)) ||
+    (c.req.method === 'POST' && TOKEN_POST_ROUTES.test(path));
   const session = sessionValid(getCookie(c, SESSION_COOKIE));
   const viaToken = !session && forToken && tokenValid(appDb, c.req.header('authorization'));
   if (!session && !viaToken) return c.json({ error: 'Nicht angemeldet.' }, 401);

@@ -57,6 +57,35 @@ const send = async (method: string, path: string, body?: unknown, client?: strin
 const mk = async (kind: string, input: unknown) => (await send('POST', `/kind/${kind}`, input)).body as { id: string; version: number };
 
 describe('Routen', () => {
+  it('eine hereingereichte Aufgabe landet im Backlog – mehr lässt sich nicht bestimmen', async () => {
+    const p = await mk('project', { name: 'P' });
+    const m = await mk('milestone', { projectId: p.id, title: 'M' });
+
+    const made = await send('POST', '/intake/task', { projectId: p.id, title: 'Keine Hose', desc: 'Am Modell', prio: 1 });
+    assert.equal(made.status, 201);
+    const t = made.body as Record<string, unknown>;
+    assert.deepEqual(
+      [t['title'], t['desc'], t['prio'], t['status'], t['parentId'], t['milestoneId'], t['groupId'], t['ready'], t['doc']],
+      ['Keine Hose', 'Am Modell', 1, 'open', null, null, null, false, false],
+    );
+    assert.deepEqual(t['tags'], ['ai-created']);
+    assert.equal(typeof t['ref'], 'number');
+    // Andere Tabs erfahren davon wie von jeder neuen Aufgabe.
+    assert.deepEqual(
+      seen.filter((e) => e.event.type === 'upsert' && e.event.kind === 'task').length,
+      1,
+    );
+
+    // Ort, Status und Labels bestimmt der Server – wer sie mitschickt, wird abgewiesen.
+    for (const extra of [{ milestoneId: m.id }, { status: 'done' }, { tags: ['x'] }, { parentId: t['id'] }, { ready: true }]) {
+      const res = await send('POST', '/intake/task', { projectId: p.id, title: 'X', ...extra });
+      assert.equal(res.status, 400, JSON.stringify(extra));
+    }
+    assert.equal((await send('POST', '/intake/task', { projectId: p.id })).status, 400);
+    assert.equal((await send('POST', '/intake/task', { projectId: p.id, title: '' })).status, 400);
+    assert.equal((await send('POST', '/intake/task', { projectId: 'gibtsnicht', title: 'X' })).status, 400);
+  });
+
   it('feste Pfade und Objektrouten überschneiden sich nicht', async () => {
     const p = await mk('project', { name: 'P' });
     const a = await mk('task', { projectId: p.id, title: 'A' });

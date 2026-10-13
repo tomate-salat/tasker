@@ -27,6 +27,22 @@ export const KINDS = [
 export type Kind = (typeof KINDS)[number];
 export const kindSchema = z.enum(KINDS);
 
+/**
+ * Eine Aufgabe von außen hereinreichen (`POST /api/intake/task`, etwa aus dem
+ * Godot-Addon). Bewusst eng und `strict`: wohin die Aufgabe kommt, legt der
+ * Server fest – ein Feld darüber hinaus ist ein Fehler, kein stilles Weglassen.
+ */
+export const intakeTask = z
+  .object({
+    projectId: id,
+    title: title.min(1),
+    desc: desc.optional(),
+    markId: id.optional(),
+    categoryId: id.optional(),
+    prio: prio.optional(),
+  })
+  .strict();
+
 export const createSchemas = {
   project: z.object({ name: title, color: z.string().max(32).optional() }),
   category: z.object({ projectId: id, name: title }),
