@@ -395,32 +395,90 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
    * Knoten vom Board. Was über Abhängigkeiten zum Ausschnitt gehört, bleibt
    * liegen – sonst wäre es beim nächsten Öffnen ohnehin wieder da. React Flow
    * selbst entfernt nichts: das Board zeigt immer die Daten.
+   *
+   * Ein ausgewählter Milestone mit Pfeilen geht stattdessen aus seiner Kette
+   * heraus (Wunsch des Nutzers): was auf ihn gewartet hat, wartet danach auf
+   * seine Vorgänger – A → B → C wird zu A → C. Gehörte er zu einem Release auf
+   * dem Board, kommen seine Vorgänger hinein: A → B → Release wird zu
+   * A → Release. Er selbst bleibt ohne Pfeile liegen.
    */
   const onBeforeDelete: OnBeforeDelete<ItemNode, RoutedEdge> = useCallback(
     async ({ nodes: gone, edges: goneEdges }) => {
+      // Erst alles sammeln, dann je Eintrag ein Schritt – auch wenn ihn mehreres trifft
+      // (zwei Glieder derselben Kette, ein Pfeil und ein Knoten zugleich).
+      const deps = new Map<string, string[]>();
+      const release = new Map<string, string | null>();
+      const depsOf = (x: Task | Milestone): string[] => deps.get(x.id) ?? x.deps;
+      const releaseOf = (m: Milestone): string | null => (release.has(m.id) ? (release.get(m.id) ?? null) : m.releaseId);
+      const keep = new Set<string>();
+
       const cut = goneEdges.filter((e) => e.selected);
-      const byTarget = new Map<string, Set<string>>();
       for (const e of cut) {
-        const set = byTarget.get(e.target) ?? new Set<string>();
-        byTarget.set(e.target, set.add(e.source));
-      }
-      for (const [targetId, sources] of byTarget) {
-        const t = items.get(targetId);
-        if (!t) continue;
-        if (isRel(t)) for (const id of sources) await patch('milestone', id, { releaseId: null });
-        else await patch(kindOf(t), t.id, { deps: t.deps.filter((d) => !sources.has(d)) });
+        const s = items.get(e.source);
+        const t = items.get(e.target);
+        if (!s || !t) continue;
+        if (isRel(t)) {
+          if (isMs(s)) release.set(s.id, null);
+        } else deps.set(t.id, depsOf(t).filter((d) => d !== s.id));
+        // Ein gelöschter Pfeil soll nichts unter der Hand verschwinden lassen.
+        keep.add(s.id).add(t.id);
       }
 
-      setAdded((prev) => {
-        const next = new Set(prev);
-        // Ein gelöschter Pfeil soll nichts unter der Hand verschwinden lassen.
-        for (const e of cut) next.add(e.source).add(e.target);
-        return next;
-      });
-      takeOff(gone.map((n) => n.id));
+      const unchained = new Set<string>();
+      let stays = 0;
+      for (const n of gone) {
+        const x = items.get(n.id);
+        if (!x || !isMs(x)) continue;
+        const before = depsOf(x).filter((d) => items.has(d));
+        const after = [...items.values()].filter(
+          (t): t is Task | Milestone => !isRel(t) && t.id !== x.id && depsOf(t).includes(x.id),
+        );
+        const own = releaseOf(x);
+        const inRelease = own && onBoard.has(own) ? own : null;
+        if (!before.length && !after.length && !inRelease) continue;
+
+        unchained.add(x.id);
+        keep.add(x.id);
+        for (const t of after) {
+          // Was einen Kreis ergäbe oder nicht passt (ein Milestone wartet nur auf Milestones), fällt weg.
+          const bridged = before.filter((p) => {
+            const pi = items.get(p);
+            return !!pi && (depsOf(t).includes(p) || !refusal(ws, pi, t));
+          });
+          deps.set(t.id, [...new Set([...depsOf(t).filter((d) => d !== x.id), ...bridged])]);
+          keep.add(t.id);
+        }
+        if (inRelease) {
+          for (const p of before) {
+            const pm = items.get(p);
+            if (!pm || !isMs(pm)) continue;
+            // Wer schon in einem anderen Release steckt, zieht nicht stillschweigend um.
+            if (!releaseOf(pm)) release.set(pm.id, inRelease);
+            else if (releaseOf(pm) !== inRelease) stays++;
+            keep.add(pm.id);
+          }
+          release.set(x.id, null);
+          keep.add(inRelease);
+        }
+        deps.set(x.id, []);
+      }
+
+      for (const id of new Set([...deps.keys(), ...release.keys()])) {
+        const x = items.get(id);
+        if (!x || isRel(x)) continue;
+        const changes: Record<string, unknown> = {};
+        const d = deps.get(id);
+        if (d && (d.length !== x.deps.length || d.some((v) => !x.deps.includes(v)))) changes['deps'] = d;
+        if (isMs(x) && release.has(id) && release.get(id) !== x.releaseId) changes['releaseId'] = release.get(id);
+        if (Object.keys(changes).length) await patch(kindOf(x), id, changes);
+      }
+      if (stays) say('Ein Vorgänger gehört schon zu einem anderen Release und bleibt dort.');
+
+      setAdded((prev) => new Set([...prev, ...keep]));
+      takeOff(gone.map((n) => n.id).filter((id) => !unchained.has(id)));
       return false;
     },
-    [items, patch, scope],
+    [items, ws, patch, say, scope, onBoard],
   );
 
   /** Vom Board nehmen – nur, was nicht über Abhängigkeiten zum Ausschnitt gehört. */
@@ -635,7 +693,8 @@ function Board({ ws, projectId, focusId }: { ws: Workspace; projectId: string; f
         </strong>
         <span className="graph-help muted">
           Aus der Liste aufs Board ziehen · vom rechten Punkt zum nächsten Eintrag ziehen = „benötigt“ ·
-          Milestone → Release = gehört dazu · Entf löscht den gewählten Pfeil · Doppelklick zeigt Details
+          Milestone → Release = gehört dazu · Entf löscht den gewählten Pfeil oder nimmt den gewählten
+          Milestone aus seiner Kette · Doppelklick zeigt Details
         </span>
         <button className="btn" onClick={() => void newRelease()} title="Ein neues Release aufs Board legen">
           + Release
