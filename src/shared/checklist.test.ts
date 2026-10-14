@@ -52,7 +52,7 @@ describe('Checklisten in Markdown', () => {
 });
 
 describe('Checkboxen zu Unteraufgaben', () => {
-  const codecks = [
+  const sample = [
     'Quest Generator',
     '',
     '- [ ] test',
@@ -72,7 +72,7 @@ describe('Checkboxen zu Unteraufgaben', () => {
   ].join('\n');
 
   it('nimmt alles Eingerückte mit, auch über Leerzeilen', () => {
-    const items = convertibleItems(codecks);
+    const items = convertibleItems(sample);
     assert.deepEqual(
       items.map((i) => [i.title, i.desc]),
       [
@@ -83,8 +83,8 @@ describe('Checkboxen zu Unteraufgaben', () => {
   });
 
   it('ersetzt die Punkte durch Verweise und lässt den Rest stehen', () => {
-    const items = convertibleItems(codecks);
-    const out = replaceItems(codecks, items.map((item, i) => ({ item, ref: 123 + i })));
+    const items = convertibleItems(sample);
+    const out = replaceItems(sample, items.map((item, i) => ({ item, ref: 123 + i })));
     assert.equal(out, 'Quest Generator\n\n- $123\n- $124\n\nDanach');
   });
 

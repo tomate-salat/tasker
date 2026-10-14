@@ -1,6 +1,30 @@
 # Tasker
 
-Persönliches Projektmanagement-Werkzeug, selbst gehostet. Ersatz für Codecks.
+Persönliches Projektmanagement-Werkzeug für Solo-Entwickler, selbst gehostet.
+
+Tasker ist bewusst für **eine Person** gebaut: ein Konto, keine Rollen, keine Zuweisungen, keine
+Abstimmung im Team. Wer im Team arbeitet, ist bei [Codecks](https://www.codecks.io) besser
+aufgehoben – Codecks hat Tasker in vielem inspiriert und funktioniert allein wie im Team, Tasker
+dagegen nur für den eigenen Schreibtisch.
+
+## Was Tasker kann
+
+- **Projekte, Milestones und Aufgaben** – Aufgaben beliebig tief verschachtelt, mit Status,
+  Priorität, Kategorien, Labels und Markierungen.
+- **Ansichten** für den aktiven Milestone („Tisch“), Plan, Ready, Backlog, Doku, Zeitplan und
+  Releases – als Liste oder als Karten.
+- **Abhängigkeiten** zwischen Aufgaben und Milestones, auch über Projektgrenzen, mit Graph.
+- **Beschreibungen in Markdown** mit Verweisen (`$142`), Checklisten, Bildern, Galerie und
+  Zeichnungen (Excalidraw).
+- **Suche** als Palette (`/` oder Strg+K), Papierkorb statt sofortigem Löschen.
+- **Mehrere Tabs und Geräte** bleiben über einen Änderungs-Strom synchron.
+- **MCP-Endpunkt** mit Zugangs-Tokens, damit etwa Claude Code Aufgaben lesen und anlegen kann.
+- **[Godot-Plugin](https://github.com/tomate-salat/godot-tasker)** – Tasker direkt im
+  Godot-Editor: Aufgaben des laufenden Milestones, Planung, Verknüpfungen mit Nodes der Szene und
+  ein eigener MCP-Server, über den Claude Code aus einer Beobachtung im Spiel einen Task anlegt.
+- **Import** aus dem CSV-Export von Codecks.
+
+## Im Repository
 
 - `prototype/index.html` – der klickbare Prototyp aus Phase 1. Bleibt als Referenz für Gestaltung
   und Verhalten liegen.
@@ -24,7 +48,7 @@ Weitere Befehle:
 | Befehl | Zweck |
 |---|---|
 | `npm run check` | TypeScript prüfen |
-| `npm test` | Tests der Berechnungslogik |
+| `npm test` | Tests für Server und Berechnungslogik |
 | `npm run build` | Client nach `dist/client`, Server nach `dist/server` |
 | `npm start` | Produktivstart, wie Railway ihn ausführt |
 | `npm run db:generate` | Migration aus dem Drizzle-Schema erzeugen |
@@ -54,7 +78,7 @@ Ein einziger Node-Prozess liefert API und gebautes Frontend aus. Im Entwicklungs
 Vite das Frontend, im Produktivbetrieb der Server selbst.
 
 ```
-src/server/   Hono: Routen, Datenbank, später Auth und SSE
+src/server/   Hono: Routen, Datenbank, Anmeldung, Änderungs-Strom (SSE), MCP
 src/client/   React-App (Vite)
 src/shared/   Typen, Zod-Schemas und reine Berechnungslogik für beide Seiten
 db/           Drizzle-Schema und Migrationen
@@ -70,7 +94,7 @@ Kein Dockerfile nötig – Railway erkennt das Node-Projekt und nutzt `build` un
 3. Variablen setzen:
    - `DATABASE_PATH=/data/tasker.db`
    - `NODE_ENV=production`
-   - `TASKER_EMAIL`, `TASKER_PASSWORD` (sobald die Anmeldung steht) – gelten nur beim ersten Start,
+   - `TASKER_EMAIL`, `TASKER_PASSWORD` – gelten nur beim ersten Start,
      danach ändert man das Passwort im Profil. Railways `secret(…)`-Vorschlag als Wert ist in Ordnung;
      er wird einmal ausgewertet und bleibt dann fest.
 

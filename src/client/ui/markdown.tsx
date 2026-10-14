@@ -18,7 +18,7 @@ const PLACEHOLDER = /<p>DRAWEMBED([A-Za-z0-9_-]+)END<\/p>/;
 /**
  * Markdown zu bereinigtem HTML; Checkboxen bekommen ihre laufende Nummer, und
  * mit `resolve` werden Verweise ($142) zu Links. Jeder Zeilenumbruch bleibt
- * einer – wie in Codecks (Wunsch des Nutzers).
+ * einer (Wunsch des Nutzers).
  *
  * `subtasks` sind die Nummern der Checkboxen, die neben sich einen Knopf zum
  * Umwandeln in eine Unteraufgabe bekommen, `sections` die Überschriften, für

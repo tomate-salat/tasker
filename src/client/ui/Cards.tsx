@@ -23,9 +23,8 @@ import { gapView, useCardGap, watchCardGap } from './cardGap.js';
 import './cards.css';
 
 /**
- * Die Kartenansicht – ein Versuch, angelehnt an Codecks, auf Wunsch des
- * Nutzers neben der Liste. Plan, Ready, Backlog und Doku wählen das je für
- * sich (`layouts` im Speicher) und zeigen dann nur die Aufgaben bzw. Seiten
+ * Die Kartenansicht – ein Versuch, auf Wunsch des Nutzers neben der Liste.
+ * Plan, Ready, Backlog und Doku wählen das je für sich (`layouts` im Speicher) und zeigen dann nur die Aufgaben bzw. Seiten
  * ohne Elternteil, als Karten nebeneinander. Den Baum darunter zeigt der
  * Inspektor (`Hierarchy`), und zwar immer von der Wurzel an – auch wenn
  * gerade eine Unteraufgabe ausgewählt ist.

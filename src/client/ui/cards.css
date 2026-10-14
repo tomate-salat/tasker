@@ -1,11 +1,11 @@
 /*
- * Kartenansicht (Versuch, angelehnt an Codecks). Alles hier gehört zu
+ * Kartenansicht (Versuch). Alles hier gehört zu
  * `Cards.tsx` und geht mit ihr, falls die Ansicht wieder rausfliegt.
  */
 
 /* ---------------------------------------------------------------- Raster */
 
-/* Schmale Karten mit fester Breite, wie bei Codecks. Den Abstand machen die
+/* Schmale Karten mit fester Breite. Den Abstand machen die
    Zellen selbst (je 7px Rand), damit es zwischen den Karten keine Lücke gibt,
    die beim Ziehen nichts annimmt. */
 .card-grid {

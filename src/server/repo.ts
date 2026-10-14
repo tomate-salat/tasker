@@ -1095,8 +1095,8 @@ export function convertToMilestone(
 }
 
 /**
- * Checkboxen der Beschreibung werden Unteraufgaben – wie in Codecks (Wunsch
- * des Nutzers): der Text hinter der Checkbox wird der Titel, alles Eingerückte
+ * Checkboxen der Beschreibung werden Unteraufgaben (Wunsch des Nutzers): der
+ * Text hinter der Checkbox wird der Titel, alles Eingerückte
  * darunter die Beschreibung, und in der Beschreibung bleibt ein Verweis stehen.
  * Mit `headings` gilt dasselbe für Überschriften: die Überschrift wird der
  * Titel, ihr Abschnitt die Beschreibung.

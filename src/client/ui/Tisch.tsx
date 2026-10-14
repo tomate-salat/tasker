@@ -52,7 +52,7 @@ type DropZone = 'open' | 'play' | 'pile';
 
 const STATUS_OF: Record<DropZone, Status> = { open: 'open', play: 'progress', pile: 'done' };
 
-/** Plätze in „Im Spiel“, die leer angezeigt werden – nur ein Richtwert wie bei Codecks. */
+/** Plätze in „Im Spiel“, die leer angezeigt werden – nur ein Richtwert. */
 const SLOTS = 7;
 
 const OPEN_KEY = 'tasker.tischOpen';
@@ -466,7 +466,7 @@ const SHELF_OUT = 460;
 const dayMonth = (start: string): string => `${start.slice(8, 10)}.${start.slice(5, 7)}.`;
 
 /**
- * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers, nach Codecks): legt sich
+ * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers): legt sich
  * über „Gesperrt“ und „Offen“ und zeigt je Woche, was erledigt wurde – mit
  * Wochenziel, bester Woche und Serie. Jede Karte lässt sich von hier zurück auf
  * „Offen“ oder ins Spiel ziehen; solange gezogen wird, tritt die Ablage dafür

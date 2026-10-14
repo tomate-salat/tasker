@@ -98,7 +98,7 @@ export function taskMenu(ws: Workspace, t: Task): MenuItem[] {
       onSelect: () => void store.convertToMilestone(t.id),
     },
     {
-      // Wie in Codecks: jede offene Checkbox der Beschreibung wird eine Unteraufgabe.
+      // Jede offene Checkbox der Beschreibung wird eine Unteraufgabe.
       label: 'Checkboxen zu Unteraufgaben',
       disabled: convertibleItems(t.desc).length === 0,
       onSelect: () => void store.checklistToSubtasks(t.id),

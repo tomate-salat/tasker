@@ -98,7 +98,7 @@ export const stackReady = (ws: Workspace, t: Task): boolean =>
 /* ------------------------------------------------------------ Ablage */
 
 /**
- * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers, nach Codecks): was in
+ * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers): was in
  * den Milestones auf dem Tisch erledigt wurde, je Woche. Wochen laufen von Montag bis Sonntag in
  * der Zeitzone des Geräts – der Server kennt nur UTC.
  */

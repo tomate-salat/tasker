@@ -8,7 +8,7 @@
  * - Enter in einem leeren Punkt beendet die Liste: eingerückt geht es eine
  *   Ebene hinauf, ganz außen verschwindet das Zeichen.
  * - Umschalt+Enter bricht im Punkt die Zeile um und rückt die neue so weit
- *   ein, dass sie noch zum Punkt gehört – wie in Codecks.
+ *   ein, dass sie noch zum Punkt gehört.
  * - Tab / Umschalt+Tab rücken Listenpunkte ein und aus – alle markierten
  *   Zeilen, die Listenpunkte sind.
  * - Alt und Pfeil hoch/runter schieben die Zeile der Schreibmarke (oder alle

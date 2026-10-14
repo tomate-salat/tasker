@@ -2052,7 +2052,7 @@ button.prop:hover {
 .md li:has(> p:first-child > input:first-child) {
   list-style: none;
   margin-left: -18px;
-  /* Folgezeilen stehen unter dem Text, nicht unter der Checkbox – wie in Codecks. */
+  /* Folgezeilen stehen unter dem Text, nicht unter der Checkbox. */
   padding-left: 24px;
 }
 
@@ -2087,7 +2087,7 @@ button.prop:hover {
   color: var(--muted);
 }
 
-/* Trennlinie wie bei Codecks: dünn und gedämpft. */
+/* Trennlinie: dünn und gedämpft. */
 .md hr {
   height: 0;
   margin: 14px 0;

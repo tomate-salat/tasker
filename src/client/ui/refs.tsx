@@ -7,7 +7,7 @@ import { replaceText, useCaretMenu } from './caretMenu.js';
 /**
  * Verweise im Text ($142): in der Anzeige ein Link mit dem aktuellen Titel,
  * beim Schreiben eine Suche nach `$`. Über den Prototyp hinaus (Wunsch des
- * Nutzers, wie die Kartenverweise in Codecks).
+ * Nutzers).
  */
 export type RefTarget = {
   id: string;

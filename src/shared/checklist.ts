@@ -54,8 +54,8 @@ export function toggleChecklistItem(s: string, n: number): string {
 /* --------------------------------------------- Checkboxen zu Unteraufgaben */
 
 /**
- * Ein Checklisten-Punkt samt allem, was zu ihm gehört – wie in Codecks
- * (Wunsch des Nutzers): alles, was tiefer eingerückt ist als die Checkbox,
+ * Ein Checklisten-Punkt samt allem, was zu ihm gehört (Wunsch des Nutzers):
+ * alles, was tiefer eingerückt ist als die Checkbox,
  * gehört noch zum Punkt, auch über Leerzeilen hinweg und samt eingerückter
  * Checkboxen darin.
  */
