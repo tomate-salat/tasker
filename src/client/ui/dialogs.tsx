@@ -802,10 +802,6 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>Titel bearbeiten</dd>
         <dt>
-          <kbd>P</kbd>
-        </dt>
-        <dd>Milestone in den Plan / zurück in den Backlog</dd>
-        <dt>
           <kbd>B</kbd>
         </dt>
         <dd>Task in den Backlog (Unsortiert)</dd>
@@ -948,9 +944,11 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           Tab „Ready“ = ready · auf Tab „Backlog“ = Unsortiert · auf Projekt = in dessen Backlog
         </dd>
         <dt>Milestone</dt>
-        <dd>auf Milestone = Reihenfolge · auf Tab „Plan“ / „Backlog“ = einplanen / zurückholen</dd>
+        <dd>auf Milestone = Reihenfolge · auf Tab „Archiv“ = archivieren · in den Plan kommt er über sein Release</dd>
         <dt>Gruppe</dt>
         <dd>auf Gruppe = Reihenfolge</dd>
+        <dt>Release</dt>
+        <dd>am ✦ ziehen · auf Release = Reihenfolge</dd>
       </dl>
     </Modal>
   );

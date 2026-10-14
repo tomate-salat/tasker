@@ -160,7 +160,7 @@ export async function moveProjectBy(ws: Workspace, p: Project, delta: 1 | -1): P
  * wird die Liste neu durchgezählt – wie der Server es bei Aufgaben tut.
  */
 export function placeSteps<T extends { id: string; version: number }>(
-  kind: 'milestone' | 'group' | 'project',
+  kind: 'milestone' | 'group' | 'project' | 'release',
   key: 'order' | 'qorder',
   list: T[],
   item: T,

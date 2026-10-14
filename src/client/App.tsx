@@ -291,9 +291,8 @@ function Shell({
 
 /** Was man auf einen Reiter ziehen kann – die Titel aus dem Prototyp. */
 const TAB_DROP_TITLE: Partial<Record<View, string>> = {
-  plan: 'Milestone hierher ziehen = einplanen',
   ready: 'Task hierher ziehen = ready',
-  backlog: 'Hierher ziehen = zurück in den Backlog',
+  backlog: 'Task hierher ziehen = zurück in den Backlog',
   docs: 'Task hierher ziehen = in die Dokumentation',
   archive: 'Hierher ziehen = archivieren',
 };

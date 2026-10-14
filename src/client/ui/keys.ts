@@ -159,14 +159,6 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu, cards: Ca
             e.preventDefault();
             void store.setMilestoneStatus(m.id, stepMsStatus(m.status, e.shiftKey ? -1 : 1));
             return;
-          case 'p':
-          case 'P':
-            void store.planMilestone(m.id, !m.planned);
-            return;
-          case 'b':
-          case 'B':
-            void store.planMilestone(m.id, false);
-            return;
           case 'a':
           case 'A':
             void store.archiveItem('milestone', m.id);

@@ -6,15 +6,12 @@ import { isArchived, type Milestone, type Task } from '@shared/model.js';
 import {
   areaLabel,
   doneCandidates,
-  draftMilestones,
   isLooseRoot,
   looseBoxId,
   placeLabel,
-  plannedMilestones,
   visibility,
   type OutlineFilter,
 } from '@shared/outline.js';
-import { schedule } from '@shared/schedule.js';
 import { Workspace } from '@shared/workspace.js';
 import {
   ApiError,
@@ -78,9 +75,10 @@ export const VIEW_LABEL: Record<View, string> = {
  * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
  * „Bilder“ ebenso: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
  * „Tisch“ (Wunsch des Nutzers) steht als erster: der aktive Milestone als Kartenspiel.
- * „Releases“ steht hinter dem Backlog, die Doku dafür hinter dem Zeitplan (Wunsch des Nutzers).
+ * „Releases“ steht vor dem Plan – im Plan steht, was einem Release angehört –, die Doku hinter
+ * dem Zeitplan (Wunsch des Nutzers).
  */
-export const TABS: View[] = ['tisch', 'plan', 'ready', 'backlog', 'releases', 'timeline', 'docs', 'bilder', 'archive'];
+export const TABS: View[] = ['tisch', 'releases', 'plan', 'ready', 'backlog', 'timeline', 'docs', 'bilder', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help' | 'search';
 
@@ -278,10 +276,13 @@ type State = {
   openCategories: (projectId?: string) => void;
   /** Wie `openCategories`: die Markierungen gehören zu einem Projekt. */
   openMarks: (projectId?: string) => void;
-  /** Ohne Angabe ein eingeplanter Milestone im aktuellen Projekt. Gibt die ID zurück. */
+  /**
+   * Ohne Angabe ein vorbereiteter Milestone im aktuellen Projekt; mit Release
+   * steht er im Plan. Gibt die ID zurück.
+   */
   addMilestone: (
     title: string,
-    o?: { planned?: boolean; projectId?: string },
+    o?: { releaseId?: string | null; projectId?: string },
   ) => Promise<string | null>;
   /** Gibt die ID zurück – „Neue Gruppe“ im Menü benennt sie gleich um. */
   addGroup: (title: string, projectId?: string) => Promise<string | null>;
@@ -313,8 +314,6 @@ type State = {
     message?: (moved: Task | null, ws: Workspace | null) => string,
   ) => Promise<void>;
   archiveItem: (kind: 'task' | 'milestone', id: string) => Promise<void>;
-  /** Milestone in den Plan oder zurück in den Backlog, jeweils ans Ende – `planMs` im Prototyp. */
-  planMilestone: (id: string, planned: boolean) => Promise<void>;
   /**
    * Status eines Milestones, `setMsStatus` im Prototyp: „In Progress“ setzt ein
    * fehlendes Startdatum, „Done“ ein fehlendes Enddatum; das automatische
@@ -911,11 +910,10 @@ export const useStore = create<State>((set, get) => ({
     const projectId = o?.projectId ?? currentProjectId(get());
     if (!projectId) return null;
     try {
-      // Aus der Planansicht heraus ist ein Milestone eingeplant, aus dem Backlog vorbereitet.
       const created = await api.create<{ id: string }>('milestone', {
         projectId,
         title,
-        planned: o?.planned ?? true,
+        ...(o?.releaseId ? { releaseId: o.releaseId } : {}),
       });
       await get().load();
       return created.id;
@@ -1072,35 +1070,6 @@ export const useStore = create<State>((set, get) => ({
     } catch (e) {
       set({ toast: e instanceof Error ? e.message : 'Archivieren fehlgeschlagen' });
     }
-  },
-
-  planMilestone: async (id, planned) => {
-    const ws = get().ws;
-    const m = ws?.milestone(id);
-    if (!ws || !m) return;
-    if (m.planned === planned) {
-      set({ toast: planned ? 'Ist schon im Plan' : 'Liegt schon im Backlog', toastUndo: false });
-      return;
-    }
-    // Ans Ende der Zielliste, wie `qorder = 1e6` bzw. `order = 1e6` im Prototyp.
-    const key = planned ? 'qorder' : 'order';
-    const list = (planned ? plannedMilestones : draftMilestones)(ws, m.projectId);
-    const end = list.reduce((max, x) => Math.max(max, x[key]), -1) + 1;
-    await get().patch('milestone', id, { planned, [key]: end });
-
-    const now = get().ws;
-    if (now?.milestone(id)?.planned !== planned) return; // Fehler steht schon in der Meldung.
-    const line = planned
-      ? schedule(now, { velocity: get().settings.velocity }).byId.get(id)
-      : undefined;
-    // Wie im Prototyp mit „Anzeigen“ – der Milestone ist gerade aus der Ansicht gewandert.
-    linked(
-      planned
-        ? `„${m.title}“ ist im Plan${line && line.open ? ` · fertig ca. ${inWeeks(line.end)}` : ''}`
-        : `„${m.title}“ ist zurück im Backlog`,
-      'Anzeigen',
-      () => get().reveal(id),
-    );
   },
 
   setMilestoneStatus: async (id, status) => {
@@ -1495,14 +1464,6 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 }));
-
-/** Datum in so vielen Wochen, kurz – `fmtD(addWeeks(w))` im Prototyp. */
-const inWeeks = (weeks: number): string => {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() + Math.round(weeks * 7));
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-};
 
 /**
  * Die Kette vom obersten Ordner bis zu diesem – für die Spur über dem Raster

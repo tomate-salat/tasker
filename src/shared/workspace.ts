@@ -63,7 +63,12 @@ export class Workspace {
     this.categories = data.categories;
     this.marks = data.marks;
     this.groups = data.groups;
-    this.milestones = data.milestones;
+    // Im Plan steht, was zu einem Release zählt – auch über Abhängigkeiten.
+    this.releaseOfMilestone = effectiveReleases(data.milestones, data.releases);
+    this.milestones = data.milestones.map((m) => {
+      const planned = this.releaseOfMilestone.has(m.id);
+      return m.planned === planned ? m : { ...m, planned };
+    });
     this.releases = data.releases;
     this.stages = data.stages;
     this.headings = data.headings;
@@ -73,11 +78,10 @@ export class Workspace {
     for (const c of data.categories) this.categoryById.set(c.id, c);
     for (const k of data.marks) this.markById.set(k.id, k);
     for (const g of data.groups) this.groupById.set(g.id, g);
-    for (const m of data.milestones) this.milestoneById.set(m.id, m);
+    for (const m of this.milestones) this.milestoneById.set(m.id, m);
     for (const r of data.releases) this.releaseById.set(r.id, r);
     for (const s of data.stages) push(this.stagesOfRelease, s.releaseId, s);
-    this.releaseOfMilestone = effectiveReleases(data.milestones, data.releases);
-    for (const m of data.milestones) {
+    for (const m of this.milestones) {
       const releaseId = this.releaseOfMilestone.get(m.id);
       if (releaseId && !isArchived(m)) push(this.milestonesOfRelease, releaseId, m);
     }

@@ -1,4 +1,4 @@
-import type { Release } from './model.js';
+import { isArchived, type Release } from './model.js';
 import { milestoneDone } from './progress.js';
 import type { ScheduledMilestone } from './schedule.js';
 import type { Workspace } from './workspace.js';
@@ -81,3 +81,13 @@ export function releaseGroups(ws: Workspace, list: ScheduledMilestone[]): Releas
 /** „0.4.0 · Zirkus-Update“ – was davon da ist. */
 export const releaseLabel = (r: Pick<Release, 'name' | 'title'>): string =>
   [r.name, r.title].filter(Boolean).join(' · ') || 'Ohne Version';
+
+/**
+ * Wohin ein im Plan angelegter Milestone kommt – im Plan steht nur, was zu
+ * einem Release zählt: das oberste aktive Release des Projekts, wie es im
+ * Reiter „Releases“ zuoberst steht.
+ */
+export const planRelease = (ws: Workspace, projectId: string): Release | null =>
+  ws.releases
+    .filter((r) => r.projectId === projectId && !isArchived(r))
+    .sort((a, b) => b.order - a.order)[0] ?? null;

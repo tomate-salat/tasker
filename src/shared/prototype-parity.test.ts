@@ -76,7 +76,8 @@ function toData(d: Dump['data']): Data {
       ref: i + 1,
       version: 1,
       projectId: m['project'] as string,
-      releaseId: null,
+      // Im Prototyp ist „eingeplant“ ein Schalter; hier heißt es: gehört zu einem Release.
+      releaseId: m['planned'] ? `plan:${m['project'] as string}` : null,
       title: m['title'] as string,
       desc: m['desc'] as string,
       planned: m['planned'] as boolean,
@@ -89,8 +90,10 @@ function toData(d: Dump['data']): Data {
       archivedAt: (m['archived'] as string | null) ?? null,
       deps: m['deps'] as string[],
     })),
-    // Releases kennt der Prototyp nicht.
-    releases: [],
+    // Releases kennt der Prototyp nicht – je Projekt eines für das Eingeplante.
+    releases: d.projects.map((p, i) => ({
+      id: `plan:${p.id}`, version: 1, projectId: p.id, name: '', title: '', desc: '', order: i, archivedAt: null,
+    })),
     stages: [],
     headings: [],
     tasks: d.tasks.map((t, i) => ({

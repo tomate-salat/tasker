@@ -58,7 +58,8 @@ export const createSchemas = {
     projectId: id,
     title,
     desc: desc.optional(),
-    planned: z.boolean().optional(),
+    /** Gleich einem Release zuordnen – damit steht der Milestone im Plan. */
+    releaseId: id.optional(),
   }),
   // Die Schnell-Erfassung setzt schon beim Anlegen mehr als nur den Titel,
   // deshalb darf `create` dieselben Felder wie `patch` entgegennehmen.
@@ -106,7 +107,6 @@ export const patchSchemas = {
       projectId: id,
       /** Nur ein Release aus dem eigenen Projekt. */
       releaseId: id.nullable(),
-      planned: z.boolean(),
       status: z.enum(TASK_STATUS),
       order: z.number(),
       qorder: z.number(),

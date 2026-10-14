@@ -3,6 +3,7 @@ import { isDone, type Milestone, type Task } from '@shared/model.js';
 import { outline, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
 import { schedule, type ScheduledMilestone } from '@shared/schedule.js';
+import { planRelease } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { currentProjectId, scopeProjectIds, useStore } from '../store.js';
 import { addIn } from './actions.js';
@@ -199,9 +200,6 @@ function KbdHint() {
         <kbd>Leertaste</kbd> nächster Status
       </span>
       <span>
-        <kbd>P</kbd> Milestone planen
-      </span>
-      <span>
         <kbd>?</kbd> alle Kürzel
       </span>
     </div>
@@ -244,10 +242,10 @@ function SectionAction({ row }: { row: Extract<OutlineRow, { type: 'section' }> 
   return (
     <button
       className="linkish"
-      // Aus dem Backlog heraus ist ein Milestone ein vorbereiteter.
+      // Aus dem Backlog heraus ist ein Milestone ein vorbereiteter: noch ohne Release.
       onClick={() =>
         void store()
-          .addMilestone('', { planned: false, projectId: row.projectId })
+          .addMilestone('', { projectId: row.projectId })
           .then((id) => id && store().edit(id, true))
       }
     >
@@ -315,7 +313,8 @@ function MilestoneRight({
         >
           Als Done markieren
         </button>
-      ) : milestone.planned ? (
+      ) : (
+        milestone.planned &&
         line &&
         (stats.open > 0 || line.fixedEnd) && (
           <span
@@ -333,16 +332,6 @@ function MilestoneRight({
             {line.late ? ' ⚠' : ''}
           </span>
         )
-      ) : (
-        <button
-          className="btn tiny"
-          onClick={(e) => {
-            e.stopPropagation();
-            void useStore.getState().planMilestone(milestone.id, true);
-          }}
-        >
-          In den Plan →
-        </button>
       )}
     </>
   );
@@ -355,22 +344,37 @@ const EMPTY: Record<OutlineView, string> = {
   docs: 'Noch keine Dokumente in diesem Projekt.',
 };
 
-/** Wie im Prototyp: der leere Plan zeigt beide Wege, dorthin etwas zu bekommen. */
+/**
+ * Der leere Plan zeigt die Wege dorthin: im Plan steht, was zu einem Release
+ * gehört – zugeordnet wird in den Releases, und gibt es schon eines, lässt
+ * sich ein Milestone direkt darin anlegen.
+ */
 function PlanEmpty() {
-  const { setView, addMilestone } = useStore();
+  const { setView, addMilestone, ws } = useStore();
+  const projectId = useStore(currentProjectId);
+  const release = ws && projectId ? planRelease(ws, projectId) : null;
   return (
     <>
-      Nichts im Plan. Bereite Milestones im{' '}
-      <button className="linkish" onClick={() => setView('backlog')}>
-        Backlog
+      Nichts im Plan. Im Plan steht, was zu einem{' '}
+      <button className="linkish" onClick={() => setView('releases')}>
+        Release
       </button>{' '}
-      vor oder{' '}
-      <button
-        className="linkish"
-        onClick={() => void addMilestone('').then((id) => id && useStore.getState().edit(id, true))}
-      >
-        leg direkt einen an
-      </button>
+      gehört
+      {release && (
+        <>
+          {' '}– oder{' '}
+          <button
+            className="linkish"
+            onClick={() =>
+              void addMilestone('', { releaseId: release.id, projectId: release.projectId }).then(
+                (id) => id && useStore.getState().edit(id, true),
+              )
+            }
+          >
+            leg direkt einen an
+          </button>
+        </>
+      )}
       .
     </>
   );

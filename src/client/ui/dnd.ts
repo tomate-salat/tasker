@@ -11,7 +11,7 @@ import {
 } from '@shared/outline.js';
 import type { Step } from '@shared/api.js';
 import { dependsOn } from '@shared/blocking.js';
-import type { Milestone, Project, Task } from '@shared/model.js';
+import type { Milestone, Project, Release, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { folderPath, useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
@@ -25,10 +25,12 @@ import { setCover } from './Cards.js';
  * - **Aufgabe** über einer Aufgabe: oben „davor“, unten „danach“, in der Mitte
  *   „hinein“. Über Milestone, Gruppe, leerem Platzhalter, Reiter (Plan,
  *   Backlog, Doku, Archiv) und Projekt in der Seitenleiste: „hinein“.
- * - **Milestone** über einem Milestone: davor oder danach; über den Reitern
- *   Plan, Backlog und Archiv: hinein.
+ * - **Milestone** über einem Milestone derselben Liste: davor oder danach;
+ *   über dem Reiter Archiv: hinein. In den Plan bringt ihn sein Release.
  * - **Projekt** über einem Projekt, **Gruppe** über einer Gruppe desselben
  *   Projekts: davor oder danach.
+ * - **Release** über einem Release desselben Projekts: davor oder danach
+ *   (Wunsch des Nutzers).
  *
  * Über den Prototyp hinaus (Wunsch des Nutzers): Gehört die gezogene Aufgabe
  * zu einer Mehrfachauswahl, wandern alle Ausgewählten mit. Am Listenrand
@@ -39,7 +41,7 @@ import { setCover } from './Cards.js';
  */
 export type Zone = 'before' | 'after' | 'child' | 'into';
 
-type DragKind = 'task' | 'milestone' | 'group' | 'project' | 'image' | 'folder';
+type DragKind = 'task' | 'milestone' | 'group' | 'project' | 'release' | 'image' | 'folder';
 
 type Drag = {
   kind: DragKind;
@@ -74,6 +76,8 @@ export type Target =
   | { type: 'empty'; row: EmptyRowT }
   | { type: 'tab'; view: View }
   | { type: 'project'; project: Project }
+  /** Ein Release im Reiter „Releases“ – nimmt nur andere Releases desselben Projekts. */
+  | { type: 'release'; release: Release }
   /** Die beiden Felder im Inspektor: Ablegen setzt eine Abhängigkeit. */
   | { type: 'dep'; dir: 'by' | 'blocks'; item: Task | Milestone }
   /**
@@ -100,6 +104,8 @@ const keyOf = (t: Target): string => {
       return `tab:${t.view}`;
     case 'project':
       return `proj:${t.project.id}`;
+    case 'release':
+      return `rel:${t.release.id}`;
     case 'dep':
       return `dep:${t.dir}:${t.item.id}`;
     case 'cover':
@@ -361,14 +367,21 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
         return ['plan', 'ready', 'backlog', 'docs', 'archive'].includes(target.view) ? 'into' : null;
       }
       return 'into';
-    case 'milestone':
-      if (target.type === 'milestone') return target.milestone.id === drag.id ? null : half;
-      if (target.type === 'tab') {
-        return ['plan', 'ready', 'backlog', 'archive'].includes(target.view) ? 'into' : null;
+    case 'milestone': {
+      // Ob ein Milestone im Plan steht, entscheidet sein Release – hier wird nur sortiert.
+      if (target.type === 'milestone') {
+        const m = useStore.getState().ws?.milestone(drag.id);
+        return target.milestone.id === drag.id || m?.planned !== target.milestone.planned ? null : half;
       }
-      return null;
+      return target.type === 'tab' && target.view === 'archive' ? 'into' : null;
+    }
     case 'project':
       return target.type === 'project' && target.project.id !== drag.id ? half : null;
+    case 'release': {
+      if (target.type !== 'release' || target.release.id === drag.id) return null;
+      const r = useStore.getState().ws?.release(drag.id);
+      return r?.projectId === target.release.projectId ? half : null;
+    }
     case 'group':
       return target.type === 'group' && target.row.group && target.row.group.id !== drag.id
         ? half
@@ -403,6 +416,8 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
       return dropMilestone(ws, drag.id, target, zone);
     case 'project':
       return dropProject(ws, drag.id, target, zone);
+    case 'release':
+      return dropRelease(ws, drag.id, target, zone);
     case 'group':
       return dropGroup(ws, drag.id, target, zone);
   }
@@ -622,19 +637,22 @@ async function dropMilestone(ws: Workspace, id: string, target: Target, zone: Zo
 
   if (zone === 'into' && target.type === 'tab') {
     if (target.view === 'archive') return store.archiveItem('milestone', id);
-    return store.planMilestone(id, target.view === 'plan');
+    return;
   }
   if (target.type !== 'milestone') return;
 
-  // Wie im Prototyp: der Milestone übernimmt Projekt und Planungsstand des Ziels.
+  // Wie im Prototyp: der Milestone übernimmt das Projekt des Ziels.
   const x = target.milestone;
   const key = x.planned ? 'qorder' : 'order';
   const list = (x.planned ? plannedMilestones : draftMilestones)(ws, x.projectId).filter(
     (y) => y.id !== id,
   );
   const extra: Record<string, unknown> = {};
-  if (m.projectId !== x.projectId) extra['projectId'] = x.projectId;
-  if (m.planned !== x.planned) extra['planned'] = x.planned;
+  if (m.projectId !== x.projectId) {
+    extra['projectId'] = x.projectId;
+    // Das alte Release bleibt zurück; im Plan des neuen Projekts gehört er zum Release des Ziels.
+    if (x.planned) extra['releaseId'] = ws.releaseOf(x)?.id ?? null;
+  }
   const at = list.indexOf(x) + (zone === 'after' ? 1 : 0);
   await store.runSteps(placeSteps('milestone', key, [...list, m], m, at, extra), null);
 }
@@ -645,6 +663,18 @@ async function dropProject(ws: Workspace, id: string, target: Target, zone: Zone
   const list = ws.projects.filter((x) => x.id !== id);
   const at = list.indexOf(target.project) + (zone === 'after' ? 1 : 0);
   await useStore.getState().runSteps(placeSteps('project', 'order', ws.projects, p, at), null);
+}
+
+/**
+ * Releases stehen mit dem höchsten `order` zuoberst – „davor“ heißt also:
+ * in der aufsteigenden Liste hinter das Ziel.
+ */
+async function dropRelease(ws: Workspace, id: string, target: Target, zone: Zone): Promise<void> {
+  const r = ws.release(id);
+  if (!r || target.type !== 'release' || target.release.projectId !== r.projectId) return;
+  const all = ws.releases.filter((x) => x.projectId === r.projectId).sort((a, b) => a.order - b.order);
+  const at = all.filter((x) => x.id !== id).indexOf(target.release) + (zone === 'before' ? 1 : 0);
+  await useStore.getState().runSteps(placeSteps('release', 'order', all, r, at), null);
 }
 
 async function dropGroup(ws: Workspace, id: string, target: Target, zone: Zone): Promise<void> {

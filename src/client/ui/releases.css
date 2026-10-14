@@ -8,11 +8,8 @@
   overflow-y: auto;
 }
 
-.rl-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 13px;
+.rl > .sec {
+  padding: 8px 0 0;
 }
 
 .rl-empty {
@@ -34,6 +31,38 @@
 
 .rl-card.gone {
   opacity: 0.7;
+}
+
+/* Umsortieren: gezogen wird am Zeichen, die Linie zeigt, wo das Release landet. */
+.rl-card {
+  position: relative;
+}
+
+.rl-card.dragging {
+  opacity: 0.4;
+}
+
+.rl-card.dz-before::before,
+.rl-card.dz-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.rl-card.dz-before::before {
+  top: -9px;
+}
+
+.rl-card.dz-after::after {
+  bottom: -9px;
+}
+
+.rl-grip {
+  cursor: grab;
 }
 
 /* ------------------------------------------------------------------ Kopf */

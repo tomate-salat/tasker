@@ -97,7 +97,6 @@ describe('Codecks-Import', () => {
     const cat = (name: string) => data.categories.find((c) => c.name === name)!.id;
     const [ms] = data.milestones;
 
-    assert.equal(ms!.planned, true);
     assert.equal(ms!.endDate, '2026-09-23');
     assert.equal(ms!.endAuto, false);
 

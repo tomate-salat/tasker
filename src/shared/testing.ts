@@ -40,7 +40,16 @@ export class Builder {
     return this;
   }
 
+  /**
+   * `planned: true` ohne Release legt den Milestone in ein Release „plan:<Projekt>“
+   * – im Plan steht nur, was zu einem Release gehört.
+   */
   milestone(id: string, projectId: string, o: Partial<Milestone> = {}): this {
+    if (o.planned && !o.releaseId) {
+      const releaseId = `plan:${projectId}`;
+      if (!this.data.releases.some((r) => r.id === releaseId)) this.release(releaseId, projectId);
+      o = { ...o, releaseId };
+    }
     this.data.milestones.push({
       id,
       ref: this.ref++,

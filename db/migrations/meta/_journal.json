@@ -134,6 +134,13 @@
       "when": 1791621391854,
       "tag": "0018_changelog",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791989194962,
+      "tag": "0019_plan_aus_release",
+      "breakpoints": true
     }
   ]
 }

@@ -23,7 +23,7 @@ import {
   type OutlineView,
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
-import { releaseLabel } from '@shared/release.js';
+import { planRelease, releaseLabel } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import {
@@ -174,10 +174,6 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       })),
     },
     {
-      label: m.planned ? 'Zurück in den Backlog' : 'In den Plan',
-      onSelect: () => void store.planMilestone(m.id, !m.planned),
-    },
-    {
       label: 'Nach oben',
       disabled: !canMoveRow(ws, m, -1),
       onSelect: () => void moveRowBy(ws, m, -1),
@@ -296,13 +292,17 @@ export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group
  */
 export function listMenu(view: OutlineView, projectId: string): MenuItem[] {
   const store = useStore.getState();
-  const milestone = (planned: boolean): MenuItem => ({
+  const milestone = (releaseId: string | null): MenuItem => ({
     label: 'Neuer Milestone',
     onSelect: () =>
-      void store.addMilestone('', { planned, projectId }).then((id) => id && store.edit(id, true)),
+      void store.addMilestone('', { releaseId, projectId }).then((id) => id && store.edit(id, true)),
   });
 
-  if (view === 'plan') return [milestone(true)];
+  if (view === 'plan') {
+    // Im Plan steht nur, was zu einem Release gehört.
+    const release = store.ws ? planRelease(store.ws, projectId) : null;
+    return release ? [milestone(release.id)] : [{ head: 'Erst ein Release anlegen' }];
+  }
   if (view === 'docs') {
     return [{ label: 'Neue Seite', onSelect: () => void addAndEdit({ projectId, doc: true }) }];
   }
@@ -312,7 +312,7 @@ export function listMenu(view: OutlineView, projectId: string): MenuItem[] {
   return [
     { label: 'Neuer Task', onSelect: () => void addIn(projectId, {}) },
     { sep: true },
-    milestone(false),
+    milestone(null),
     { label: 'Neue Gruppe', onSelect: () => void newGroup(projectId) },
   ];
 }

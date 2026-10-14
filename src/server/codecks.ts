@@ -215,7 +215,6 @@ function write(ctx: DbCtx, cards: CodecksCard[]): CodecksSummary {
         create(ctx, 'milestone', {
           projectId,
           title: card.milestone,
-          planned: true,
           endDate: date,
           endAuto: !date,
         }) as { id: string }

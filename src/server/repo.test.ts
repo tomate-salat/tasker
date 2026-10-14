@@ -554,8 +554,9 @@ describe('Löschen', () => {
 
   it('ein wiederhergestellter Milestone holt seine Aufgaben zurück und reiht sich hinten ein', () => {
     const p = mkProject();
-    const m = mkMilestone({ projectId: p.id, title: 'M', planned: true });
-    const n = mkMilestone({ projectId: p.id, title: 'N', planned: true });
+    const rel = create(ctx, 'release', { projectId: p.id }) as { id: string };
+    const m = mkMilestone({ projectId: p.id, title: 'M', releaseId: rel.id });
+    const n = mkMilestone({ projectId: p.id, title: 'N', releaseId: rel.id });
     const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
     const b = mkTask({ projectId: p.id, title: 'B', milestoneId: m.id });
 
@@ -637,8 +638,8 @@ describe('Löschen', () => {
     const other = create(ctx, 'project', { name: 'Website' }) as { id: string };
     const c = create(ctx, 'category', { projectId: p.id, name: 'Technik' }) as { id: string };
     const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
-    const m = mkMilestone({ projectId: p.id, title: 'M', planned: true });
-    const m2 = mkMilestone({ projectId: p.id, title: 'M2', planned: true });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const m2 = mkMilestone({ projectId: p.id, title: 'M2' });
     patch(ctx, 'milestone', m2.id, 1, { deps: [m.id] });
     const a = mkTask({ projectId: p.id, title: 'A', milestoneId: m.id });
     const kind = mkTask({ projectId: p.id, title: 'Kind', parentId: a.id });
@@ -1237,6 +1238,20 @@ describe('Releases', () => {
     assert.equal(inside.releaseId, r.id);
     assert.throws(() => patch(ctx, 'milestone', m.id, inside.version, { releaseId: foreign.id }), /anderen Projekt/);
     assert.throws(() => patch(ctx, 'milestone', m.id, inside.version, { releaseId: 'rGibtEsNicht' }), /gibt es nicht/);
+  });
+
+  it('mit dem Release kommt ein Milestone in den Plan – ans Ende', () => {
+    const p = mkProject();
+    const r = mkRelease({ projectId: p.id, name: '0.1' });
+    const m = mkMilestone({ projectId: p.id, title: 'M' });
+    const n = mkMilestone({ projectId: p.id, title: 'N', releaseId: r.id });
+    assert.equal(m.planned, false);
+    assert.equal(n.planned, true);
+    assert.throws(() => mkMilestone({ projectId: mkProject().id, title: 'X', releaseId: r.id }), /anderen Projekt/);
+
+    const planned = patch(ctx, 'milestone', m.id, m.version, { releaseId: r.id }) as Milestone;
+    assert.equal(planned.planned, true);
+    assert.ok(planned.qorder > n.qorder);
   });
 
   it('beim Projektwechsel bleibt das Release zurück – Rückgängig holt es wieder', () => {

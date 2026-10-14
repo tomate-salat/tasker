@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { releaseGroups, releaseLabel, releaseStatus } from './release.js';
+import { planRelease, releaseGroups, releaseLabel, releaseStatus } from './release.js';
 import { schedule } from './schedule.js';
 import { Builder } from './testing.js';
 
@@ -70,17 +70,18 @@ describe('Release', () => {
     assert.equal(releaseStatus(open, open.release('r')!, 1), 'progress');
   });
 
-  it('gruppiert den Zeitplan nach Release – ohne Release steht je Projekt am Schluss', () => {
+  it('gruppiert den Zeitplan nach Release – ohne Release steht nichts im Plan', () => {
     const b = new Builder()
       .project('p')
       .project('q')
       .release('r1', 'p')
       .release('r2', 'p')
-      .milestone('lose', 'p', { planned: true, qorder: 0 })
+      .release('rq', 'q')
+      .milestone('lose', 'p', { qorder: 0 })
       .milestone('a', 'p', { planned: true, qorder: 1, releaseId: 'r2' })
       .milestone('b', 'p', { planned: true, qorder: 2, releaseId: 'r1' })
       .milestone('c', 'p', { planned: true, qorder: 3, releaseId: 'r2' })
-      .milestone('fremd', 'q', { planned: true, qorder: 0 });
+      .milestone('fremd', 'q', { releaseId: 'rq', qorder: 4 });
     for (const m of ['lose', 'a', 'b', 'c', 'fremd']) {
       for (let i = 0; i < 4; i++) b.task(`${m}${i}`, m === 'fremd' ? 'q' : 'p', { milestoneId: m });
     }
@@ -91,13 +92,28 @@ describe('Release', () => {
       [
         ['p', 'r2', ['a', 'c']],
         ['p', 'r1', ['b']],
-        ['p', null, ['lose']],
-        ['q', null, ['fremd']],
+        ['q', 'rq', ['fremd']],
       ],
     );
     // Vier Aufgaben je Milestone bei Tempo vier: je eine Woche, nacheinander.
     const r2 = groups[0]!;
-    assert.deepEqual([r2.start, r2.end, r2.done], [1, 4, false]);
+    assert.deepEqual([r2.start, r2.end, r2.done], [0, 3, false]);
+  });
+
+  it('im Plan steht, was zu einem Release zählt – auch über Abhängigkeiten', () => {
+    const ws = new Builder()
+      .project('p')
+      .release('r', 'p')
+      .milestone('drin', 'p', { releaseId: 'r', deps: ['gebraucht'] })
+      .milestone('gebraucht', 'p')
+      .milestone('lose', 'p', { planned: false })
+      .build();
+    assert.deepEqual(
+      ws.milestones.map((m) => [m.id, m.planned]),
+      [['drin', true], ['gebraucht', true], ['lose', false]],
+    );
+    assert.equal(planRelease(ws, 'p')?.id, 'r');
+    assert.equal(planRelease(ws, 'q'), null);
   });
 
   it('nennt Version und Titel, soweit vorhanden', () => {

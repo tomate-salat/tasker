@@ -26,7 +26,9 @@ import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { currentProjectId, scopeProjectIds, useStore } from '../store.js';
 import { GRAPH_ICON } from './icons.js';
+import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { useMenu, type MenuItem } from './Menu.js';
+import { SectionRow } from './rows.js';
 import './releases.css';
 
 export function Releases({ ws }: { ws: Workspace }) {
@@ -50,19 +52,28 @@ export function Releases({ ws }: { ws: Workspace }) {
 
   return (
     <div className="rl">
-      <div className="rl-bar">
-        <button className="btn" onClick={() => void add()} disabled={!projectId}>
-          + Release
-        </button>
-        {many && projectId && (
-          <span className="muted">legt in „{ws.project(projectId)?.name}“ an</span>
-        )}
-        {archived.length > 0 && (
-          <button className="linkish" onClick={() => setShowArchived((v) => !v)}>
-            {showArchived ? 'Archivierte ausblenden' : `Archivierte anzeigen (${archived.length})`}
-          </button>
-        )}
-      </div>
+      {/* Die Überschrift wie bei den Abschnitten der Liste, das Anlegen rechts daran. */}
+      <SectionRow
+        title="Releases"
+        action={
+          <>
+            {archived.length > 0 && (
+              <button className="linkish" onClick={() => setShowArchived((v) => !v)}>
+                {showArchived ? 'Archivierte ausblenden' : `Archivierte anzeigen (${archived.length})`}
+              </button>
+            )}
+            {projectId && (
+              <button
+                className="linkish"
+                title={many ? `Legt in „${ws.project(projectId)?.name}“ an` : undefined}
+                onClick={() => void add()}
+              >
+                + Release
+              </button>
+            )}
+          </>
+        }
+      />
 
       {!all.length && (
         <div className="rl-empty">
@@ -159,6 +170,11 @@ function ReleaseCard({
   const status = releaseStatus(ws, release, data?.milestones.filter((m) => m.archived).length ?? 0);
   const gone = isArchived(release);
   const [stage, setStage] = useState('');
+  const target = { type: 'release', release } as const;
+  const zone = useZone(target);
+  const dragging = useDragging(release.id);
+  const card = useRef<HTMLElement>(null);
+  const drag = dragSource('release', release.id);
 
   const addFresh = (): void => {
     const name = stage.trim();
@@ -193,9 +209,23 @@ function ReleaseCard({
   };
 
   return (
-    <section className={`rl-card ${gone ? 'gone' : ''}`} data-status={status}>
+    <section
+      ref={card}
+      className={`rl-card ${gone ? 'gone' : ''} ${zone ? `dz-${zone}` : ''} ${dragging ? 'dragging' : ''}`}
+      data-status={status}
+      {...dropTarget(target)}
+    >
       <header className="rl-head">
-        <span className="ico rel" aria-hidden="true">
+        {/* Am Zeichen wird gezogen – Version und Titel bleiben Eingabefelder. */}
+        <span
+          className="ico rel rl-grip"
+          title="Ziehen zum Umsortieren"
+          {...drag}
+          onDragStart={(e) => {
+            drag.onDragStart(e);
+            if (card.current) e.dataTransfer.setDragImage(card.current, 24, 24);
+          }}
+        >
           ✦
         </span>
         <CommitInput

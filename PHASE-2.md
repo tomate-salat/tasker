@@ -744,6 +744,14 @@ dabei:
   kennt sie nicht, deshalb kommen sie mit dem Changelog vom Server (`GET /api/changelog/<id>`).
   Im Graphen fehlen sie weiterhin.
 
+**Geändert (14.10.2026, Wunsch des Nutzers):** Der Reiter steht jetzt vor dem Plan. Ein Milestone
+wird nicht mehr eigens eingeplant: **im Plan steht, was zu einem Release zählt** (auch über
+Abhängigkeiten). `planned` wird nicht mehr gespeichert (Migration 0019), der `Workspace` leitet
+es ab; „In den Plan →“, `P`/`B` und das Ziehen auf die Reiter Plan/Backlog entfallen. Bekommt ein
+Milestone ein Release, rückt er ans Ende des Plans. Im Plan angelegte Milestones kommen ins oberste
+aktive Release. Die Releases lassen sich am ✦ ziehen und umsortieren; „+ Release“ steht wie bei
+den Abschnitten der Liste rechts an der Überschrift.
+
 **Changelog**
 
 - Das Changelog hängt am Task, mit drei Zuständen: **unentschieden** (Vorgabe), **Eintrag** (eine

@@ -485,7 +485,10 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
     if (kind === 'project' && !values['color']) {
       values['color'] = PROJECT_COLORS[(values['order'] as number) % PROJECT_COLORS.length];
     }
-    if (kind === 'milestone') values['qorder'] = values['order'];
+    if (kind === 'milestone') {
+      values['qorder'] = values['order'];
+      if (typeof values['releaseId'] === 'string') checkRelease(ctx, values['releaseId'], String(values['projectId']));
+    }
     if (kind === 'task' && values['parentId']) {
       // Ein Kind hängt nie zusätzlich an Milestone oder Gruppe.
       values['milestoneId'] = null;
@@ -559,11 +562,13 @@ export function patch(
     if (kind === 'milestone') {
       const projectId = (fields['projectId'] as string | undefined) ?? (current['project_id'] as string);
       if (typeof fields['releaseId'] === 'string') {
-        // Ein Release sammelt nur Milestones seines eigenen Projekts.
-        const release = readRow(ctx, 'release', fields['releaseId']);
-        if (!release) throw new Error('Dieses Release gibt es nicht mehr');
-        if (release['project_id'] !== projectId) {
-          throw new Error('Das Release gehört zu einem anderen Projekt');
+        checkRelease(ctx, fields['releaseId'], projectId);
+        // Mit dem Release kommt der Milestone in den Plan – dort ans Ende.
+        if (!current['release_id'] && fields['qorder'] === undefined) {
+          fields['qorder'] =
+            (ctx.sqlite
+              .prepare('SELECT coalesce(max(queue_order), -1) AS q FROM milestone WHERE project_id = ? AND id != ?')
+              .get(projectId, id) as { q: number }).q + 1;
         }
       } else if (projectId !== current['project_id'] && fields['releaseId'] === undefined) {
         // Beim Projektwechsel bleibt das Release zurück.
@@ -1044,7 +1049,6 @@ export function convertToMilestone(
       projectId: row['project_id'],
       title: row['title'],
       desc: row['desc'],
-      planned: false,
       ref: row['ref'],
       deps: deps.filter(isMs),
     }) as { id: string };
@@ -1749,7 +1753,7 @@ export function restoreTrash(
           : p.kind === 'milestone'
             ? p.row['archived_at']
               ? 'im Archiv'
-              : p.row['planned']
+              : p.row['release_id']
                 ? 'im Plan'
                 : 'im Backlog'
             : '';
@@ -1780,7 +1784,7 @@ function whereOf(ctx: DbCtx, kind: Kind, row: Record<string, unknown>): string {
   const project = String(get('SELECT name FROM project WHERE id = ?', row['project_id'])?.['name'] ?? '');
 
   if (kind === 'milestone') {
-    return row['archived_at'] ? 'aus dem Archiv' : row['planned'] ? 'aus dem Plan' : 'aus dem Backlog';
+    return row['archived_at'] ? 'aus dem Archiv' : row['release_id'] ? 'aus dem Plan' : 'aus dem Backlog';
   }
   if (kind === 'group') return `Gruppe · ${project}`;
   if (kind !== 'task') return '';
@@ -1788,8 +1792,8 @@ function whereOf(ctx: DbCtx, kind: Kind, row: Record<string, unknown>): string {
   if (row['parent_id']) {
     return `unter „${String(get('SELECT title FROM task WHERE id = ?', row['parent_id'])?.['title'] ?? '?')}“`;
   }
-  const m = get('SELECT title, planned FROM milestone WHERE id = ?', row['milestone_id']);
-  if (m) return `in ◆ ${String(m['title'])}${m['planned'] ? '' : ' (Backlog)'}`;
+  const m = get('SELECT title, release_id FROM milestone WHERE id = ?', row['milestone_id']);
+  if (m) return `in ◆ ${String(m['title'])}${m['release_id'] ? '' : ' (Backlog)'}`;
   if (row['doc']) return `in Dokumentation · ${project}`;
 
   const g = get('SELECT title FROM "group" WHERE id = ?', row['group_id']);
@@ -2030,6 +2034,13 @@ function targetProject(ctx: DbCtx, t: MoveTarget): string | null {
 /** Dieselben Farben wie im Prototyp, der Reihe nach vergeben. */
 const PROJECT_COLORS = ['#7A4FA0', '#B04A6A', '#3E8A8A', '#6B7A2A', '#4A5BB0'];
 
+/** Ein Release sammelt nur Milestones seines eigenen Projekts. */
+function checkRelease(ctx: DbCtx, releaseId: string, projectId: string): void {
+  const release = readRow(ctx, 'release', releaseId);
+  if (!release) throw new Error('Dieses Release gibt es nicht mehr');
+  if (release['project_id'] !== projectId) throw new Error('Das Release gehört zu einem anderen Projekt');
+}
+
 function nextOrder(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): number {
   if (kind === 'heading') {
     const release = readRow(ctx, 'release', String(input['releaseId']));
@@ -2155,7 +2166,7 @@ type StageRow = {
 };
 type HeadingRow = { id: string; version: number; release_id: string; title: string; sort_order: number };
 type MilestoneRow = {
-  id: string; ref: number; version: number; project_id: string; release_id: string | null; title: string; desc: string; planned: number; status: string;
+  id: string; ref: number; version: number; project_id: string; release_id: string | null; title: string; desc: string; status: string;
   sort_order: number; queue_order: number; start_date: string | null; end_date: string | null;
   end_auto: number; archived_at: string | null;
 };
@@ -2208,7 +2219,8 @@ const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
   releaseId: r.release_id ?? null,
   title: r.title,
   desc: r.desc,
-  planned: !!r.planned,
+  // Nur die ausdrückliche Zuordnung – was über Abhängigkeiten dazukommt, rechnet der `Workspace`.
+  planned: r.release_id !== null,
   status: r.status as Status,
   order: r.sort_order,
   qorder: r.queue_order,

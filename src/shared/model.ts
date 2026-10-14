@@ -105,6 +105,11 @@ export type Milestone = {
   releaseId: string | null;
   title: string;
   desc: string;
+  /**
+   * Im Plan – nicht gespeichert, sondern abgeleitet (Wunsch des Nutzers): im
+   * Plan steht, was zu einem Release zählt (`Workspace.releaseOf`). Der Server
+   * liefert die ausdrückliche Zuordnung, der `Workspace` rechnet nach.
+   */
   planned: boolean;
   status: Status;
   order: number;

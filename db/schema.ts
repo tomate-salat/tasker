@@ -171,8 +171,6 @@ export const milestones = sqliteTable(
     ref: integer('ref'),
     title: text('title').notNull(),
     desc: text('desc').notNull().default(''),
-    /** Eingeplant (mit Zeitraum) oder nur gesammelt. */
-    planned: integer('planned', { mode: 'boolean' }).notNull().default(false),
     status: text('status', { enum: MILESTONE_STATUS }).notNull().default('open'),
     order: integer('sort_order').notNull().default(0),
     /** Reihenfolge in der Planungsansicht, unabhängig von der Listenreihenfolge. */
