@@ -101,3 +101,7 @@ Kein Dockerfile nötig – Railway erkennt das Node-Projekt und nutzt `build` un
    `PORT` setzt Railway selbst; der Server hört darauf und auf `0.0.0.0`.
 4. Prüfen: `/api/health` antwortet. Der Zähler `boots` steigt bei jedem Deploy, `firstBootAt` bleibt
    gleich – genau daran erkennt man, dass das Volume greift.
+
+## Lizenz
+
+[MIT](LICENSE)
