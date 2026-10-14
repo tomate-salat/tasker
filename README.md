@@ -2,6 +2,8 @@
 
 Persönliches Projektmanagement-Werkzeug für Solo-Entwickler, selbst gehostet.
 
+![Der Tisch: der aktive Milestone mit gesperrten, offenen und laufenden Aufgaben und dem Stapel des Erledigten](docs/screenshots/tisch.png)
+
 Tasker ist bewusst für **eine Person** gebaut: ein Konto, keine Rollen, keine Zuweisungen, keine
 Abstimmung im Team. Wer im Team arbeitet, ist bei [Codecks](https://www.codecks.io) besser
 aufgehoben – Codecks hat Tasker in vielem inspiriert und funktioniert allein wie im Team, Tasker
@@ -23,6 +25,19 @@ dagegen nur für den eigenen Schreibtisch.
   Godot-Editor: Aufgaben des laufenden Milestones, Planung, Verknüpfungen mit Nodes der Szene und
   ein eigener MCP-Server, über den Claude Code aus einer Beobachtung im Spiel einen Task anlegt.
 - **Import** aus dem CSV-Export von Codecks.
+
+## Bilder
+
+Alle Daten in den Bildern sind ausgedacht.
+
+| | |
+|---|---|
+| ![Plan als Karten](docs/screenshots/plan-karten.png) | ![Plan als Liste mit Inspektor](docs/screenshots/inspektor.png) |
+| **Plan als Karten** – Milestones nacheinander, Fortschritt je Aufgabe | **Liste und Inspektor** – Baum, Beschreibung mit Checkliste, Abhängigkeiten |
+| ![Zeitplan](docs/screenshots/zeitplan.png) | ![Abhängigkeits-Graph](docs/screenshots/abhaengigkeiten.png) |
+| **Zeitplan** – Prognose aus Tempo und offenen Aufgaben, je Projekt und Release | **Abhängigkeiten** – Aufgaben, Milestones und Releases als Graph |
+| ![Releases mit Changelog](docs/screenshots/releases.png) | ![Suche](docs/screenshots/suche.png) |
+| **Releases** – Kanäle zum Abhaken und Changelog aus den erledigten Aufgaben | **Suche** – Palette über der Ansicht, auch in Beschreibungen |
 
 ## Im Repository
 
