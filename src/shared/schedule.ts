@@ -1,4 +1,4 @@
-import { type Milestone, isDone } from './model.js';
+import { type Milestone, isArchived, isDone } from './model.js';
 import { milestoneStats, type MilestoneStats } from './progress.js';
 import type { Workspace } from './workspace.js';
 
@@ -63,10 +63,25 @@ export type ScheduleOptions = {
   /** Aufgaben pro Woche. */
   velocity: number;
   today?: Date;
+  /** Was gerechnet wird, in dieser Reihenfolge – ohne Angabe die Milestones im Plan. */
+  milestones?: Milestone[];
 };
 
 /**
- * Reiht die eingeplanten Milestones je Projekt nacheinander auf und rechnet aus, wann sie
+ * Was im Zeitplan steht (Wunsch des Nutzers): jeder aktive Milestone mit
+ * mindestens einer Aufgabe oder mit Start- und Enddatum – nicht nur die im
+ * Plan. Die im Plan kommen zuerst, in ihrer Reihenfolge; die übrigen danach,
+ * so verschieben sie die Prognosen im Plan nicht.
+ */
+export function timelineMilestones(ws: Workspace): Milestone[] {
+  const shown = (m: Milestone): boolean =>
+    !isArchived(m) && (ws.msCounted(m).length > 0 || (m.startDate !== null && m.endDate !== null));
+  const rest = ws.milestones.filter((m) => !m.planned && shown(m)).sort((a, b) => a.order - b.order);
+  return [...ws.plannedMilestones().filter(shown), ...rest];
+}
+
+/**
+ * Reiht die Milestones (ohne Angabe die im Plan) je Projekt nacheinander auf und rechnet aus, wann sie
  * beim eingestellten Tempo fertig werden.
  *
  * Abhängigkeiten kommen aus zwei Quellen: direkt zwischen Milestones und
@@ -80,7 +95,8 @@ export type ScheduleOptions = {
 export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
   const velocity = Math.max(1, options.velocity || 1);
   const today = options.today ?? new Date();
-  const planned = ws.plannedMilestones();
+  const planned = options.milestones ?? ws.plannedMilestones();
+  const counted = new Set(planned.map((m) => m.id));
   const byId = new Map<string, ScheduledMilestone>();
 
   for (const m of planned) {
@@ -88,7 +104,7 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     const deps = new Set(
       m.deps.filter((id) => {
         const other = ws.milestone(id);
-        return other !== null && other.planned && !milestoneStats(ws, other).isDone;
+        return other !== null && counted.has(other.id) && !milestoneStats(ws, other).isDone;
       }),
     );
 
@@ -100,7 +116,7 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
           // Wartet die Aufgabe direkt auf einen Milestone, wartet auch dieser hier.
           const depMs = ws.milestone(depId);
           if (depMs) {
-            if (depMs.id !== m.id && depMs.planned && !milestoneStats(ws, depMs).isDone) {
+            if (depMs.id !== m.id && counted.has(depMs.id) && !milestoneStats(ws, depMs).isDone) {
               deps.add(depMs.id);
             }
             continue;
@@ -108,7 +124,7 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
           const dep = ws.task(depId);
           if (!dep || isDone(dep)) continue;
           const other = ws.milestoneOf(dep);
-          if (other && other.id !== m.id && other.planned) deps.add(other.id);
+          if (other && other.id !== m.id && counted.has(other.id)) deps.add(other.id);
         }
       }
     }

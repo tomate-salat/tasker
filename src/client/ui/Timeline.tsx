@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { releaseGroups, releaseLabel, type ReleaseGroup } from '@shared/release.js';
-import { dateFromWeeks, isoWeek, schedule, type ScheduledMilestone } from '@shared/schedule.js';
+import { dateFromWeeks, isoWeek, schedule, timelineMilestones, type ScheduledMilestone } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { MS_STATUS, STATUS_LABEL } from './icons.js';
@@ -9,8 +9,9 @@ import { MS_STATUS, STATUS_LABEL } from './icons.js';
 type Segment = { cls: string; from: number; to: number; title: string };
 
 /**
- * Der Zeitplan aus dem Prototyp: eine Zeile je eingeplantem Milestone, der
- * Balken zeigt den gerechneten Zeitraum auf einer Wochenachse.
+ * Der Zeitplan aus dem Prototyp: eine Zeile je Milestone mit Aufgaben oder
+ * festem Zeitraum (`timelineMilestones`), der Balken zeigt den gerechneten
+ * Zeitraum auf einer Wochenachse.
  *
  * Gerechnet wird immer über alle Projekte – du arbeitest allein, also liegen
  * die Milestones hintereinander. Der Projektfilter wählt nur aus, welche
@@ -25,11 +26,11 @@ export function Timeline({ ws }: { ws: Workspace }) {
   const state = useStore();
   const { settings, scope, select } = state;
   const velocity = Math.max(1, settings.velocity);
-  const all = schedule(ws, { velocity }).list;
+  const all = schedule(ws, { velocity, milestones: timelineMilestones(ws) }).list;
   const ids = new Set(scopeProjectIds(state));
   const list = all.filter((x) => ids.has(x.milestone.projectId));
 
-  if (!list.length) return <div className="empty-state">Keine Milestones im Plan.</div>;
+  if (!list.length) return <div className="empty-state">Kein Milestone mit Aufgaben oder Zeitraum.</div>;
   const groups = releaseGroups(ws, list);
   const grouped = groups.some((g) => g.release);
 
@@ -51,14 +52,14 @@ export function Timeline({ ws }: { ws: Workspace }) {
   return (
     <div className="tl">
       <p className="tl-note">
-        Die Milestones im Plan werden <b>je Projekt nacheinander</b> eingeplant – in der
-        Reihenfolge des Plans, außer eine Abhängigkeit erzwingt etwas anderes. Projekte laufen
+        Jeder Milestone mit Aufgaben oder festem Zeitraum steht hier, <b>je Projekt nacheinander</b>{' '}
+        – erst die im Plan in dessen Reihenfolge, dann die übrigen, außer eine Abhängigkeit erzwingt etwas anderes. Projekte laufen
         unabhängig voneinander. Hat ein Milestone ein <b>Startdatum</b>, beginnt
         er dort – so steuerst du den Zeitplan; der blassere Teil des Balkens ist die bereits
         vergangene Zeit, die Restarbeit wird ab heute gerechnet. Die Dauer ergibt sich aus den
         offenen Aufgaben und deinem Tempo. Sind mehrere Milestones eines Projekts <b>In Progress</b>,
         teilen sie sich das Tempo zu gleichen Teilen; wird einer fertig, geht sein Anteil an die
-        übrigen. Vorbereitete Milestones im Backlog zählen nicht mit.
+        übrigen.
         {grouped && (
           <>
             {' '}

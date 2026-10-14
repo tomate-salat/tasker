@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { dateFromWeeks, isoWeek, schedule, sharedFinish, weeksFromToday } from './schedule.js';
+import { dateFromWeeks, isoWeek, schedule, sharedFinish, timelineMilestones, weeksFromToday } from './schedule.js';
 import { Builder } from './testing.js';
 
 // Fester Bezugstag, damit die Tests nicht vom Kalender abhängen.
@@ -291,5 +291,29 @@ describe('Geteiltes Tempo', () => {
     const s = schedule(b.build(), { velocity: 4, today: TODAY }).byId;
     assert.equal(s.get('läuft')!.forecastEnd, 2);
     assert.equal(s.get('läuft')!.sharing, 1);
+  });
+});
+
+describe('Zeitplan-Auswahl', () => {
+  it('zeigt jeden Milestone mit Aufgaben oder festem Zeitraum – die im Plan zuerst', () => {
+    const ws = new Builder()
+      .project('p1')
+      .milestone('backlog', 'p1')
+      .milestone('plan', 'p1', { planned: true })
+      .milestone('leer', 'p1')
+      .milestone('datiert', 'p1', { startDate: day(0), endDate: day(7) })
+      .milestone('nurStart', 'p1', { startDate: day(0) })
+      .milestone('archiviert', 'p1', { archivedAt: '2026-01-01T00:00:00Z' })
+      .task('a', 'p1', { milestoneId: 'backlog' })
+      .task('b', 'p1', { milestoneId: 'plan' })
+      .task('c', 'p1', { milestoneId: 'archiviert' })
+      .build();
+    assert.deepEqual(timelineMilestones(ws).map((m) => m.id), ['plan', 'backlog', 'datiert']);
+
+    // Die übrigen verschieben die Prognose im Plan nicht.
+    const all = schedule(ws, { velocity: 1, today: TODAY, milestones: timelineMilestones(ws) }).byId;
+    const plan = schedule(ws, { velocity: 1, today: TODAY }).byId;
+    assert.equal(all.get('plan')!.end, plan.get('plan')!.end);
+    assert.equal(all.get('backlog')!.start, all.get('plan')!.end);
   });
 });
