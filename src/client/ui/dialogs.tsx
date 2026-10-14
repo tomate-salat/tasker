@@ -493,7 +493,7 @@ function PasswordForm() {
       await api.changePassword(current, next);
       setCurrent('');
       setNext('');
-      say('Passwort geändert');
+      say('Passwort geändert – andere Geräte sind abgemeldet');
     } catch (err) {
       say(err instanceof Error ? err.message : 'Passwort konnte nicht geändert werden');
     } finally {

@@ -1,7 +1,9 @@
 import { serve } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { secureHeaders } from 'hono/secure-headers';
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { DATABASE_PATH, HOST, PORT, PRODUCTION, warnIfNotPersistent } from './env.js';
@@ -34,6 +36,41 @@ const boot = recordBoot();
 
 const app = new Hono<{ Variables: { viaToken: boolean } }>();
 
+/**
+ * Sicherheits-Header für alles. Die CSP ist das Netz unter der Beschreibung:
+ * die kommt auch von außen (MCP, Token, Import) und wird als HTML gezeigt.
+ * Freigegeben ist nur, was die Oberfläche braucht – Google Fonts, dazu esm.sh,
+ * von wo Excalidraw Schriften nachlädt, die nicht im Bündel liegen. Für dessen
+ * Schrift-Untermengen beim Export braucht es WASM und `new Function`; das
+ * Wichtigste bleibt trotzdem verboten: Skripte im HTML und Event-Attribute.
+ */
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://esm.sh'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'", 'data:', 'blob:', 'https://esm.sh'],
+      workerSrc: ["'self'", 'blob:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  }),
+);
+
+/**
+ * Der Absender für die Login-Sperre. Auf Railway steht er im letzten Eintrag
+ * von X-Forwarded-For – den hängt der Proxy selbst an, davor kann der Absender
+ * schreiben, was er will. Ohne Proxy gilt die Adresse der Verbindung.
+ */
+const clientOf = (c: Context): string =>
+  c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() || getConnInfo(c).remote.address || '?';
+
 /* ------------------------------------------------------------ Öffentliches */
 
 // Railway prüft damit, ob der Container lebt – bewusst ohne Details.
@@ -46,7 +83,8 @@ const loginBody = z.object({
 });
 
 app.post('/api/login', async (c) => {
-  const locked = loginLocked();
+  const client = clientOf(c);
+  const locked = loginLocked(client);
   if (locked) {
     return c.json({ error: `Zu viele Versuche. Bitte in ${Math.ceil(locked / 60)} Minuten erneut.` }, 429);
   }
@@ -55,7 +93,7 @@ app.post('/api/login', async (c) => {
   if (!parsed.success) return c.json({ error: 'Ungültige Anfrage.' }, 400);
 
   const { email, password, keepSignedIn } = parsed.data;
-  if (!(await checkPassword(email, password))) {
+  if (!(await checkPassword(email, password, client))) {
     return c.json({ error: 'E-Mail oder Passwort stimmt nicht.' }, 401);
   }
 
@@ -154,7 +192,7 @@ app.post('/api/password', async (c) => {
   if (!parsed.success) {
     return c.json({ error: parsed.error.issues[0]?.message ?? 'Ungültige Anfrage.' }, 400);
   }
-  if (!(await changePassword(parsed.data.current, parsed.data.next))) {
+  if (!(await changePassword(parsed.data.current, parsed.data.next, getCookie(c, SESSION_COOKIE)))) {
     return c.json({ error: 'Aktuelles Passwort stimmt nicht.' }, 403);
   }
   return c.json({ ok: true });

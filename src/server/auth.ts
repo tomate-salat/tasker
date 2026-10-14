@@ -1,6 +1,6 @@
 import { hash, verify } from '@node-rs/argon2';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { eq, lt } from 'drizzle-orm';
+import { eq, lt, ne } from 'drizzle-orm';
 import { sessions } from '../../db/schema.js';
 import { db } from './db.js';
 import { ACCOUNT, accountSetting as getSetting, setAccountSetting as setSetting } from './settings.js';
@@ -77,10 +77,17 @@ export async function bootstrapAccount(): Promise<void> {
   }
 }
 
-export async function changePassword(current: string, next: string): Promise<boolean> {
+/**
+ * Ein neues Passwort meldet alle anderen Geräte ab – sonst bliebe angemeldet,
+ * wer das alte kannte. Die Sitzung, aus der geändert wird, bleibt bestehen.
+ */
+export async function changePassword(current: string, next: string, keepSession?: string): Promise<boolean> {
   const stored = getSetting(ACCOUNT.passwordHash);
   if (!stored || !(await verify(stored, current))) return false;
   await storePassword(next);
+  db.delete(sessions)
+    .where(keepSession ? ne(sessions.id, tokenHash(keepSession)) : undefined)
+    .run();
   return true;
 }
 
@@ -89,23 +96,37 @@ export async function changePassword(current: string, next: string): Promise<boo
 /**
  * Einfache Sperre gegen Durchprobieren. Der Prozess ist einzeln, deshalb reicht
  * ein Zähler im Speicher – nach einem Neustart ist er weg, was hier vertretbar ist.
+ *
+ * Gezählt wird je Absender: ein gemeinsamer Zähler ließe jeden, der die Adresse
+ * kennt, den Nutzer mit ein paar falschen Versuchen aussperren. Dazu kommt eine
+ * hohe Grenze über alle Absender als Notbremse gegen verteiltes Durchprobieren.
  */
-const LIMIT = { tries: 10, windowMs: 15 * 60_000 };
-let failures: number[] = [];
+const LIMIT = { tries: 10, allTries: 100, windowMs: 15 * 60_000 };
+const failures = new Map<string, number[]>();
+let allFailures: number[] = [];
 
-export function loginLocked(): number {
+/** Sekunden, bis `list` wieder unter `max` Fehlversuchen liegt – 0, wenn schon jetzt. */
+const waitFor = (list: number[], max: number): number => {
+  const first = list[list.length - max];
+  return first === undefined ? 0 : Math.ceil((first + LIMIT.windowMs - Date.now()) / 1000);
+};
+
+export function loginLocked(client: string): number {
   const since = Date.now() - LIMIT.windowMs;
-  failures = failures.filter((t) => t > since);
-  if (failures.length < LIMIT.tries) return 0;
-  const oldest = failures[0] ?? Date.now();
-  return Math.ceil((oldest + LIMIT.windowMs - Date.now()) / 1000);
+  allFailures = allFailures.filter((t) => t > since);
+  for (const [key, list] of failures) {
+    const kept = list.filter((t) => t > since);
+    if (kept.length) failures.set(key, kept);
+    else failures.delete(key);
+  }
+  return Math.max(waitFor(failures.get(client) ?? [], LIMIT.tries), waitFor(allFailures, LIMIT.allTries));
 }
 
 /** Immer gleich teuer, egal ob es das Konto gibt – sonst verrät die Laufzeit es. */
 const DUMMY_HASH =
   '$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2E$Uu1rBFI0hM4pqTRWpcVCPQoEHKTnhcHkQyXQTvKXHVk';
 
-export async function checkPassword(email: string, password: string): Promise<boolean> {
+export async function checkPassword(email: string, password: string, client: string): Promise<boolean> {
   const account = getAccount();
   const stored = getSetting(ACCOUNT.passwordHash) ?? DUMMY_HASH;
   let ok = false;
@@ -115,8 +136,13 @@ export async function checkPassword(email: string, password: string): Promise<bo
     ok = false;
   }
   if (!account || !sameString(account.email, email)) ok = false;
-  if (!ok) failures.push(Date.now());
-  else failures = [];
+  if (ok) {
+    failures.delete(client);
+  } else {
+    const now = Date.now();
+    failures.set(client, [...(failures.get(client) ?? []), now]);
+    allFailures.push(now);
+  }
   return ok;
 }
 

@@ -54,15 +54,12 @@ export function useRefResolver(): RefResolver | undefined {
 const icon = (t: RefTarget): string => (t.kind === 'milestone' ? '◆ ' : t.doc ? '📄 ' : '');
 
 /**
- * Ersetzt `$142` im fertigen, bereinigten HTML durch Links – nur im Fließtext,
+ * Ersetzt `$142` im fertigen, bereinigten DOM durch Links – nur im Fließtext,
  * nicht in Code und nicht in vorhandenen Links. Gebaut wird mit DOM-Knoten,
  * damit ein Titel nie als HTML gelesen wird.
  */
-export function linkRefs(html: string, resolve: RefResolver): string {
-  if (!html.includes('$')) return html;
-  const tpl = document.createElement('template');
-  tpl.innerHTML = html;
-  const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
+export function linkRefs(root: Node, resolve: RefResolver): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     if (n.parentElement?.closest('code, pre, a')) continue;
@@ -98,7 +95,6 @@ export function linkRefs(html: string, resolve: RefResolver): string {
     frag.append(text.slice(last));
     node.replaceWith(frag);
   }
-  return tpl.innerHTML;
 }
 
 /** Klick auf einen Verweis im gerenderten Markdown: hinspringen statt bearbeiten. */

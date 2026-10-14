@@ -13,7 +13,7 @@ import { linkRefs, type RefResolver } from './refs.js';
  * und nicht in fremdem HTML stecken.
  */
 const TOKEN = /!\[\[zeichnung:([^\]]+)\]\]/g;
-const PLACEHOLDER = /<p>DRAWEMBED([A-Za-z0-9_-]+)END<\/p>/;
+const PLACEHOLDER = /^DRAWEMBED([A-Za-z0-9_-]+)END$/;
 
 /**
  * Markdown zu bereinigtem HTML; Checkboxen bekommen ihre laufende Nummer, und
@@ -30,37 +30,73 @@ export function markdownHtml(
   subtasks?: ReadonlySet<number>,
   sections?: readonly HeadingSection[],
 ): string {
+  return serialize(markdownDom(src, resolve, subtasks, sections).childNodes);
+}
+
+/**
+ * Alles nach dem Bereinigen geschieht am DOM, nie am HTML-Text: ein Regex über
+ * HTML trifft auch, was in einem Attribut steht, und kann es dort aufbrechen.
+ * Die Beschreibung kommt nicht nur vom Nutzer (MCP, Token, Import).
+ */
+function markdownDom(
+  src: string,
+  resolve?: RefResolver,
+  subtasks?: ReadonlySet<number>,
+  sections?: readonly HeadingSection[],
+): DocumentFragment {
   const raw = marked.parse(src ?? '', { async: false, gfm: true, breaks: true }) as string;
+  const root = DOMPurify.sanitize(raw, { RETURN_DOM_FRAGMENT: true });
+
   // Links nach draußen öffnen einen neuen Tab – sonst verlässt ein Klick die Anwendung.
-  const sanitized = DOMPurify.sanitize(raw).replace(
-    /<a href="(https?:[^"]*)"/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer"',
-  );
-  const clean = resolve ? linkRefs(sanitized, resolve) : sanitized;
-  let n = 0;
-  const boxed = clean.replace(/<input[^>]*type="checkbox"[^>]*>/g, (m) => {
-    const i = n++;
-    const box = `<input type="checkbox" class="md-cb" data-cb="${i}"${/checked/.test(m) ? ' checked' : ''} aria-label="Checklisten-Punkt umschalten">`;
-    return subtasks?.has(i)
-      ? `${box}<button type="button" class="md-cb-sub" data-sub="${i}" title="In Unteraufgabe umwandeln">↳ Unteraufgabe</button>`
-      : box;
+  for (const a of root.querySelectorAll('a[href]')) {
+    if (!/^https?:/i.test(a.getAttribute('href') ?? '')) continue;
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  }
+  if (resolve) linkRefs(root, resolve);
+
+  root.querySelectorAll('input[type="checkbox"]').forEach((old, i) => {
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'md-cb';
+    box.dataset['cb'] = String(i);
+    if (old.hasAttribute('checked')) box.setAttribute('checked', '');
+    box.setAttribute('aria-label', 'Checklisten-Punkt umschalten');
+    old.replaceWith(box);
+    if (subtasks?.has(i)) box.after(subButton('sub', i, 'In Unteraufgabe umwandeln'));
   });
-  if (!sections?.length) return boxed;
+  if (!sections?.length) return root;
 
   // Die Überschriften im HTML und die im Text werden der Reihe nach über Ebene
   // und Wortlaut zusammengeführt – was nicht sicher passt, bekommt keinen Knopf.
   let at = 0;
-  return boxed.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (m, level: string, inner: string) => {
-    const text = letters(inner.replace(/<[^>]*>/g, '').replace(/&[a-z#0-9]+;/gi, ''));
-    const hit = sections.findIndex(
-      (s, i) => i >= at && s.level === Number(level) && letters(s.title) === text,
-    );
-    if (hit < 0) return m;
+  for (const h of root.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    const level = Number(h.tagName.slice(1));
+    const text = letters(h.textContent ?? '');
+    const hit = sections.findIndex((s, i) => i >= at && s.level === level && letters(s.title) === text);
+    if (hit < 0) continue;
     at = hit + 1;
-    const s = sections[hit] as HeadingSection;
-    return `<h${level}>${inner}<button type="button" class="md-cb-sub" data-head="${s.n}" title="Abschnitt in Unteraufgabe umwandeln">↳ Unteraufgabe</button></h${level}>`;
-  });
+    h.append(subButton('head', (sections[hit] as HeadingSection).n, 'Abschnitt in Unteraufgabe umwandeln'));
+  }
+  return root;
 }
+
+function subButton(key: 'sub' | 'head', n: number, title: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'md-cb-sub';
+  b.dataset[key] = String(n);
+  b.title = title;
+  b.textContent = '↳ Unteraufgabe';
+  return b;
+}
+
+/** Über ein `template`, damit nichts davon schon hier lädt oder ausgeführt wird. */
+const serialize = (nodes: Iterable<Node>): string => {
+  const tpl = document.createElement('template');
+  tpl.content.append(...[...nodes].map((n) => n.cloneNode(true)));
+  return tpl.innerHTML;
+};
 
 /** Nur Buchstaben und Ziffern – zum Vergleich von Markdown-Text und gerendertem HTML. */
 const letters = (s: string): string => s.replace(/[^\p{L}\p{N}]/gu, '');
@@ -85,16 +121,29 @@ export function markdownParts(
     return `\n\nDRAWEMBED${d.id}END\n\n`;
   });
 
-  const pieces = markdownHtml(src, resolve, subtasks, sections).split(new RegExp(PLACEHOLDER.source, 'g'));
+  // Aufgeteilt wird an den Absätzen der obersten Ebene, die nur aus einem
+  // Platzhalter bestehen – jedes Stück bleibt so ganzes, bereinigtes HTML.
   const parts: MarkdownPart[] = [];
-  pieces.forEach((piece, i) => {
-    if (i % 2 === 1) {
-      const d = drawings.find((z) => z.id === piece);
-      if (d) parts.push({ kind: 'drawing', drawing: d });
-      return;
+  let pending: Node[] = [];
+  const flush = (): void => {
+    const html = serialize(pending);
+    if (html.trim()) parts.push({ kind: 'html', html });
+    pending = [];
+  };
+  for (const node of markdownDom(src, resolve, subtasks, sections).childNodes) {
+    const id =
+      node instanceof HTMLParagraphElement && node.children.length === 0
+        ? PLACEHOLDER.exec(node.textContent ?? '')?.[1]
+        : undefined;
+    if (id === undefined) {
+      pending.push(node);
+      continue;
     }
-    if (piece.trim()) parts.push({ kind: 'html', html: piece });
-  });
+    flush();
+    const d = drawings.find((z) => z.id === id);
+    if (d) parts.push({ kind: 'drawing', drawing: d });
+  }
+  flush();
   return { parts, embedded };
 }
 
