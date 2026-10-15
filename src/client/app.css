@@ -18,9 +18,13 @@
   display: block;
 }
 
+/* Auch bei mittlerer Breite, wo der Inspektor sonst rechts über der Liste schwebt. */
 .app.detached > .detail {
+  position: static;
+  width: auto;
   height: 100%;
   border-left: 0;
+  box-shadow: none;
 }
 
 .app.with-detail {
