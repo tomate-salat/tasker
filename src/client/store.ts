@@ -299,6 +299,7 @@ type State = {
    * die Unteraufgaben werden seine Wurzelaufgaben.
    */
   convertToMilestone: (id: string) => Promise<void>;
+  convertToTask: (id: string) => Promise<void>;
   /**
    * Checkboxen der Beschreibung zu Unteraufgaben – ohne `items` alle offenen;
    * mit `headings` die Abschnitte unter diesen Überschriften.
@@ -996,6 +997,25 @@ export const useStore = create<State>((set, get) => ({
       remember(
         `„${task.title || 'Ohne Titel'}“ ist jetzt ein Milestone mit ${count} ${
           count === 1 ? 'Task' : 'Tasks'
+        }`,
+        undo,
+      );
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Umwandeln fehlgeschlagen' });
+    }
+  },
+
+  convertToTask: async (id) => {
+    const ms = get().ws?.milestone(id);
+    if (!ms) return;
+    try {
+      const { id: taskId, count, undo } = await api.convertMilestone(id, ms.version);
+      await get().load();
+      // Der neue Task steht im Backlog unter „Unsortiert“ – gleich hinschauen.
+      get().reveal(taskId);
+      remember(
+        `„${ms.title || 'Ohne Titel'}“ ist jetzt ein Task${
+          count ? ` mit ${count} ${count === 1 ? 'Unteraufgabe' : 'Unteraufgaben'}` : ''
         }`,
         undo,
       );

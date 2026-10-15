@@ -1099,6 +1099,77 @@ export function convertToMilestone(
 }
 
 /**
+ * Das Gegenstück zu `convertToMilestone` (Wunsch des Nutzers): aus einem
+ * Milestone wird ein Task unter „Unsortiert“ im Backlog. Er übernimmt Titel,
+ * Beschreibung, Status und Verweis-Nummer, die Wurzelaufgaben des Milestones
+ * werden seine Unteraufgaben, der Milestone selbst wandert in den Papierkorb.
+ *
+ * Worauf der Milestone gewartet hat, darauf wartet der Task; wer auf ihn
+ * gewartet hat, wartet danach auf den Task. Nur andere Milestones verlieren
+ * ihren Blocker – sie dürfen nicht auf einen Task warten. Release, Termine und
+ * das Protokoll fürs Burn-up bleiben beim Milestone im Papierkorb.
+ */
+export function convertToTask(
+  ctx: DbCtx,
+  id: string,
+  version: number,
+): { id: string; count: number; undo: Step[] } {
+  return ctx.sqlite.transaction(() => {
+    const row = readRow(ctx, 'milestone', id);
+    if (!row) throw new NotFound();
+    if (row['version'] !== version) throw new Conflict(read(ctx, 'milestone', id));
+    if (row['archived_at']) throw new Error('Ein archivierter Milestone lässt sich nicht in einen Task umwandeln');
+    const kids = (
+      ctx.sqlite
+        .prepare('SELECT id FROM task WHERE milestone_id = ? AND parent_id IS NULL ORDER BY sort_order')
+        .all(id) as { id: string }[]
+    ).map((r) => r.id);
+
+    // Der Task kann die Nummer übernehmen: der Milestone verschwindet gleich.
+    const task = create(ctx, 'task', {
+      projectId: row['project_id'],
+      title: row['title'],
+      desc: row['desc'],
+      status: row['status'],
+      ref: row['ref'],
+      deps: depsOf(ctx, 'milestone', id),
+    }) as { id: string };
+
+    const undo: Step[] = [];
+    for (const kidId of kids) {
+      undo.push(
+        moveBack(ctx, kidId, versionOf(ctx, 'task', kidId), {
+          parentId: task.id,
+          index: Number.MAX_SAFE_INTEGER,
+        }),
+      );
+    }
+
+    // Wer auf den Milestone gewartet hat, wartet jetzt auf den Task.
+    for (const from of incomingDeps(ctx, id)) {
+      const before = depsOf(ctx, 'task', from);
+      undo.push(
+        patchBack(ctx, 'task', from, versionOf(ctx, 'task', from), {
+          deps: before.map((d) => (d === id ? task.id : d)),
+        }),
+      );
+    }
+
+    // Wartende Milestones verlieren den Blocker hier; der Papierkorb merkt ihn sich.
+    const { trashId } = remove(ctx, 'milestone', id);
+
+    // In dieser Reihenfolge zurück: erst ist der Milestone wieder da, dann
+    // hängen die Aufgaben wieder in ihm, zuletzt geht der Task.
+    const back: Step[] = [
+      { op: 'untrash', trashId },
+      ...undo.reverse(),
+      { op: 'purge', kind: 'task', id: task.id },
+    ];
+    return { id: task.id, count: kids.length, undo: stampVersions(ctx, back) };
+  })();
+}
+
+/**
  * Checkboxen der Beschreibung werden Unteraufgaben (Wunsch des Nutzers): der
  * Text hinter der Checkbox wird der Titel, alles Eingerückte
  * darunter die Beschreibung, und in der Beschreibung bleibt ein Verweis stehen.

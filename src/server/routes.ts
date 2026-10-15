@@ -7,6 +7,7 @@ import {
   codecksRefsBody,
   checklistBody,
   convertBody,
+  convertMilestoneBody,
   createSchemas,
   drawingCreate,
   drawingPatch,
@@ -58,6 +59,7 @@ import {
   bulk,
   checklistToSubtasks,
   convertToMilestone,
+  convertToTask,
   create,
   duplicate,
   inBootstrap,
@@ -410,6 +412,16 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
     return run(c, bus, () => convertToMilestone(ctx, body.data.id, body.data.version), {
       status: 201,
       event: () => ({ type: 'reload', reason: 'In Milestone umgewandelt' }),
+    });
+  });
+
+  app.post('/convert-milestone', async (c) => {
+    const body = convertMilestoneBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    // Aus einem Milestone wird ein Task, seine Aufgaben ziehen darunter – neu laden.
+    return run(c, bus, () => convertToTask(ctx, body.data.id, body.data.version), {
+      status: 201,
+      event: () => ({ type: 'reload', reason: 'In Task umgewandelt' }),
     });
   });
 

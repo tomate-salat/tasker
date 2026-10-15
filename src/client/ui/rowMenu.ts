@@ -208,6 +208,11 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
       onSelect: () => void archiveTasks(donePending),
     },
     {
+      // Die Aufgaben des Milestones werden Unteraufgaben des Tasks.
+      label: 'In Task umwandeln',
+      onSelect: () => void store.convertToTask(m.id),
+    },
+    {
       label: 'Milestone archivieren',
       kbd: 'A',
       onSelect: () => void store.archiveItem('milestone', m.id),

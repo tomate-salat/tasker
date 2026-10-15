@@ -220,6 +220,9 @@ export const duplicateBody = z.object({ id });
 /** „In Milestone umwandeln“: aus dem Task wird ein vorbereiteter Milestone. */
 export const convertBody = z.object({ id, version: z.number().int().positive() });
 
+/** „In Task umwandeln“: aus dem Milestone wird ein Task im Backlog. */
+export const convertMilestoneBody = convertBody;
+
 /**
  * Checkboxen der Beschreibung zu Unteraufgaben machen. Ohne `items` alle
  * offenen der obersten Ebene, sonst die Checkboxen mit diesen Nummern. Mit

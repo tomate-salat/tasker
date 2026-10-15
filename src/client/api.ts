@@ -244,6 +244,9 @@ export const api = {
   /** „In Milestone umwandeln“ – gibt den neuen Milestone und die Rücknahme zurück. */
   convert: (id: string, version: number) =>
     post<{ id: string; count: number; undo: Step[] }>('/api/convert', { id, version }),
+  /** „In Task umwandeln“ – gibt den neuen Task und die Rücknahme zurück. */
+  convertMilestone: (id: string, version: number) =>
+    post<{ id: string; count: number; undo: Step[] }>('/api/convert-milestone', { id, version }),
 
   /**
    * Checkboxen der Beschreibung zu Unteraufgaben – ohne `items` alle offenen;
