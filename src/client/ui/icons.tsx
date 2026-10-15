@@ -305,6 +305,20 @@ export const SEARCH_ICON = (
   </svg>
 );
 
+/** Den Inspektor in einem eigenen Fenster öffnen: ein Fenster, aus dem ein Pfeil herauszeigt. */
+export const WINDOW_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="M7 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9M9.5 2.5h4v4M13.3 2.7 7.5 8.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 /** „Erledigte archivieren“ im schmalen Kopf. */
 export const ARCHIVE_ICON = (
   <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">

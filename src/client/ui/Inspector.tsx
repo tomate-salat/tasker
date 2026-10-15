@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DETACHED, openDetached } from '../detached.js';
 import { dependsOn, inheritedBlock } from '@shared/blocking.js';
 import { checklist, checklistItems, convertibleItems, headingSections } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags, projectTags } from '@shared/inherit.js';
@@ -32,6 +33,7 @@ import {
   STATUS_LABEL,
   StatusIcon,
   TOOL_ICON,
+  WINDOW_ICON,
 } from './icons.js';
 import {
   appendMarkdown,
@@ -79,6 +81,20 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
       <InspectorCover ws={ws} task={task} />
       <div className="d-top">
         <Crumbs ws={ws} task={task} milestone={milestone} />
+        {!DETACHED && (
+          <button
+            className="icon-btn"
+            title="In eigenem Fenster öffnen – bleibt offen, während du hier weiterarbeitest"
+            aria-label="In eigenem Fenster öffnen"
+            onClick={() => {
+              if (!openDetached(item.projectId, item.id)) {
+                useStore.getState().say('Das Fenster wurde blockiert – Pop-ups für Tasker erlauben.');
+              }
+            }}
+          >
+            {WINDOW_ICON}
+          </button>
+        )}
         <button
           className="icon-btn"
           title="Weitere Aktionen"
@@ -88,7 +104,11 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
         >
           ⋯
         </button>
-        <button className="icon-btn" onClick={() => select(null)} aria-label="Details schließen">
+        <button
+          className="icon-btn"
+          onClick={() => (DETACHED ? window.close() : select(null))}
+          aria-label={DETACHED ? 'Fenster schließen' : 'Details schließen'}
+        >
           ✕
         </button>
       </div>

@@ -13,6 +13,16 @@
   height: 100%;
 }
 
+/* Der Inspektor als eigenes Fenster (`detached.ts`): er nimmt das ganze Fenster. */
+.app.detached {
+  display: block;
+}
+
+.app.detached > .detail {
+  height: 100%;
+  border-left: 0;
+}
+
 .app.with-detail {
   grid-template-columns: 236px minmax(360px, 1fr) minmax(440px, 38%);
 }

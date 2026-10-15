@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { DETACHED } from '../detached.js';
 import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { container, isCollapsed, siblings, type OutlineRow } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
@@ -272,7 +273,8 @@ export function useGlobalKeys(): void {
         else if (store.multi.size) store.clearMulti();
         // Anders als im Prototyp schließt der Inspektor immer, auch neben der
         // Liste (Wunsch des Nutzers).
-        else if (store.selected) store.select(null);
+        // Ein abgelöster Inspektor ist ein eigenes Fenster – das schließt erst sein ✕.
+        else if (store.selected && !DETACHED) store.select(null);
         return;
       }
       if (typing) return;

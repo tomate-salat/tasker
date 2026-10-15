@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { api, type Account } from './api.js';
 import { connectEvents } from './events.js';
+import { DETACHED } from './detached.js';
 import { Login } from './Login.js';
 import { doneCandidates } from '@shared/outline.js';
 import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL, type View } from './store.js';
@@ -123,6 +124,13 @@ function Shell({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Als eigenes Fenster heißt es wie der Eintrag, den es zeigt – so findet man es in der Taskleiste.
+  const shown = selected ? (ws?.task(selected) ?? ws?.milestone(selected)) : null;
+  const shownTitle = shown ? shown.title || 'Ohne Titel' : null;
+  useEffect(() => {
+    if (DETACHED) document.title = shownTitle ? `${shownTitle} · Tasker` : 'Tasker';
+  }, [shownTitle]);
+
   async function logout() {
     await api.logout().catch(() => undefined);
     onLogout();
@@ -155,6 +163,50 @@ function Shell({
   }
 
   const title = scope === 'all' ? 'Alle Projekte' : (ws.project(scope)?.name ?? 'Projekt');
+
+  const toastBox = toast && (
+    <div className="toast" role="status">
+      <span>{toast}</span>
+      {state.toastUndo && (
+        <button onClick={() => void state.undo()} title="Rückgängig (Strg+Z)">
+          Rückgängig
+        </button>
+      )}
+      {state.toastLink?.toast === toast && (
+        <button
+          onClick={() => {
+            // Wie im Prototyp: die Meldung geht zu, dann geht es dorthin.
+            const { run } = state.toastLink!;
+            say(null);
+            run();
+          }}
+        >
+          {state.toastLink.label}
+        </button>
+      )}
+    </div>
+  );
+
+  // Der Inspektor als eigenes Fenster (`detached.ts`): nur er, dazu was aus ihm aufgeht.
+  if (DETACHED) {
+    return (
+      <div className="app detached">
+        {selected ? (
+          <Inspector ws={(view === 'archive' && archiveWorkspace(state)) || ws} id={selected} />
+        ) : (
+          <main className="boot muted">Nichts ausgewählt.</main>
+        )}
+        <BadgeDrawingEditor />
+        {state.graphOpen && (
+          <Suspense fallback={null}>
+            <DepGraph />
+          </Suspense>
+        )}
+        {dialog === 'search' && <SearchPalette ws={ws} onClose={() => setDialog('none')} />}
+        {toastBox}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -260,28 +312,7 @@ function Shell({
         {dialog === 'help' && <HelpDialog onClose={() => setDialog('none')} />}
         {dialog === 'search' && <SearchPalette ws={ws} onClose={() => setDialog('none')} />}
 
-        {toast && (
-          <div className="toast" role="status">
-            <span>{toast}</span>
-            {state.toastUndo && (
-              <button onClick={() => void state.undo()} title="Rückgängig (Strg+Z)">
-                Rückgängig
-              </button>
-            )}
-            {state.toastLink?.toast === toast && (
-              <button
-                onClick={() => {
-                  // Wie im Prototyp: die Meldung geht zu, dann geht es dorthin.
-                  const { run } = state.toastLink!;
-                  say(null);
-                  run();
-                }}
-              >
-                {state.toastLink.label}
-              </button>
-            )}
-          </div>
-        )}
+        {toastBox}
       </div>
       {/* Mobil: ein Tipp neben die offene Seitenleiste schließt sie. */}
       <div className="scrim" onClick={state.toggleSide} />

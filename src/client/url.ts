@@ -1,6 +1,7 @@
 import { deepLinkPath } from '@shared/deeplink.js';
 import type { OutlineFilter } from '@shared/outline.js';
 import { pushEntry, replaceEntry } from './back.js';
+import { keepDetached } from './detached.js';
 import { ambiguousView, archiveWorkspace, homeView, useStore, VIEWS, type View } from './store.js';
 
 /**
@@ -67,6 +68,8 @@ const format = (s: S): string => {
     const value = filter[key];
     if (value) q.set(PARAMS[key], value);
   }
+  // Ein abgelöster Inspektor bleibt einer, auch nach F5 und beim Folgen eines Links.
+  keepDetached(q);
   const search = q.toString();
   return `/${path}${search ? `?${search}` : ''}`;
 };
