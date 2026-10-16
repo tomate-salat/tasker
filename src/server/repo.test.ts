@@ -6,6 +6,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { Milestone, Release, ReleaseStage, Task } from '../shared/model.js';
 import { createDbCtx, type DbCtx } from './db.js';
+import { createDrawing, loadDrawingMeta, patchDrawing } from './drawings.js';
 import {
   Conflict,
   NotFound,
@@ -967,6 +968,27 @@ describe('In Milestone umwandeln', () => {
     assert.throws(() => convertToMilestone(ctx, t.id, t.version), /Unteraufgaben/);
   });
 
+  it('nimmt die Zeichnungen mit, die Rücknahme gibt sie dem Task zurück', () => {
+    const p = mkProject();
+    const t = mkTask({ projectId: p.id, title: 'Skizzen', desc: '![[zeichnung:Plan]]' });
+    mkTask({ projectId: p.id, title: 'Kind', parentId: t.id });
+    const d = createDrawing(ctx, { kind: 'task', id: t.id }, 'Plan');
+    patchDrawing(ctx, d.id, d.version, { scene: { elements: [{ type: 'rectangle' }] } });
+
+    const out = convertToMilestone(ctx, t.id, one(t.id).version);
+    const mine = loadDrawingMeta(ctx).filter((x) => x.milestoneId === out.id);
+    assert.deepEqual(mine.map((x) => x.name), ['Plan']);
+    const { shapes } = ctx.sqlite.prepare('SELECT shapes FROM drawing WHERE id = ?').get(mine[0]?.id) as {
+      shapes: string;
+    };
+    assert.match(shapes, /rectangle/, 'mit Inhalt, nicht leer');
+
+    applySteps(ctx, out.undo);
+    const back = loadDrawingMeta(ctx);
+    assert.deepEqual(back.filter((x) => x.taskId === t.id).map((x) => x.name), ['Plan']);
+    assert.equal(back.some((x) => x.milestoneId === out.id), false);
+  });
+
   it('auf einem überholten Stand gibt es einen Konflikt', () => {
     const s = scene();
     assert.throws(() => convertToMilestone(ctx, s.armor.id, s.armor.version + 1), Conflict);
@@ -1056,6 +1078,26 @@ describe('In Task umwandeln', () => {
     const out = convertToTask(ctx, m.id, m.version);
     assert.equal(out.count, 0);
     assert.equal(one(out.id).title, 'Leer');
+  });
+
+  it('nimmt die Zeichnungen mit, die Rücknahme gibt sie dem Milestone zurück', () => {
+    const p = mkProject();
+    const m = mkMilestone({ projectId: p.id, title: 'Skizzen', desc: '![[zeichnung:Plan]]' });
+    const d = createDrawing(ctx, { kind: 'milestone', id: m.id }, 'Plan');
+    patchDrawing(ctx, d.id, d.version, { scene: { elements: [{ type: 'rectangle' }] } });
+
+    const out = convertToTask(ctx, m.id, m.version);
+    const mine = loadDrawingMeta(ctx).filter((x) => x.taskId === out.id);
+    assert.deepEqual(mine.map((x) => x.name), ['Plan']);
+    const { shapes } = ctx.sqlite.prepare('SELECT shapes FROM drawing WHERE id = ?').get(mine[0]?.id) as {
+      shapes: string;
+    };
+    assert.match(shapes, /rectangle/, 'mit Inhalt, nicht leer');
+
+    applySteps(ctx, out.undo);
+    const back = loadDrawingMeta(ctx);
+    assert.deepEqual(back.filter((x) => x.milestoneId === m.id).map((x) => x.name), ['Plan']);
+    assert.equal(back.some((x) => x.taskId === out.id), false);
   });
 
   it('auf einem überholten Stand gibt es einen Konflikt', () => {

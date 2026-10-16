@@ -1053,6 +1053,12 @@ export function convertToMilestone(
       deps: deps.filter(isMs),
     }) as { id: string };
 
+    // Die Zeichnungen gehen als Kopie mit, die Originale bleiben beim Task im
+    // Papierkorb – wie bei `convertToTask`.
+    for (const d of rowsFor(ctx, 'drawing', 'task_id', [id]) as Record<string, unknown>[]) {
+      insertRows(ctx, 'drawing', [{ ...d, id: newId('d'), task_id: null, milestone_id: ms.id }]);
+    }
+
     // Erst verschieben, dann nachtragen – so steht in beiden Gegen-Schritten
     // die Version, die beim Zurücknehmen tatsächlich gilt.
     const taskDeps = deps.filter((d) => !isMs(d));
@@ -1134,6 +1140,13 @@ export function convertToTask(
       ref: row['ref'],
       deps: depsOf(ctx, 'milestone', id),
     }) as { id: string };
+
+    // Die Zeichnungen gehen als Kopie mit: die Originale bleiben beim Milestone
+    // im Papierkorb, damit die Rücknahme sie ihm zurückgibt. Eingebettet wird
+    // über den Namen – die Beschreibung des Tasks findet sie also wieder.
+    for (const d of rowsFor(ctx, 'drawing', 'milestone_id', [id]) as Record<string, unknown>[]) {
+      insertRows(ctx, 'drawing', [{ ...d, id: newId('d'), task_id: task.id, milestone_id: null }]);
+    }
 
     const undo: Step[] = [];
     for (const kidId of kids) {
