@@ -1142,6 +1142,13 @@ button.caret:hover {
   font-weight: 700;
 }
 
+/* Von einer Unteraufgabe geerbt: gestrichelt und ohne Füllung. */
+.list .check.implicit-blocked,
+.list .check.implicit-unclear {
+  border-style: dashed;
+  background: transparent;
+}
+
 .ico {
   flex: none;
   width: 14px;

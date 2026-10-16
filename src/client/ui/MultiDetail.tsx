@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { isDone, type Task } from '@shared/model.js';
+import type { Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
+import { implicitStatus } from '@shared/parentStatus.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PrioIcon } from './icons.js';
@@ -78,11 +79,7 @@ function Card({ ws, task, onOpen }: { ws: Workspace; task: Task; onOpen: () => v
     if (editing) focusAtEnd(ref.current);
   }, [editing]);
 
-  const implicit =
-    !isDone(task) &&
-    task.status === 'open' &&
-    ws.kids(task.id).length > 0 &&
-    ws.desc(task).some((d) => d.status === 'progress');
+  const implicit = implicitStatus(ws, task);
 
   const commit = (text: string): void => {
     setEditing(false);

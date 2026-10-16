@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { inheritedBlock, ownBlockers } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
-import { isDone, type Milestone, type Task } from '@shared/model.js';
+import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
+import { implicitStatus } from '@shared/parentStatus.js';
 import { categoryColorIndex, isCollapsed, type OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
 import { releaseLabel } from '@shared/release.js';
@@ -71,12 +72,8 @@ export function TaskRow({
       menu?.openAt(e.currentTarget, cellMenu(kind, task.id));
     };
 
-  // Offener Elternteil, unter dem trotzdem gearbeitet wird.
-  const implicit =
-    !isDone(task) &&
-    task.status === 'open' &&
-    kids.length > 0 &&
-    ws.desc(task).some((d) => d.status === 'progress');
+  // Was die Unteraufgaben am Elternteil zeigen: in Arbeit, blockiert, unklar.
+  const implicit = implicitStatus(ws, task);
 
   return (
     <div
@@ -459,16 +456,25 @@ function Caret({
   );
 }
 
-export function StatusDot({ task, implicit }: { task: Task; implicit: boolean }) {
-  const label = implicit ? 'Offen · eine Unteraufgabe ist in Arbeit' : STATUS_LABEL[task.status];
+const IMPLICIT_WHY: Partial<Record<Status, string>> = {
+  progress: 'eine Unteraufgabe ist in Arbeit',
+  blocked: 'eine Unteraufgabe ist blockiert',
+  unclear: 'eine Unteraufgabe ist unklar',
+};
+
+/** Statuspunkt; ein von den Unteraufgaben geerbter Status erscheint gestrichelt. */
+export function StatusDot({ task, implicit }: { task: Task; implicit: Status | null }) {
+  const shown = implicit ?? task.status;
+  const why = implicit ? IMPLICIT_WHY[implicit] : undefined;
+  const label = why ? `${STATUS_LABEL[task.status]} · ${why}` : STATUS_LABEL[task.status];
   return (
     <span
-      className={`check status-dot st-${task.status} ${implicit ? 'implicit-progress' : ''}`}
+      className={`check status-dot st-${shown} ${implicit ? `implicit implicit-${implicit}` : ''}`}
       role="img"
       title={`${label} · Leertaste: nächster Status, mit Shift zurück`}
-      aria-label={`Status ${STATUS_LABEL[task.status]}${implicit ? ', Unteraufgabe in Arbeit' : ''}`}
+      aria-label={`Status ${STATUS_LABEL[task.status]}${why ? `, ${why}` : ''}`}
     >
-      {statusMark(task.status)}
+      {statusMark(shown)}
     </span>
   );
 }

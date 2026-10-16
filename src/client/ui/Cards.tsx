@@ -4,6 +4,7 @@ import { checklist } from '@shared/checklist.js';
 import { coverFromLabel, effectiveCover } from '@shared/inherit.js';
 import { isDone, type Category, type Mark, type Project, type Task } from '@shared/model.js';
 import { categoriesOf, marksOf, type OutlineRow, type OutlineView } from '@shared/outline.js';
+import { implicitStatus } from '@shared/parentStatus.js';
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, imageUrl } from '../api.js';
@@ -801,8 +802,7 @@ export function CardFace({
   const cover = coverOf(ws, task);
   const segments = statusSegments(ws, task);
   const cl = checklist(task.desc);
-  const implicit =
-    !isDone(task) && task.status === 'open' && kids.length > 0 && ws.desc(task).some((d) => d.status === 'progress');
+  const implicit = implicitStatus(ws, task);
   const cellProps = (kind: CellKind) => (onCell ? { role: 'button', tabIndex: -1, onClick: onCell(kind) } : {});
 
   return (
