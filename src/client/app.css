@@ -4635,6 +4635,11 @@ body:has(.bulk) .toast {
   }
 }
 
+/* Was beim Hinausgleiten übersteht, soll keine Scrollleiste aufziehen. */
+.app:not(.detached) {
+  overflow-x: clip;
+}
+
 .app:not(.detached) > .detail {
   transition:
     transform 180ms ease-out 140ms,
@@ -4690,6 +4695,17 @@ body:has(.bulk) .toast {
     visibility 0s;
 }
 
+/* Mit offenem Inspektor nimmt das Panel seine Spalte ein, statt sie leer zu lassen. */
+.app.with-detail .drop-panel {
+  width: max(440px, 38%);
+}
+
+@media (max-width: 1080px) and (min-width: 901px) {
+  .app.with-detail .drop-panel {
+    width: min(520px, calc(100vw - 236px));
+  }
+}
+
 /* Mit offenem Inspektor kommt das Panel erst, wenn er gegangen ist. */
 .app.with-detail .drop-panel.in {
   transition:
@@ -4710,8 +4726,14 @@ body:has(.bulk) .toast {
   color: var(--muted);
 }
 
+/* Schmal eine Spalte, in der breiten Inspektor-Spalte mehrere nebeneinander. */
+.dp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 5px;
+}
+
 .dp-tile {
-  margin-bottom: 5px;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -4731,12 +4753,6 @@ body:has(.bulk) .toast {
 
 .dp-ms {
   color: var(--accent);
-}
-
-.dp-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
 }
 
 @media (prefers-reduced-motion: reduce) {

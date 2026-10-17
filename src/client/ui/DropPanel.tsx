@@ -85,17 +85,13 @@ function Targets({ ws, projectId, other }: { ws: Workspace; projectId: string; o
       {planned.length > 0 && <Section title="Im Plan">{planned.map(milestone)}</Section>}
       {other && (
         <Section title={`Abhängigkeit zu „${other.title || 'Ohne Titel'}“`}>
-          <div className="dp-row">
-            <Tile target={{ type: 'dep', dir: 'by', item: other }}>Benötigt</Tile>
-            <Tile target={{ type: 'dep', dir: 'blocks', item: other }}>Blockiert</Tile>
-          </div>
+          <Tile target={{ type: 'dep', dir: 'by', item: other }}>Benötigt</Tile>
+          <Tile target={{ type: 'dep', dir: 'blocks', item: other }}>Blockiert</Tile>
         </Section>
       )}
       <Section title="Sonst">
-        <div className="dp-row">
-          <Tile target={{ type: 'tab', view: 'docs', panel: true }}>Dokumentation</Tile>
-          <Tile target={{ type: 'tab', view: 'archive', panel: true }}>Archiv</Tile>
-        </div>
+        <Tile target={{ type: 'tab', view: 'docs', panel: true }}>Dokumentation</Tile>
+        <Tile target={{ type: 'tab', view: 'archive', panel: true }}>Archiv</Tile>
       </Section>
     </div>
   );
@@ -105,7 +101,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="dp-sec">
       <h3>{title}</h3>
-      {children}
+      <div className="dp-grid">{children}</div>
     </section>
   );
 }
