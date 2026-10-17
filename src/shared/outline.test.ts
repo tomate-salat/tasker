@@ -121,6 +121,25 @@ describe('Backlog-Aufbau', () => {
     assert.equal(rows.filter((r) => r.type === 'empty').length, 0);
   });
 
+  it('zeigt beim Ziehen trotz Filter alle Milestones und Gruppen, ihr Inhalt bleibt gefiltert', () => {
+    const ws = new Builder()
+      .project('p')
+      .group('g1', 'p', 'High Value')
+      .group('g2', 'p', 'Low Value')
+      .milestone('m', 'p', { planned: false })
+      .task('treffer', 'p', { markId: 'k1' })
+      .task('daneben', 'p', { groupId: 'g2' })
+      .build();
+    const view = (allBoxes: boolean) =>
+      outline(ws, { view: 'backlog', projectIds: ['p'], collapsed: {}, filter: { markId: 'k1' }, allBoxes });
+    assert.deepEqual(titles(view(false)), ['Unsortiert']);
+    const drag = view(true);
+    assert.deepEqual(titles(drag), ['Unsortiert', 'High Value', 'Low Value']);
+    assert.ok(kinds(drag).includes('milestone:m'));
+    assert.deepEqual(drag.filter((r) => r.type === 'task').map((r) => r.id), ['treffer']);
+    assert.equal(drag.filter((r) => r.type === 'empty').length, 0);
+  });
+
   it('filtert nach dem eigenen Status – die Eltern-Aufgabe bleibt als Pfad stehen', () => {
     const ws = new Builder()
       .project('p')

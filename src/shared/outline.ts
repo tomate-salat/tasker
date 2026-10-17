@@ -65,6 +65,11 @@ export function outline(
     projectIds: string[];
     collapsed: Record<string, boolean>;
     filter?: OutlineFilter;
+    /**
+     * Auch gefiltert jeden Milestone und jede Gruppe zeigen – solange gezogen
+     * wird, braucht es die Ziele (Wunsch des Nutzers). Ihr Inhalt bleibt gefiltert.
+     */
+    allBoxes?: boolean;
   },
 ): OutlineRow[] {
   const rows: OutlineRow[] = [];
@@ -73,6 +78,8 @@ export function outline(
   // Wird gefiltert, sind zugeklappte Äste offen – sonst versteckt man das Gesuchte.
   const open = (id: string, empty = false): boolean => filtering || !isCollapsed(o.collapsed, id, empty);
   const many = o.projectIds.length > 1;
+  /** Ein Behälter ohne Treffer fällt beim Filtern weg – außer beim Ziehen. */
+  const hidden = (tasks: Task[]): boolean => filtering && !o.allBoxes && !tasks.some(show);
 
   const walk = (task: Task, depth: number): void => {
     if (!show(task)) return;
@@ -99,7 +106,7 @@ export function outline(
 
   const milestoneBlock = (m: Milestone): void => {
     const roots = ws.msRoots(m);
-    if (filtering && !roots.some(show)) return;
+    if (hidden(roots)) return;
     rows.push({ type: 'milestone', id: m.id, milestone: m });
     contents(roots, m.id, m.projectId, { milestoneId: m.id }, !open(m.id));
   };
@@ -162,7 +169,7 @@ export function outline(
 
   /** Eine Gruppe im Backlog – eine eigene oder der Sammelbereich „Unsortiert“. */
   function box(id: string, title: string, group: Group | null, projectId: string, place: Placement, tasks: Task[]): void {
-    if (filtering && !tasks.some(show)) return;
+    if (hidden(tasks)) return;
     rows.push({ type: 'group', id, title, group, projectId, place, tasks });
     contents(tasks, id, projectId, place, !open(id, !tasks.length));
   }
