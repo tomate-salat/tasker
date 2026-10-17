@@ -24,7 +24,7 @@ import {
 import { effectiveCategory } from '@shared/inherit.js';
 import { planRelease, releaseLabel } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore } from '../store.js';
+import { collapsedOf, useStore } from '../store.js';
 import {
   addAndEdit,
   addChild,
@@ -151,7 +151,7 @@ export function docMenu(ws: Workspace, t: Task): MenuItem[] {
 
 export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
   const store = useStore.getState();
-  const collapsed = !!store.collapsed[m.id];
+  const collapsed = !!collapsedOf(store)[m.id];
   const donePending = doneInContainer(ws, m.projectId, { milestoneId: m.id });
 
   return [
@@ -234,7 +234,7 @@ export function milestoneMenu(ws: Workspace, m: Milestone): MenuItem[] {
 /** Gruppen und „Unsortiert“ – zwei Varianten, wie im Prototyp. */
 export function groupMenu(ws: Workspace, row: Extract<OutlineRow, { type: 'group' }>): MenuItem[] {
   const store = useStore.getState();
-  const collapsed = isCollapsed(store.collapsed, row.id, !row.tasks.length);
+  const collapsed = isCollapsed(collapsedOf(store), row.id, !row.tasks.length);
   const donePending = doneInContainer(ws, row.projectId, row.place);
 
   const common: MenuItem[] = [

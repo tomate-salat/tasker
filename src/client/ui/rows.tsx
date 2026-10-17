@@ -9,7 +9,7 @@ import { doneCount, progressPct, total } from '@shared/progress.js';
 import { releaseLabel } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { drawingsOf } from '../api.js';
-import { useStore } from '../store.js';
+import { collapsedOf, useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { addChild, indent, outdent } from './actions.js';
@@ -49,8 +49,8 @@ export function TaskRow({
    */
   noEdit?: boolean;
 }) {
-  const { selected, select, collapsed, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } =
-    useStore();
+  const { selected, select, toggle, editing, multi, toggleMulti, rangeMulti, clearMulti } = useStore();
+  const collapsed = useStore(collapsedOf);
   const kids = ws.kids(task.id);
   const open = !collapsed[task.id];
   const mark = ws.mark(task.markId);
@@ -194,7 +194,8 @@ export function MilestoneRow({
   stats: { done: number; total: number };
   pct: number;
 }) {
-  const { selected, select, collapsed, toggle, editing } = useStore();
+  const { selected, select, toggle, editing } = useStore();
+  const collapsed = useStore(collapsedOf);
   const open = !collapsed[milestone.id];
   const release = ws.releaseOf(milestone);
   const waiting = milestone.deps
@@ -289,7 +290,8 @@ export function GroupRow({
   count: number;
   onAdd: () => void;
 }) {
-  const { collapsed, setCollapsed, editing, edit, remove } = useStore();
+  const { setCollapsed, editing, edit, remove } = useStore();
+  const collapsed = useStore(collapsedOf);
   const { id, group } = row;
   // Eine leere Gruppe ist von sich aus zu – geklappt wird darum gegen das, was
   // dasteht, sonst liefe der erste Klick ins Leere.

@@ -8,7 +8,7 @@ import { implicitStatus } from '@shared/parentStatus.js';
 import { doneCount, statusSegments, total } from '@shared/progress.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api, imageUrl } from '../api.js';
-import { isLayoutView, useStore, type Layout, type LayoutView, type View } from '../store.js';
+import { collapsedOf, isLayoutView, useStore, type Layout, type LayoutView, type View } from '../store.js';
 import { hasFiles, refreshGallery } from './imageDrop.js';
 import { ImageRejected, imagesIn, prepareImage } from './imageFile.js';
 import { addChild } from './actions.js';
@@ -902,9 +902,9 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
   const root = hierarchyRoot(ws, id) ?? (task ? ws.root(task) : null);
   if (!root) return null;
   const empty = !ws.kids(root.id).length;
-  const rows = treeRows(ws, root, state.collapsed);
+  const rows = treeRows(ws, root, collapsedOf(state));
   const current = ws.task(state.selected);
-  const open = !state.collapsed[HIER_KEY];
+  const open = !collapsedOf(state)[HIER_KEY];
   const doc = ws.isDoc(root);
   // Neben der Liste wird der Titel dort bearbeitet, nicht im Baum. Bewusst ohne
   // `visible`: das meldet die Liste erst nach dem Zeichnen – im ersten Durchgang

@@ -2,7 +2,7 @@ import { useLayoutEffect, useReducer, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { isDone } from '@shared/model.js';
 import { outline, type OutlineRow } from '@shared/outline.js';
-import { scopeProjectIds, useStore } from '../store.js';
+import { collapsedOf, scopeProjectIds, useStore } from '../store.js';
 import { HIDE_DONE_ICON } from './icons.js';
 
 /**
@@ -189,7 +189,7 @@ export async function toggleHideDone(): Promise<void> {
       const all = outline(state.ws, {
         view: 'plan',
         projectIds: scopeProjectIds(state),
-        collapsed: state.collapsed,
+        collapsed: collapsedOf(state),
         filter: state.filter,
       });
       const keep = new Set(withoutDone(all).map((r) => r.id));

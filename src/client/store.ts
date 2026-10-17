@@ -5,6 +5,7 @@ import type { ChangeEvent } from '@shared/events.js';
 import { isArchived, type Milestone, type Task } from '@shared/model.js';
 import {
   doneCandidates,
+  isFiltering,
   placeLabel,
   unsortedId,
   visibility,
@@ -126,6 +127,12 @@ type State = {
   editing: string | null;
   /** Zugeklappte Zeilen – bleibt pro Gerät, nicht auf dem Server. */
   collapsed: Record<string, boolean>;
+  /**
+   * Zugeklappt, solange ein Filter gilt (Wunsch des Nutzers): beginnt offen,
+   * damit kein Treffer verdeckt ist, lässt sich aber klappen. Nur für diese
+   * Sitzung; ein neuer Filter fängt wieder offen an.
+   */
+  filterCollapsed: Record<string, boolean>;
   settings: Settings;
 
   /** Archiv und Papierkorb werden erst beim Öffnen geholt. */
@@ -411,6 +418,7 @@ export const useStore = create<State>((set, get) => ({
   mark: (marked) => set({ marked }),
   editing: null,
   collapsed: readLocal<Record<string, boolean>>(COLLAPSED_KEY, {}),
+  filterCollapsed: {},
   settings: { velocity: 8, theme: 'system', imageMaxKb: 500, imageMaxEdge: 2560 },
   archive: null,
   archiveQuery: '',
@@ -461,7 +469,7 @@ export const useStore = create<State>((set, get) => ({
     });
   },
 
-  setFilter: (patch) => set({ filter: { ...get().filter, ...patch }, sideOpen: false }),
+  setFilter: (patch) => set({ filter: { ...get().filter, ...patch }, filterCollapsed: {}, sideOpen: false }),
 
   // Wie im Prototyp: mobil öffnet und schließt das Overlay, am Desktop wird
   // dauerhaft ein- oder ausgeklappt.
@@ -632,17 +640,21 @@ export const useStore = create<State>((set, get) => ({
     const m = ws?.milestone(id);
     const t = m ? null : ws?.task(id);
     if (!ws || (!m && !t)) return;
-    const collapsed = { ...get().collapsed };
-    if (m) collapsed[m.id] = false;
+    const ids: string[] = [];
+    if (m) ids.push(m.id);
     if (t) {
-      for (const a of ws.ancestors(t)) collapsed[a.id] = false;
+      for (const a of ws.ancestors(t)) ids.push(a.id);
       const root = ws.root(t);
-      if (root.milestoneId) collapsed[root.milestoneId] = false;
-      else if (root.groupId) collapsed[root.groupId] = false;
-      else if (!ws.isDoc(root)) collapsed[unsortedId(root.projectId)] = false;
+      if (root.milestoneId) ids.push(root.milestoneId);
+      else if (root.groupId) ids.push(root.groupId);
+      else if (!ws.isDoc(root)) ids.push(unsortedId(root.projectId));
     }
+    // Beide Klappzustände – der gefilterte gilt, solange ein Filter gesetzt ist.
+    const collapsed = { ...get().collapsed };
+    const filterCollapsed = { ...get().filterCollapsed };
+    for (const x of ids) collapsed[x] = filterCollapsed[x] = false;
     writeLocal(COLLAPSED_KEY, collapsed);
-    set({ collapsed });
+    set({ collapsed, filterCollapsed });
   },
 
   reveal: (id) => {
@@ -757,9 +769,13 @@ export const useStore = create<State>((set, get) => ({
     await get().runSteps(steps, (n) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'} archiviert`);
   },
 
-  toggle: (id) => get().setCollapsed(id, !get().collapsed[id]),
+  toggle: (id) => get().setCollapsed(id, !collapsedOf(get())[id]),
 
   setCollapsed: (id, value) => {
+    if (isFiltering(get().filter)) {
+      set({ filterCollapsed: { ...get().filterCollapsed, [id]: value } });
+      return;
+    }
     const collapsed = { ...get().collapsed, [id]: value };
     writeLocal(COLLAPSED_KEY, collapsed);
     set({ collapsed });
@@ -1660,6 +1676,10 @@ export function homeView(ws: Workspace, id: string, hint: View | null): View {
   if (t && ws.isDoc(t)) return 'docs';
   return 'backlog';
 }
+
+/** Der Klappzustand, der gerade gilt: gefiltert ein eigener, sonst der gemerkte. */
+export const collapsedOf = (s: Pick<State, 'filter' | 'collapsed' | 'filterCollapsed'>): Record<string, boolean> =>
+  isFiltering(s.filter) ? s.filterCollapsed : s.collapsed;
 
 /** Steht es in mehr als einer Ansicht? Dann gehört die Ansicht in die Adresse. */
 export const ambiguousView = (ws: Workspace, id: string): boolean =>

@@ -3,7 +3,7 @@ import { DETACHED } from '../detached.js';
 import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { container, isCollapsed, siblings, type OutlineRow } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
-import { useStore } from '../store.js';
+import { collapsedOf, useStore } from '../store.js';
 import { addAndEdit, addChild, addSibling, indent, moveRowBy, outdent, toBacklog } from './actions.js';
 import type { Menu } from './Menu.js';
 import { locationMenu, rowMenu } from './rowMenu.js';
@@ -128,7 +128,7 @@ export function useKeys(ws: Workspace, rows: OutlineRow[], menu: Menu, cards: Ca
         e.preventDefault();
         const hasKids = row.type === 'task' ? ws.kids(row.id).length > 0 : true;
         // Eine leere Gruppe steht schon zu – dann führt ← gleich eine Ebene höher.
-        const shut = isCollapsed(store.collapsed, row.id, row.type === 'group' && !row.tasks.length);
+        const shut = isCollapsed(collapsedOf(store), row.id, row.type === 'group' && !row.tasks.length);
         if (hasKids && !shut) store.setCollapsed(row.id, true);
         else if (row.type === 'task') {
           const up = row.task.parentId ?? row.task.milestoneId ?? row.task.groupId;

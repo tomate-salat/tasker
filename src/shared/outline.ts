@@ -76,7 +76,8 @@ export function outline(
   const filtering = isFiltering(o.filter);
   const show = visibility(ws, o.filter);
   // Wird gefiltert, sind zugeklappte Äste offen – sonst versteckt man das Gesuchte.
-  const open = (id: string, empty = false): boolean => filtering || !isCollapsed(o.collapsed, id, empty);
+  // Gefiltert gilt ein eigener Klappzustand, der offen beginnt (siehe `collapsedOf` im Client).
+  const open = (id: string, empty = false): boolean => !isCollapsed(o.collapsed, id, empty);
   const many = o.projectIds.length > 1;
   /** Ein Behälter ohne Treffer fällt beim Filtern weg – außer beim Ziehen. */
   const hidden = (tasks: Task[]): boolean => filtering && !o.allBoxes && !tasks.some(show);
@@ -175,7 +176,7 @@ export function outline(
   }
 }
 
-const isFiltering = (f: OutlineFilter | undefined): boolean =>
+export const isFiltering = (f: OutlineFilter | undefined): boolean =>
   !!(f && (f.tag || f.categoryId || f.markId || f.status));
 
 /**
