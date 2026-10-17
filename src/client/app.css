@@ -171,7 +171,9 @@
   place-items: center;
   color: var(--faint);
 }
-.st-nav.st-ready,
+.st-nav.st-ready {
+  color: var(--ink);
+}
 .st-nav.st-progress {
   color: var(--accent);
 }
@@ -1138,10 +1140,11 @@ button.caret:hover {
   color: var(--ok);
 }
 
-/* Bereit: fertig geplant – grüner Ring, leicht gefüllt. */
+/* Bereit: fertig geplant – heller Ring mit Punkt, wie im Godot-Plugin. Bewusst
+   ohne grüne Füllung, die läse sich wie „erledigt“ (Wunsch des Nutzers). */
 .check.st-ready {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 75%, transparent);
+  background: radial-gradient(circle, var(--ink) 0 2.5px, transparent 3px);
 }
 
 .check.st-progress {
@@ -1417,7 +1420,7 @@ button.caret:hover {
 }
 
 .stpill.st-ready {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .stpill.st-progress {
