@@ -62,6 +62,7 @@ import {
   convertToTask,
   create,
   duplicate,
+  archivedSignature,
   inBootstrap,
   loadArchive,
   loadBootstrap,
@@ -570,6 +571,9 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
 
     const changes = patchSchemas[kind].safeParse(body.data.changes);
     if (!changes.success) return fail(c, changes.error);
+    // Die archivierten Milestones am Release sind abgeleitet: ändert ein aktiver
+    // Milestone sie mit, laden die anderen Fenster neu, statt nur ihn zu ersetzen.
+    const archivedBefore = kind === 'milestone' ? archivedSignature(ctx, c.req.param('id')) : null;
 
     return run(
       c,
@@ -581,7 +585,9 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
         event: (object) =>
           !inBootstrap(ctx, kind, c.req.param('id'))
             ? { type: 'reload', reason: 'Im Archiv geändert' }
-            : kind === 'task' && 'status' in changes.data && (object as Task).parentId
+            : archivedBefore !== null && archivedSignature(ctx, c.req.param('id')) !== archivedBefore
+              ? { type: 'reload', reason: 'Archivierte Milestones eines Releases geändert' }
+              : kind === 'task' && 'status' in changes.data && (object as Task).parentId
               ? { type: 'reload', reason: 'Status geändert' }
               : { type: 'upsert', kind, object },
       },

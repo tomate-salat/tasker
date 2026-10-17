@@ -76,6 +76,27 @@ export type Release = {
   desc: string;
   order: number;
   archivedAt: string | null;
+  /**
+   * Abgeleitet, nur zum Lesen: die archivierten Milestones, die zum Release
+   * zählen (siehe `archivedMembers` im Server). Ändern lässt es sich nicht.
+   */
+  archivedMilestones: ArchivedMember[];
+};
+
+/** Ein archivierter Milestone eines Releases, so weit, wie ihn ein Client ohne Archiv braucht. */
+export type ArchivedMember = {
+  id: string;
+  ref: number;
+  title: string;
+  /** Erledigte und alle Aufgaben, gezählt wie der Fortschritt in der App. */
+  done: number;
+  total: number;
+  /** Milestones, auf die er wartet – aktiv oder archiviert. */
+  deps: string[];
+  /** Milestones, die auf ihn warten – aktiv oder archiviert. */
+  dependents: string[];
+  /** Nicht zugeordnet, sondern über eine Abhängigkeit mitgezählt. */
+  inherited: boolean;
 };
 
 /** Eine Veröffentlichung je Kanal (itch-Seite, Steam-Demo, …). */

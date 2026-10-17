@@ -1,4 +1,5 @@
 import type {
+  ArchivedMember,
   Category,
   Data,
   Group,
@@ -126,6 +127,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     archiveCounts[r.project_id] = r.c;
   }
 
+  const archived = archivedMembers(ctx);
   const tagsOf = groupValues(tagRows, (r) => r.task_id, (r) => r.tag);
   const depsOfTask = groupValues(taskDeps, (r) => r.from_id, (r) => r.to_id);
   const depsOfMs = groupValues(msDeps, (r) => r.from_id, (r) => r.to_id);
@@ -136,7 +138,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     marks: marks.map(toMark),
     groups: groups.map(toGroup),
     milestones: milestones.map((m) => toMilestone(m, depsOfMs.get(m.id) ?? [])),
-    releases: releases.map(toRelease),
+    releases: releases.map((r) => ({ ...toRelease(r), archivedMilestones: archived.get(r.id) ?? [] })),
     stages: stages.map(toStage),
     headings: headings.map(toHeading),
     tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
@@ -245,6 +247,113 @@ export function loadChangelog(ctx: DbCtx, releaseId: string): ChangelogData {
 }
 
 /** Ob ein Objekt zum aktiven Bestand gehört, den `loadBootstrap` ausliefert. */
+/* ------------------------------------------- Archivierte Milestones je Release */
+
+/**
+ * Die archivierten Milestones, die zu einem Release zählen – abgeleitet und
+ * nur zum Lesen, am Release im Startpaket (`archivedMilestones`). So sehen
+ * Clients, die das Archiv nicht laden (das Godot-Addon), auch das schon
+ * Abgeschlossene eines Releases, ohne Aufgaben.
+ *
+ * Wer dazu zählt, ergibt sich wie im Changelog aus Zuordnung und
+ * Abhängigkeiten über alle Milestones des Projekts, auch archivierte
+ * (`effectiveReleases`). Gezählt wird wie der Fortschritt in der App
+ * (`milestoneStats`): Aufgaben ohne Unteraufgaben zählen 1, offen
+ * Archiviertes fällt heraus.
+ */
+export function archivedMembers(ctx: DbCtx, projectId?: string): Map<string, ArchivedMember[]> {
+  const all = <T>(sql: string, ...p: unknown[]): T[] => ctx.sqlite.prepare(sql).all(...p) as T[];
+  const only = projectId === undefined ? '' : 'WHERE project_id = ?';
+  const params = projectId === undefined ? [] : [projectId];
+
+  const ms = all<{
+    id: string; project_id: string; ref: number; title: string; archived_at: string | null; release_id: string | null;
+  }>(`SELECT id, project_id, ref, title, archived_at, release_id FROM milestone ${only} ORDER BY queue_order, id`, ...params);
+  const out = new Map<string, ArchivedMember[]>();
+  if (!ms.some((m) => m.archived_at)) return out;
+
+  const links = all<{ from_id: string; to_id: string }>(
+    `SELECT d.from_id, d.to_id FROM dependency d JOIN milestone m ON m.id = d.from_id
+      WHERE d.kind = 'milestone' ${projectId === undefined ? '' : 'AND m.project_id = ?'}`,
+    ...params,
+  );
+  const depsOfMs = groupValues(links, (r) => r.from_id, (r) => r.to_id);
+  const waitingOn = groupValues(links, (r) => r.to_id, (r) => r.from_id);
+  const releases = all<{ id: string; project_id: string; sort_order: number }>(
+    `SELECT id, project_id, sort_order FROM "release" ${only}`,
+    ...params,
+  );
+  const member = effectiveReleases(
+    ms.map((m) => ({ id: m.id, projectId: m.project_id, releaseId: m.release_id, deps: depsOfMs.get(m.id) ?? [] })),
+    releases.map((r) => ({ id: r.id, projectId: r.project_id, order: r.sort_order })),
+  );
+  const archived = ms.filter((m) => m.archived_at && member.has(m.id));
+  if (!archived.length) return out;
+
+  // Die Aufgaben darunter, nur so viel, wie zum Zählen nötig ist.
+  const tasks = all<{ id: string; parent_id: string | null; milestone_id: string | null; status: string; archived_at: string | null }>(
+    `WITH RECURSIVE sub(id) AS (
+       SELECT t.id FROM task t
+        WHERE t.milestone_id IN (SELECT value FROM json_each(?)) AND t.parent_id IS NULL
+       UNION
+       SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id
+     )
+     SELECT t.id, t.parent_id, t.milestone_id, t.status, t.archived_at FROM task t JOIN sub ON sub.id = t.id`,
+    JSON.stringify(archived.map((m) => m.id)),
+  );
+  type Row = (typeof tasks)[number];
+  const kidsOf = groupValues(tasks.filter((t) => t.parent_id), (t) => t.parent_id as string, (t) => t);
+  const rootsOf = groupValues(tasks.filter((t) => !t.parent_id), (t) => t.milestone_id as string, (t) => t);
+  const finishedOf = new Map<string, boolean>();
+  const finished = (t: Row): boolean => {
+    let v = finishedOf.get(t.id);
+    if (v === undefined) {
+      const ks = t.status === 'done' ? [] : counted(kidsOf.get(t.id) ?? []);
+      v = t.status === 'done' || (ks.length > 0 && ks.every(finished));
+      finishedOf.set(t.id, v);
+    }
+    return v;
+  };
+  const counted = (list: Row[]): Row[] => list.filter((t) => !t.archived_at || finished(t));
+  const total = (t: Row): number => {
+    const ks = counted(kidsOf.get(t.id) ?? []);
+    return ks.length ? ks.reduce((n, k) => n + total(k), 0) : 1;
+  };
+  const doneCount = (t: Row): number =>
+    t.status === 'done' ? total(t) : counted(kidsOf.get(t.id) ?? []).reduce((n, k) => n + doneCount(k), 0);
+
+  for (const m of archived) {
+    const roots = counted(rootsOf.get(m.id) ?? []);
+    const releaseId = member.get(m.id) as string;
+    const list = out.get(releaseId) ?? [];
+    list.push({
+      id: m.id,
+      ref: m.ref,
+      title: m.title,
+      done: roots.reduce((n, r) => n + doneCount(r), 0),
+      total: roots.reduce((n, r) => n + total(r), 0),
+      deps: depsOfMs.get(m.id) ?? [],
+      dependents: waitingOn.get(m.id) ?? [],
+      inherited: m.release_id !== releaseId,
+    });
+    out.set(releaseId, list);
+  }
+  return out;
+}
+
+/**
+ * Ein Abdruck der archivierten Milestones aller Releases eines Projekts. Ändert
+ * er sich durch eine Änderung an einem aktiven Milestone (eine Abhängigkeit
+ * ins Archiv, ein anderes Release), reicht die Änderung allein nicht – die
+ * anderen Fenster laden dann neu.
+ */
+export function archivedSignature(ctx: DbCtx, milestoneId: string): string | null {
+  const row = ctx.sqlite.prepare('SELECT project_id FROM milestone WHERE id = ?').get(milestoneId) as
+    | { project_id: string }
+    | undefined;
+  return row ? JSON.stringify([...archivedMembers(ctx, row.project_id)].sort(([a], [b]) => a.localeCompare(b))) : null;
+}
+
 export function inBootstrap(ctx: DbCtx, kind: Kind, id: string): boolean {
   const row = readRow(ctx, kind, id);
   if (!row) return false;
@@ -1949,7 +2058,10 @@ function read(ctx: DbCtx, kind: Kind, id: string): unknown {
     case 'group':
       return toGroup(row as unknown as GroupRow);
     case 'release':
-      return toRelease(row as unknown as ReleaseRow);
+      return {
+        ...toRelease(row as unknown as ReleaseRow),
+        archivedMilestones: archivedMembers(ctx, String(row['project_id'])).get(id) ?? [],
+      };
     case 'stage':
       return toStage(row as unknown as StageRow);
     case 'heading':
@@ -2231,7 +2343,8 @@ const toGroup = (r: GroupRow): Group => ({
   id: r.id, version: r.version, projectId: r.project_id, title: r.title, order: r.sort_order,
 });
 
-const toRelease = (r: ReleaseRow): Release => ({
+/** Ohne die abgeleiteten archivierten Milestones – die setzen `loadBootstrap` und `read` dazu. */
+const toRelease = (r: ReleaseRow): Omit<Release, 'archivedMilestones'> => ({
   id: r.id, version: r.version, projectId: r.project_id, name: r.name, title: r.title, desc: r.desc,
   order: r.sort_order, archivedAt: r.archived_at,
 });

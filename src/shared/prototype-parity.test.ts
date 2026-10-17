@@ -93,6 +93,7 @@ function toData(d: Dump['data']): Data {
     // Releases kennt der Prototyp nicht – je Projekt eines für das Eingeplante.
     releases: d.projects.map((p, i) => ({
       id: `plan:${p.id}`, version: 1, projectId: p.id, name: '', title: '', desc: '', order: i, archivedAt: null,
+      archivedMilestones: [],
     })),
     stages: [],
     headings: [],

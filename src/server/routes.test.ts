@@ -86,6 +86,70 @@ describe('Routen', () => {
     assert.equal((await send('POST', '/intake/task', { projectId: 'gibtsnicht', title: 'X' })).status, 400);
   });
 
+  it('ein Release bringt seine archivierten Milestones mit – abgeleitet, nicht änderbar', async () => {
+    const p = await mk('project', { name: 'P' });
+    const r = await mk('release', { projectId: p.id, name: '0.6.0' });
+    const base = await mk('milestone', { projectId: p.id, title: 'Grundlage' });
+    const done = await mk('milestone', { projectId: p.id, title: 'Remake', releaseId: r.id });
+    const live = await mk('milestone', { projectId: p.id, title: 'Quests', releaseId: r.id });
+    // Remake wartet auf Grundlage – die zählt damit über die Abhängigkeit mit.
+    await send('PATCH', `/kind/milestone/${done.id}`, { version: 1, changes: { deps: [base.id] } });
+
+    // Gezählt wie in der App: offen Archiviertes fällt heraus, Erledigtes zählt.
+    const a = await mk('task', { projectId: p.id, milestoneId: done.id, title: 'A', status: 'done' });
+    await mk('task', { projectId: p.id, milestoneId: done.id, title: 'B' });
+    const c = await mk('task', { projectId: p.id, milestoneId: done.id, title: 'C' });
+    await mk('task', { projectId: p.id, parentId: c.id, title: 'C1', status: 'done' });
+    await mk('task', { projectId: p.id, parentId: c.id, title: 'C2' });
+    const gone = await mk('task', { projectId: p.id, milestoneId: done.id, title: 'verworfen' });
+    await send('POST', `/kind/task/${gone.id}/archive`);
+    void a;
+
+    type Boot = { releases: { id: string; archivedMilestones: Record<string, unknown>[] }[] };
+    const members = async () =>
+      ((await send('GET', '/bootstrap')).body as Boot).releases.find((x) => x.id === r.id)?.archivedMilestones;
+    assert.deepEqual(await members(), []);
+
+    await send('POST', `/kind/milestone/${done.id}/archive`);
+    await send('POST', `/kind/milestone/${base.id}/archive`);
+    const got = await members();
+    assert.deepEqual(
+      got?.map((m) => [m['title'], m['done'], m['total'], m['inherited'], m['deps'], m['dependents']]),
+      [
+        ['Grundlage', 0, 0, true, [], [done.id]],
+        ['Remake', 2, 4, false, [base.id], []],
+      ],
+    );
+    assert.deepEqual(Object.keys(got?.[0] ?? {}).sort(), ['dependents', 'deps', 'done', 'id', 'inherited', 'ref', 'title', 'total']);
+
+    // Wartet ein aktiver Milestone auf einen archivierten, ändert sich die Liste
+    // mit – die anderen Fenster laden deshalb neu, statt nur ihn zu ersetzen.
+    seen = [];
+    await send('PATCH', `/kind/milestone/${live.id}`, { version: 1, changes: { deps: [done.id] } });
+    assert.deepEqual(seen.map((e) => e.event.type), ['reload']);
+    assert.deepEqual((await members())?.find((m) => m['id'] === done.id)?.['dependents'], [live.id]);
+    // Eine Änderung ohne Folgen dafür bleibt ein einfaches Ersetzen.
+    seen = [];
+    await send('PATCH', `/kind/milestone/${live.id}`, { version: 2, changes: { title: 'Quests!' } });
+    assert.deepEqual(seen.map((e) => e.event.type), ['upsert']);
+
+    // Am Release geändert, kommt es mit der Liste zurück – sie selbst lässt sich nicht setzen.
+    seen = [];
+    const changed = await send('PATCH', `/kind/release/${r.id}`, {
+      version: 1,
+      changes: { title: 'Quests And Models', archivedMilestones: [] },
+    });
+    assert.equal(changed.status, 200);
+    assert.equal(((changed.body as Boot['releases'][number]).archivedMilestones).length, 2);
+    const ev = seen[0]?.event as { type: string; object?: { archivedMilestones?: unknown[] } };
+    assert.equal(ev.type, 'upsert');
+    assert.equal(ev.object?.archivedMilestones?.length, 2);
+
+    // Zurückgeholt ist er wieder aktiv und steht nicht mehr in der Liste.
+    await send('POST', `/kind/milestone/${done.id}/restore`);
+    assert.deepEqual((await members())?.map((m) => m['title']), ['Grundlage']);
+  });
+
   it('feste Pfade und Objektrouten überschneiden sich nicht', async () => {
     const p = await mk('project', { name: 'P' });
     const a = await mk('task', { projectId: p.id, title: 'A' });

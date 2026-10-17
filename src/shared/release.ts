@@ -21,11 +21,12 @@ export const RELEASE_STATUS_LABEL: Record<ReleaseStatus, string> = {
  * alle Milestones fertig sind. In Arbeit ist es, sobald irgendetwas begonnen
  * hat – ein Milestone oder schon ein Kanal.
  */
-export function releaseStatus(ws: Workspace, r: Release, archivedMilestones = 0): ReleaseStatus {
+export function releaseStatus(ws: Workspace, r: Release): ReleaseStatus {
   const stages = ws.releaseStages(r.id);
   const milestones = ws.releaseMilestones(r.id);
+  // Archivierte Milestones bringt das Release mit (`archivedMilestones`); sie gelten als fertig.
+  const archivedMilestones = r.archivedMilestones.length;
   if (stages.length && stages.every((s) => s.doneAt)) return 'released';
-  // Archivierte Milestones kennt der aktive Bestand nicht; wer sie zählt, gibt sie mit – sie gelten als fertig.
   if (milestones.length + archivedMilestones && milestones.every((m) => milestoneDone(ws, m))) return 'ready';
   const begun =
     archivedMilestones > 0 ||

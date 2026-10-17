@@ -4,8 +4,9 @@
  * „Releases“). Aufgebaut – welcher Milestone in welches Release gehört und was
  * wovon abhängt – wird im Abhängigkeitsgraphen; hier steht die Übersicht.
  *
- * Das Changelog kommt gesondert vom Server: ins Changelog gehört auch
- * Archiviertes, und das fehlt im aktiven Bestand. Geändert wird es deshalb
+ * Die archivierten Milestones eines Releases bringt das Release selbst mit
+ * (`archivedMilestones`). Das Changelog kommt gesondert vom Server: ins
+ * Changelog gehören auch archivierte Aufgaben, und die fehlen im aktiven Bestand. Geändert wird es deshalb
  * über Schritte (`runSteps`), die auch archivierte Aufgaben erreichen.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -167,7 +168,17 @@ function ReleaseCard({
   const menu = useMenu();
   const { data, act } = useChangelog(release.id);
   const stages = ws.releaseStages(release.id);
-  const status = releaseStatus(ws, release, data?.milestones.filter((m) => m.archived).length ?? 0);
+  const status = releaseStatus(ws, release);
+  // Erst das schon Archivierte, dann die aktiven – beides zählt zum Release.
+  const members = [
+    ...release.archivedMilestones.map((m) => ({ id: m.id, title: m.title, inherited: m.inherited, live: null })),
+    ...ws.releaseMilestones(release.id).map((m) => ({
+      id: m.id,
+      title: m.title,
+      inherited: m.releaseId !== release.id,
+      live: m,
+    })),
+  ];
   const gone = isArchived(release);
   const [stage, setStage] = useState('');
   const target = { type: 'release', release } as const;
@@ -270,11 +281,11 @@ function ReleaseCard({
       <div className="rl-stages">
         <div className="rl-lane">
           <span className="rl-lbl">Milestones</span>
-          {(data?.milestones ?? []).map((m) => {
-            const live = ws.milestone(m.id);
-            const done = m.archived || m.status === 'done' || (live ? milestoneProgressPct(ws, live) === 100 : false);
+          {members.map((m) => {
+            const live = m.live;
+            const done = !live || live.status === 'done' || milestoneProgressPct(ws, live) === 100;
             return (
-              <span className={`rl-ms ${done ? 'done' : ''} ${m.status === 'progress' ? 'now' : ''}`} key={m.id}>
+              <span className={`rl-ms ${done ? 'done' : ''} ${live?.status === 'progress' ? 'now' : ''}`} key={m.id}>
                 <button
                   className="rl-ms-t"
                   disabled={!live}
@@ -284,7 +295,7 @@ function ReleaseCard({
                   <span className="ico ms">◆</span> {m.title || 'Ohne Titel'}
                 </button>
                 <span className="rl-ms-sub">
-                  {m.archived ? 'archiviert' : live ? `${milestoneProgressPct(ws, live)} %` : ''}
+                  {live ? `${milestoneProgressPct(ws, live)} %` : 'archiviert'}
                 </span>
                 {m.inherited && (
                   <span
