@@ -11,13 +11,13 @@ import {
 } from '@shared/outline.js';
 import type { Step } from '@shared/api.js';
 import { dependsOn } from '@shared/blocking.js';
-import type { Milestone, Project, Release, Task } from '@shared/model.js';
+import type { Category, Mark, Milestone, Project, Release, Task } from '@shared/model.js';
 import type { Workspace } from '@shared/workspace.js';
 import { folderPath, useStore, whereLabel, type View } from '../store.js';
 import { placeSteps, toBacklog } from './actions.js';
 import { appendImages } from './imageDrop.js';
 import { snapshotDrop } from './dropFlip.js';
-import { setCover } from './Cards.js';
+import { setCover, type CoverOwner } from './Cards.js';
 
 /**
  * Ziehen und Ablegen, Regeln wie im Prototyp (`dragover`/`applyDrop`):
@@ -75,7 +75,11 @@ export type Target =
   | { type: 'group'; row: GroupRowT }
   | { type: 'empty'; row: EmptyRowT }
   | { type: 'tab'; view: View }
+  /** Nimmt Aufgaben (in diesen Backlog), Projekte (Reihenfolge) und ein Galeriebild als Kartenbild. */
   | { type: 'project'; project: Project }
+  /** Kategorie und Markierung in der Seitenleiste: ein Galeriebild wird ihr Kartenbild. */
+  | { type: 'category'; category: Category }
+  | { type: 'mark'; mark: Mark }
   /** Ein Release im Reiter „Releases“ – nimmt nur andere Releases desselben Projekts. */
   | { type: 'release'; release: Release }
   /** Die beiden Felder im Inspektor: Ablegen setzt eine Abhängigkeit. */
@@ -104,6 +108,10 @@ const keyOf = (t: Target): string => {
       return `tab:${t.view}`;
     case 'project':
       return `proj:${t.project.id}`;
+    case 'category':
+      return `cat:${t.category.id}`;
+    case 'mark':
+      return `mark:${t.mark.id}`;
     case 'release':
       return `rel:${t.release.id}`;
     case 'dep':
@@ -349,6 +357,11 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
   if (target.type === 'cover' || (target.type === 'task' && target.card && drag.kind === 'image')) {
     return drag.kind === 'image' ? 'into' : null;
   }
+  // Seitenleiste: ein Galeriebild wird das Kartenbild von Projekt, Kategorie oder Markierung.
+  if (drag.kind === 'image' && (target.type === 'project' || target.type === 'category' || target.type === 'mark')) {
+    return 'into';
+  }
+  if (target.type === 'category' || target.type === 'mark') return null;
   if (drag.kind === 'image' || drag.kind === 'folder') return null;
 
   switch (drag.kind) {
@@ -399,6 +412,17 @@ async function applyDrop(drag: Drag, target: Target, zone: Zone): Promise<void> 
   if (drag.kind === 'image' && (target.type === 'cover' || target.type === 'task')) {
     const id = drag.ids[0];
     return id ? setCover({ kind: 'task', item: target.task }, id) : undefined;
+  }
+  if (drag.kind === 'image' && (target.type === 'project' || target.type === 'category' || target.type === 'mark')) {
+    const id = drag.ids[0];
+    if (!id) return;
+    const owner: CoverOwner =
+      target.type === 'project'
+        ? { kind: 'project', item: target.project }
+        : target.type === 'category'
+          ? { kind: 'category', item: target.category }
+          : { kind: 'mark', item: target.mark };
+    return setCover(owner, id);
   }
   if (target.type === 'folder') {
     const store = useStore.getState();

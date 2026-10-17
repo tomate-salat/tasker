@@ -6,7 +6,7 @@ import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
 import { archiveWorkspace, currentProjectId, useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
-import { dragSource, dropTarget, useZone } from './dnd.js';
+import { dragSource, dropTarget, useZone, type Target } from './dnd.js';
 import { SIDE_ICON, STATUS_LABEL, StatusIcon, THEME_ICON, THEME_LABEL } from './icons.js';
 import { useMenu } from './Menu.js';
 import { projectMenu } from './rowMenu.js';
@@ -195,25 +195,22 @@ export function Sidebar({
               Verwalten
             </button>
           </div>
-          {categories.map((c) => {
-            const n = countBy((t) => effectiveCategory(vws, t)?.category.id === c.id);
-            return (
-              <button
-                key={c.id}
-                className={`nav-i ${filter.categoryId === c.id ? 'on' : ''}`}
-                onClick={() => setFilter({ categoryId: filter.categoryId === c.id ? null : c.id })}
-              >
-                <span className="hash mk">
-                  <span
-                    className="cat-sw"
-                    style={{ '--h': categoryHue(categoryColorIndex(ws, c)) } as React.CSSProperties}
-                  />
-                </span>
-                <span>{c.name}</span>
-                <span className={n ? 'n' : 'n zero'}>{n}</span>
-              </button>
-            );
-          })}
+          {categories.map((c) => (
+            <FilterItem
+              key={c.id}
+              target={{ type: 'category', category: c }}
+              on={filter.categoryId === c.id}
+              n={countBy((t) => effectiveCategory(vws, t)?.category.id === c.id)}
+              onClick={() => setFilter({ categoryId: filter.categoryId === c.id ? null : c.id })}
+              icon={
+                <span
+                  className="cat-sw"
+                  style={{ '--h': categoryHue(categoryColorIndex(ws, c)) } as React.CSSProperties}
+                />
+              }
+              label={c.name}
+            />
+          ))}
           {!categories.length && (
             <button className="nav-i muted" onClick={onManageCategories}>
               + Kategorie anlegen
@@ -230,20 +227,17 @@ export function Sidebar({
               Verwalten
             </button>
           </div>
-          {marks.map((k) => {
-            const n = countBy((t) => t.markId === k.id);
-            return (
-              <button
-                key={k.id}
-                className={`nav-i ${filter.markId === k.id ? 'on' : ''}`}
-                onClick={() => setFilter({ markId: filter.markId === k.id ? null : k.id })}
-              >
-                <span className="hash mk">{k.emoji}</span>
-                <span>{k.name}</span>
-                <span className={n ? 'n' : 'n zero'}>{n}</span>
-              </button>
-            );
-          })}
+          {marks.map((k) => (
+            <FilterItem
+              key={k.id}
+              target={{ type: 'mark', mark: k }}
+              on={filter.markId === k.id}
+              n={countBy((t) => t.markId === k.id)}
+              onClick={() => setFilter({ markId: filter.markId === k.id ? null : k.id })}
+              icon={k.emoji}
+              label={k.name}
+            />
+          ))}
           {!marks.length && (
             <button className="nav-i muted" onClick={onManageMarks}>
               + Markierung anlegen
@@ -315,13 +309,47 @@ function ProjectItem({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      title="Offene Aufgaben · ziehen zum Sortieren · Task hierher ziehen = in diesen Backlog"
+      title="Offene Aufgaben · ziehen zum Sortieren · Task hierher ziehen = in diesen Backlog · Bild hierher ziehen = Kartenbild"
       {...dragSource('project', project.id)}
       {...dropTarget(target)}
     >
       <span className="dot" style={{ background: project.color }} />
       <span>{project.name}</span>
       <span className="n">{open}</span>
+    </button>
+  );
+}
+
+/**
+ * Kategorie oder Markierung als Filter. Ein Galeriebild, hierher gezogen, wird
+ * ihr Kartenbild (Wunsch des Nutzers).
+ */
+function FilterItem({
+  target,
+  on,
+  n,
+  onClick,
+  icon,
+  label,
+}: {
+  target: Extract<Target, { type: 'category' | 'mark' }>;
+  on: boolean;
+  n: number;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const zone = useZone(target);
+  return (
+    <button
+      className={`nav-i ${on ? 'on' : ''} ${zone ? 'dz-on' : ''}`}
+      onClick={onClick}
+      title="Filtern · Bild hierher ziehen = Kartenbild"
+      {...dropTarget(target)}
+    >
+      <span className="hash mk">{icon}</span>
+      <span>{label}</span>
+      <span className={n ? 'n' : 'n zero'}>{n}</span>
     </button>
   );
 }
