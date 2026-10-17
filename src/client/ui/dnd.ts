@@ -56,9 +56,15 @@ export type Drag = {
 type DragState = {
   drag: Drag | null;
   over: { key: string; zone: Zone } | null;
+  /**
+   * Shift ist gedrückt – bei offenem Inspektor holt das das Ablage-Panel.
+   * Tastatur-Ereignisse gibt es beim Ziehen nicht; die Zieh-Ereignisse tragen
+   * den Zustand aber mit.
+   */
+  shift: boolean;
 };
 
-export const useDrag = create<DragState>(() => ({ drag: null, over: null }));
+export const useDrag = create<DragState>(() => ({ drag: null, over: null, shift: false }));
 
 type GroupRowT = Extract<OutlineRow, { type: 'group' }>;
 type EmptyRowT = Extract<OutlineRow, { type: 'empty' }>;
@@ -138,7 +144,7 @@ export function canDepend(ws: Workspace, from: Task | Milestone, to: Task | Mile
   return !dependsOn(ws, to, from.id);
 }
 
-const clear = (): void => useDrag.setState({ drag: null, over: null });
+const clear = (): void => useDrag.setState({ drag: null, over: null, shift: false });
 
 /* ------------------------------------------------------ Mitscrollen */
 
@@ -158,6 +164,7 @@ let frame = 0;
 const track = (e: DragEvent): void => {
   pointerX = e.clientX;
   pointerY = e.clientY;
+  if (e.shiftKey !== useDrag.getState().shift) useDrag.setState({ shift: e.shiftKey });
 };
 
 /* Reiter öffnen sich beim Verweilen */
@@ -282,7 +289,7 @@ export function dragSource(kind: DragKind, id: string, enabled = true) {
       } catch {
         // Manche Browser erlauben das nicht – das Ziehen geht trotzdem.
       }
-      useDrag.setState({ drag: start(kind, id), over: null });
+      useDrag.setState({ drag: start(kind, id), over: null, shift: e.shiftKey });
     },
     onDragEnd: clear,
   };

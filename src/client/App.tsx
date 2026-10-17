@@ -5,7 +5,7 @@ import { DETACHED } from './detached.js';
 import { Login } from './Login.js';
 import { doneCandidates } from '@shared/outline.js';
 import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL, type View } from './store.js';
-import { dropTarget, useDraggedTask, useZone } from './ui/dnd.js';
+import { dropTarget, useDrag, useDraggedTask, useZone } from './ui/dnd.js';
 import { DropPanel } from './ui/DropPanel.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { categoryHue } from './ui/colors.js';
@@ -156,9 +156,13 @@ function Shell({
   }, []);
 
   // Beim Ziehen einer Aufgabe in Plan und Backlog gleitet das Ablage-Panel herein.
+  // Ist der Inspektor offen, macht er dem Panel nur mit gedrückter Shift-Taste
+  // Platz – seine eigenen Ablagefelder bleiben so erreichbar (Wunsch des Nutzers).
   const dragged = useDraggedTask();
-  const panel = dragged && (view === 'plan' || view === 'backlog') ? dragged : null;
+  const shift = useDrag((s) => s.shift);
   const detail = useDetailMotion(selected, multi.size > 1);
+  const listDrag = dragged && (view === 'plan' || view === 'backlog') ? dragged : null;
+  const panel = listDrag && (!detail.open || shift) ? listDrag : null;
 
   // Als eigenes Fenster heißt es wie der Eintrag, den es zeigt – so findet man es in der Taskleiste.
   const shown = selected ? (ws?.task(selected) ?? ws?.milestone(selected)) : null;
@@ -321,7 +325,7 @@ function Shell({
             <Inspector ws={(view === 'archive' && archiveWorkspace(state)) || ws} id={detail.id} />
           )
         )}
-        <DropPanel ws={ws} drag={panel} />
+        <DropPanel ws={ws} drag={panel} hint={!!listDrag && !panel} />
 
         <BulkBar ws={ws} />
         <BadgeDrawingEditor />

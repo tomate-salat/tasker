@@ -18,13 +18,15 @@ import { dropTarget, useZone, type Drag, type Target } from './dnd.js';
  * rechts ein Panel mit allen Zielen des Projekts herein – Unsortiert und die
  * eigenen Gruppen, die vorbereiteten Milestones und die im Plan, dazu Doku und
  * Archiv. Die Liste bleibt dabei, wie sie ist; auch ein Filter verdeckt hier
- * kein Ziel. Ist der Inspektor offen, tritt er solange zur Seite – seine
- * Abhängigkeitsfelder stehen dann hier.
+ * kein Ziel. Ist der Inspektor offen, kommt das Panel nur, solange Shift
+ * gedrückt ist – dann tritt er zur Seite, seine Abhängigkeitsfelder stehen
+ * hier. Ohne Shift bleiben seine eigenen Ablagefelder erreichbar; ein Hinweis
+ * sagt, wie es weitergeht.
  *
  * Das Panel bleibt eingehängt und gleitet nur hinein und hinaus; beim Hinaus
  * zeigt es weiter den Stand des letzten Ziehens.
  */
-export function DropPanel({ ws, drag }: { ws: Workspace; drag: Drag | null }) {
+export function DropPanel({ ws, drag, hint }: { ws: Workspace; drag: Drag | null; hint: boolean }) {
   const last = useRef<Drag | null>(null);
   if (drag) last.current = drag;
   const shown = drag ?? last.current;
@@ -36,10 +38,15 @@ export function DropPanel({ ws, drag }: { ws: Workspace; drag: Drag | null }) {
   const other = selected && !shown?.ids.includes(selected) ? (ws.task(selected) ?? ws.milestone(selected)) : null;
 
   return (
-    <aside className={`drop-panel ${drag ? 'in' : ''}`} aria-hidden={!drag}>
-      <div className="dp-head">Ablegen in …</div>
-      {projectId && <Targets ws={ws} projectId={projectId} other={other} />}
-    </aside>
+    <>
+      <aside className={`drop-panel ${drag ? 'in' : ''}`} aria-hidden={!drag}>
+        <div className="dp-head">Ablegen in …</div>
+        {projectId && <Targets ws={ws} projectId={projectId} other={other} />}
+      </aside>
+      <div className={`dp-hint ${hint ? 'in' : ''}`} aria-hidden={!hint}>
+        <kbd>Shift</kbd> halten: alle Ablageziele
+      </div>
+    </>
   );
 }
 

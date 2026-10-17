@@ -4763,3 +4763,36 @@ body:has(.bulk) .toast {
     animation: none !important;
   }
 }
+
+/* Bei offenem Inspektor: der Weg zum Ablage-Panel, oben mittig über dem Kopf. */
+.dp-hint {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 36;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity 150ms ease-in,
+    transform 150ms ease-in;
+}
+
+.dp-hint.in {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
+}
+
+.dp-hint kbd {
+  margin-right: 4px;
+}
