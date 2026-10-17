@@ -499,10 +499,6 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
     if (kind === 'task' && !values['parentId'] && values['milestoneId']) {
       values['hiddenBy'] = archivedMilestone(ctx, values['milestoneId'] as string);
     }
-    // „Ready“ gibt es nur für lose Wurzeln.
-    if (kind === 'task' && (values['parentId'] || values['milestoneId'] || values['groupId'] || values['doc'])) {
-      delete values['ready'];
-    }
     if (kind === 'task' && values['status'] === 'progress') {
       values['playOrder'] = nextPlayOrder(ctx, String(values['projectId']));
     }
@@ -776,13 +772,7 @@ export type MoveTarget = {
   parentId?: string | null | undefined;
   milestoneId?: string | null | undefined;
   groupId?: string | null | undefined;
-  /** Nur für lose Wurzeln: entscheidet über die smarte Gruppe. Fehlt es, bleibt die Markierung. */
-  markId?: string | null | undefined;
-  /** Nur für lose Wurzeln: Backlog oder „Ready“. Fehlt es, bleibt es, wie es war. */
-  ready?: boolean | undefined;
-  /** Für die Kategorie-Gruppen in „Ready“. Fehlt es, bleibt die Kategorie. */
-  categoryId?: string | null | undefined;
-  /** Fällt ein, wenn das Ziel kein eigenes Projekt hat (Unsortiert, smarte Gruppe). */
+  /** Fällt ein, wenn das Ziel kein eigenes Projekt hat (Unsortiert). */
   projectId?: string | undefined;
   /** In die Dokumentation oder heraus. Fehlt es, bleibt die Aufgabe, was sie ist. */
   doc?: boolean | undefined;
@@ -809,29 +799,19 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
     const projectId =
       targetProject(ctx, { parentId, milestoneId, groupId, projectId: target.projectId }) ??
       current['project_id'];
-    // Markierung und Dokumentations-Kennzeichen werden nur angefasst, wenn sie
-    // ausdrücklich mitgeschickt wurden.
-    const markId = target.markId === undefined ? current['mark_id'] : target.markId;
-    const categoryId = target.categoryId === undefined ? current['category_id'] : target.categoryId;
+    // Das Dokumentations-Kennzeichen wird nur angefasst, wenn es ausdrücklich mitgeschickt wurde.
     const doc = target.doc === undefined ? (Number(current['doc']) ? 1 : 0) : target.doc ? 1 : 0;
-    // „Ready“ gibt es nur für lose Wurzeln; wer in einen Behälter wandert, verliert es.
-    const loose = !parentId && !milestoneId && !groupId && !doc;
-    const ready = loose && (target.ready ?? !!Number(current['ready'])) ? 1 : 0;
 
     ctx.sqlite
       .prepare(
         `UPDATE task SET parent_id = ?, milestone_id = ?, group_id = ?, project_id = ?,
-           mark_id = ?, category_id = ?, ready = ?, doc = ?, sort_order = ?, updated_at = ?,
-           version = version + 1 WHERE id = ?`,
+           doc = ?, sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
       )
       .run(
         parentId,
         milestoneId,
         groupId,
         projectId,
-        markId,
-        categoryId,
-        ready,
         doc,
         target.order ?? current['sort_order'],
         nowIso(),
@@ -856,9 +836,6 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
           milestoneId,
           groupId,
           projectId: String(projectId),
-          markId: (markId as string | null) ?? null,
-          categoryId: (categoryId as string | null) ?? null,
-          ready,
           doc,
         },
         id,
@@ -915,13 +892,6 @@ type Container = {
   milestoneId: string | null;
   groupId: string | null;
   projectId: string;
-  /**
-   * Nur für lose Wurzeln: Unsortiert (nicht ready) und jede Gruppe in „Ready“
-   * zählen getrennt – dort entscheidet die Markierung, ohne sie die Kategorie.
-   */
-  markId: string | null;
-  categoryId: string | null;
-  ready: number;
   doc: number;
 };
 
@@ -939,26 +909,12 @@ function containerIds(ctx: DbCtx, where: Container): string[] {
                  AND project_id = ? AND doc = 1`,
               [where.projectId],
             ]
-          : !where.ready
-            ? [
-                // Unsortiert: alles Lose, was nicht ready ist – mit oder ohne Markierung.
-                `parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL
-                   AND project_id = ? AND doc = 0 AND ready = 0`,
-                [where.projectId],
-              ]
-            : where.markId
-              ? [
-                  `parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL
-                     AND project_id = ? AND doc = 0 AND ready = 1 AND mark_id = ?`,
-                  [where.projectId, where.markId],
-                ]
-              : [
-                  // Ohne Markierung entscheidet die Kategorie; NULL ist „Ohne Kategorie“.
-                  `parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL
-                     AND project_id = ? AND doc = 0 AND ready = 1 AND mark_id IS NULL
-                     AND category_id IS ?`,
-                  [where.projectId, where.categoryId],
-                ];
+          : [
+              // Unsortiert: alles Lose.
+              `parent_id IS NULL AND milestone_id IS NULL AND group_id IS NULL
+                 AND project_id = ? AND doc = 0`,
+              [where.projectId],
+            ];
 
   return (
     ctx.sqlite
@@ -973,9 +929,6 @@ const containerOf = (row: Record<string, unknown>): Container => ({
   milestoneId: (row['milestone_id'] as string | null) ?? null,
   groupId: (row['group_id'] as string | null) ?? null,
   projectId: String(row['project_id']),
-  markId: (row['mark_id'] as string | null) ?? null,
-  categoryId: (row['category_id'] as string | null) ?? null,
-  ready: Number(row['ready']) ? 1 : 0,
   doc: Number(row['doc']) ? 1 : 0,
 });
 
@@ -1498,9 +1451,6 @@ function moveBack(ctx: DbCtx, id: string, version: number, target: MoveTarget): 
       parentId: before.parentId,
       milestoneId: before.milestoneId,
       groupId: before.groupId,
-      markId: before.markId,
-      ready: before.ready,
-      categoryId: before.categoryId,
       projectId: before.projectId,
       doc: before.doc,
       order: before.order,
@@ -2111,7 +2061,7 @@ function targetProject(ctx: DbCtx, t: MoveTarget): string | null {
   if (t.parentId) return q('SELECT project_id FROM task WHERE id = ?', t.parentId);
   if (t.milestoneId) return q('SELECT project_id FROM milestone WHERE id = ?', t.milestoneId);
   if (t.groupId) return q('SELECT project_id FROM "group" WHERE id = ?', t.groupId);
-  // Unsortiert und smarte Gruppen gehören zu keinem Behälter – dann zählt das mitgeschickte Projekt.
+  // Unsortiert gehört zu keinem Behälter – dann zählt das mitgeschickte Projekt.
   return t.projectId ?? null;
 }
 
@@ -2258,7 +2208,7 @@ type TaskRow = {
   id: string; ref: number; version: number; project_id: string; parent_id: string | null; milestone_id: string | null;
   group_id: string | null; doc: number; title: string; desc: string; prio: number; status: string;
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
-  ready: number; archived_at: string | null; hidden_by: string | null; cover_image_id: string | null;
+  archived_at: string | null; hidden_by: string | null; cover_image_id: string | null;
   play_order: number; changelog: string; changelog_skip: number; changelog_order: number;
 };
 
@@ -2332,7 +2282,6 @@ const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   order: r.sort_order,
   categoryId: r.category_id,
   markId: r.mark_id,
-  ready: !!r.ready,
   coverImageId: r.cover_image_id ?? null,
   playOrder: r.play_order ?? 0,
   changelog: r.changelog ?? '',

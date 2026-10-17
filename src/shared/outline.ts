@@ -13,26 +13,18 @@ import type { Workspace } from './workspace.js';
  *
  * Der Backlog zeigt die vorbereiteten Milestones und „Ideen & Tasks“
  * (Unsortiert plus die eigenen Gruppen). Abweichung vom Prototyp, auf Wunsch:
- * die smarten Gruppen stehen nicht mehr im Backlog, sondern im Reiter
- * „Ready“ – dort nach den vorbereiteten Milestones erst eine je Kategorie
- * (plus „Ohne Kategorie“), dann eine je Markierung. In „Ready“ steht, was als
- * lose Wurzel `ready` ist; die Markierung gewinnt vor der Kategorie.
+ * smarte Gruppen gibt es nicht – Kategorie und Markierung schränkt die
+ * Filterleiste ein, und ob eine Aufgabe fertig geplant ist, sagt ihr Status „Bereit“.
  */
 
 /** Wo eine Aufgabe hängt – dieselben Felder, die Anlegen und Verschieben erwarten. */
 export type Placement = {
   milestoneId?: string | null;
   groupId?: string | null;
-  /** Nur bei losen Wurzeln: Backlog („Unsortiert“) oder „Ready“. */
-  ready?: boolean;
-  /** Nur in „Ready“: die Markierung entscheidet über die smarte Gruppe … */
-  markId?: string | null;
-  /** … und ohne Markierung die Kategorie; `null` heißt „Ohne Kategorie“. */
-  categoryId?: string | null;
 };
 
 /** Was die Überschrift eines Abschnitts rechts anbietet. */
-export type SectionAction = 'add-draft-milestone' | 'add-group' | 'manage-marks' | 'manage-categories';
+export type SectionAction = 'add-draft-milestone' | 'add-group';
 
 export type OutlineRow =
   | { type: 'project'; id: string; project: Project }
@@ -44,14 +36,8 @@ export type OutlineRow =
       type: 'group';
       id: string;
       title: string;
-      /** Null beim Sammelbereich „Unsortiert“ und bei smarten Gruppen. */
+      /** Null beim Sammelbereich „Unsortiert“. */
       group: Group | null;
-      /** Smarte Gruppe in „Ready“: je Markierung oder je Kategorie. */
-      smart: 'mark' | 'category' | null;
-      /** Gesetzt bei einer smarten Gruppe – sie gehört zu genau dieser Markierung. */
-      mark: Mark | null;
-      /** Gesetzt bei einer Kategorie-Gruppe; null bei „Ohne Kategorie“. */
-      category: Category | null;
       projectId: string;
       place: Placement;
       /** Die Wurzelaufgaben der Gruppe – für Zähler und „+“. */
@@ -61,7 +47,7 @@ export type OutlineRow =
   | { type: 'empty'; id: string; projectId: string; place: Placement }
   | { type: 'task'; id: string; task: Task; depth: number };
 
-export type OutlineView = 'plan' | 'ready' | 'backlog' | 'docs';
+export type OutlineView = 'plan' | 'backlog' | 'docs';
 
 /** Filter aus der Seitenleiste. Ein gesetzter Wert schränkt ein, `null` nicht. */
 export type OutlineFilter = {
@@ -125,9 +111,6 @@ export function outline(
       for (const m of plannedMilestones(ws, projectId)) milestoneBlock(m);
     } else if (o.view === 'docs') {
       for (const t of docRoots(ws, projectId)) walk(t, 0);
-    } else if (o.view === 'ready') {
-      drafts(projectId);
-      ready(projectId);
     } else {
       drafts(projectId);
       backlog(projectId);
@@ -141,7 +124,7 @@ export function outline(
 
   return rows;
 
-  /** Vorbereitete Milestones – dieselben in Backlog und „Ready“. */
+  /** Vorbereitete Milestones, oben im Backlog. */
   function drafts(projectId: string): void {
     rows.push({
       type: 'section',
@@ -161,70 +144,6 @@ export function outline(
     for (const m of list) milestoneBlock(m);
   }
 
-  /** Eine Gruppe, die nicht selbst gespeichert ist: Unsortiert oder eine smarte. */
-  function box(
-    id: string,
-    title: string,
-    projectId: string,
-    place: Placement,
-    tasks: Task[],
-    extra: { smart?: 'mark' | 'category'; mark?: Mark; category?: Category | null } = {},
-  ): void {
-    if (filtering && !tasks.some(show)) return;
-    rows.push({
-      type: 'group',
-      id,
-      title,
-      group: null,
-      smart: extra.smart ?? null,
-      mark: extra.mark ?? null,
-      category: extra.category ?? null,
-      projectId,
-      place,
-      tasks,
-    });
-    contents(tasks, id, projectId, place, !open(id, !tasks.length));
-  }
-
-  function ready(projectId: string): void {
-    rows.push({
-      type: 'section',
-      id: `sec:smart-cat:${projectId}`,
-      title: 'Smarte Gruppen (Kategorien)',
-      action: 'manage-categories',
-      projectId,
-    });
-    for (const c of categoriesOf(ws, projectId)) {
-      const place = { ready: true, markId: null, categoryId: c.id };
-      box(categoryGroupId(projectId, c.id), c.name, projectId, place, categoryTasks(ws, projectId, c.id), {
-        smart: 'category',
-        category: c,
-      });
-    }
-    const none = { ready: true, markId: null, categoryId: null };
-    box(categoryGroupId(projectId, null), 'Ohne Kategorie', projectId, none, categoryTasks(ws, projectId, null), {
-      smart: 'category',
-      category: null,
-    });
-
-    const marks = marksOf(ws, projectId);
-    if (!marks.length) return;
-    rows.push({
-      type: 'section',
-      id: `sec:smart:${projectId}`,
-      title: 'Smarte Gruppen (Markierungen)',
-      action: 'manage-marks',
-      projectId,
-    });
-    for (const k of marks) {
-      const place = { ready: true, markId: k.id };
-      box(smartId(projectId, k.id), k.name, projectId, place, smartTasks(ws, projectId, k.id), {
-        smart: 'mark',
-        mark: k,
-      });
-    }
-  }
-
   function backlog(projectId: string): void {
     rows.push({
       type: 'section',
@@ -233,26 +152,17 @@ export function outline(
       action: 'add-group',
       projectId,
     });
-
-    box(unsortedId(projectId), 'Unsortiert', projectId, { ready: false }, unsortedTasks(ws, projectId));
-
+    box(unsortedId(projectId), 'Unsortiert', null, projectId, {}, unsortedTasks(ws, projectId));
     for (const g of groupsOf(ws, projectId)) {
-      const tasks = groupTasks(ws, g.id);
-      if (filtering && !tasks.some(show)) continue;
-      rows.push({
-        type: 'group',
-        id: g.id,
-        title: g.title || 'Neue Gruppe',
-        group: g,
-        smart: null,
-        mark: null,
-        category: null,
-        projectId,
-        place: { groupId: g.id },
-        tasks,
-      });
-      contents(tasks, g.id, projectId, { groupId: g.id }, !open(g.id, !tasks.length));
+      box(g.id, g.title || 'Neue Gruppe', g, projectId, { groupId: g.id }, groupTasks(ws, g.id));
     }
+  }
+
+  /** Eine Gruppe im Backlog – eine eigene oder der Sammelbereich „Unsortiert“. */
+  function box(id: string, title: string, group: Group | null, projectId: string, place: Placement, tasks: Task[]): void {
+    if (filtering && !tasks.some(show)) return;
+    rows.push({ type: 'group', id, title, group, projectId, place, tasks });
+    contents(tasks, id, projectId, place, !open(id, !tasks.length));
   }
 }
 
@@ -279,8 +189,8 @@ export function visibility(ws: Workspace, f: OutlineFilter | undefined): (t: Tas
 
 /**
  * Ob ein Behälter zugeklappt ist. Wer ihn angefasst hat, bestimmt es selbst;
- * ohne gespeicherten Zustand gilt die Vorgabe. Für Gruppen – auch die smarten
- * und „Unsortiert“ – ist das `leer`: eine Gruppe ohne Aufgaben steht zu, damit
+ * ohne gespeicherten Zustand gilt die Vorgabe. Für Gruppen – auch
+ * „Unsortiert“ – ist das `leer`: eine Gruppe ohne Aufgaben steht zu, damit
  * die Ansicht nicht aus lauter leeren Behältern besteht (Wunsch des Nutzers).
  * Sobald eine Aufgabe darin liegt, ist sie wieder offen.
  */
@@ -289,21 +199,6 @@ export const isCollapsed = (collapsed: Record<string, boolean>, id: string, leer
 
 /** Der Sammelbereich im Backlog ist keine echte Gruppe, hat aber eine ID für den Klappzustand. */
 export const unsortedId = (projectId: string): string => `unsorted:${projectId}`;
-
-/** Auch smarte Gruppen brauchen eine ID, unter der ihr Klappzustand steht. */
-export const smartId = (projectId: string, markId: string): string => `smart:${markId}:${projectId}`;
-
-/** Dasselbe für die Kategorie-Gruppen in „Ready“; `null` ist „Ohne Kategorie“. */
-export const categoryGroupId = (projectId: string, categoryId: string | null): string =>
-  `smart-cat:${categoryId ?? '-'}:${projectId}`;
-
-/** Die Klapp-ID der Gruppe, in der eine lose Wurzel steht. */
-export const looseBoxId = (t: Task, ws: Workspace): string =>
-  !t.ready
-    ? unsortedId(t.projectId)
-    : t.markId
-      ? smartId(t.projectId, t.markId)
-      : categoryGroupId(t.projectId, readyCategory(ws, t));
 
 /** Die Markierungen eines Projekts – jedes Projekt hat seine eigenen. */
 export const marksOf = (ws: Workspace, projectId: string): Mark[] =>
@@ -358,22 +253,11 @@ export function siblings(ws: Workspace, t: Task): Task[] {
   return containerTasks(ws, t.projectId, container(t));
 }
 
-/**
- * Wo eine Aufgabe hängt. Bei einer losen Wurzel gehört dazu, ob sie ready ist,
- * und dann die Markierung – ohne Markierung die Kategorie: das entscheidet,
- * in welcher Gruppe von „Ready“ sie steht.
- */
+/** Wo eine Aufgabe hängt. */
 export const container = (t: Task): Placement & { parentId: string | null } => ({
   parentId: t.parentId,
   milestoneId: t.milestoneId,
   groupId: t.groupId,
-  ...(!isLooseRoot(t)
-    ? {}
-    : !t.ready
-      ? { ready: false }
-      : t.markId
-        ? { ready: true, markId: t.markId }
-        : { ready: true, markId: null, categoryId: t.categoryId }),
 });
 
 /** Lose Wurzel: hängt an nichts und ist kein Dokument – also im Backlog. */
@@ -383,25 +267,8 @@ export const isLooseRoot = (t: Task): boolean =>
 export const looseTasks = (ws: Workspace, projectId: string): Task[] =>
   ws.tasks.filter((t) => t.projectId === projectId && isLooseRoot(t)).sort((a, b) => a.order - b.order);
 
-/** „Unsortiert“: lose Wurzeln, die nicht ready sind – mit oder ohne Markierung. */
-export const unsortedTasks = (ws: Workspace, projectId: string): Task[] =>
-  looseTasks(ws, projectId).filter((t) => !t.ready);
-
-/** Eine smarte Gruppe besteht aus den ready-Wurzeln mit genau dieser Markierung. */
-export const smartTasks = (ws: Workspace, projectId: string, markId: string): Task[] =>
-  looseTasks(ws, projectId).filter((t) => t.ready && t.markId === markId);
-
-/**
- * Die Kategorie, nach der eine ready-Wurzel ohne Markierung einsortiert wird.
- * Eine Kategorie aus einem anderen Projekt zählt wie keine – sonst stünde die
- * Aufgabe in keiner Gruppe.
- */
-export const readyCategory = (ws: Workspace, t: Task): string | null =>
-  ws.category(t.categoryId)?.projectId === t.projectId ? t.categoryId : null;
-
-/** Eine Kategorie-Gruppe: ready-Wurzeln ohne Markierung mit dieser Kategorie. */
-export const categoryTasks = (ws: Workspace, projectId: string, categoryId: string | null): Task[] =>
-  looseTasks(ws, projectId).filter((t) => t.ready && !t.markId && readyCategory(ws, t) === categoryId);
+/** „Unsortiert“: alle losen Wurzeln des Projekts. */
+export const unsortedTasks = looseTasks;
 
 /** Die Wurzelaufgaben eines Behälters, in Reihenfolge. */
 export function containerTasks(ws: Workspace, projectId: string, place: Placement): Task[] {
@@ -410,10 +277,7 @@ export function containerTasks(ws: Workspace, projectId: string, place: Placemen
     return m ? ws.msRoots(m) : [];
   }
   if (place.groupId) return groupTasks(ws, place.groupId);
-  if (!place.ready) return unsortedTasks(ws, projectId);
-  if (place.markId) return smartTasks(ws, projectId, place.markId);
-  const cat = ws.category(place.categoryId ?? null);
-  return categoryTasks(ws, projectId, cat?.projectId === projectId ? cat.id : null);
+  return unsortedTasks(ws, projectId);
 }
 
 /** Wie viele Wurzelaufgaben ein Behälter schon hat – der Platz ganz unten. */
@@ -428,17 +292,8 @@ export function placeLabel(ws: Workspace, t: Task): string {
   if (ms) return ms.title || 'Ohne Titel';
   const group = ws.group(root.groupId);
   if (group) return group.title || 'Neue Gruppe';
-  if (!root.ready) return 'Unsortiert';
-  const mark = ws.mark(root.markId);
-  if (mark) return `${mark.emoji} ${mark.name}`;
-  return ws.category(readyCategory(ws, root))?.name ?? 'Ohne Kategorie';
+  return 'Unsortiert';
 }
-
-/** Der Reiter, in dem eine lose Wurzel steht: „Ready“ oder „Backlog“. */
-export const areaLabel = (ws: Workspace, t: Task): 'Ready' | 'Backlog' => {
-  const root = ws.root(t);
-  return isLooseRoot(root) && root.ready ? 'Ready' : 'Backlog';
-};
 
 /**
  * Dasselbe für einen einzelnen Behälter: was „Erledigte archivieren“ im
@@ -458,7 +313,7 @@ export const doneInContainer = (ws: Workspace, projectId: string, place: Placeme
  */
 export function doneCandidates(
   ws: Workspace,
-  o: { view: 'plan' | 'ready' | 'backlog'; projectIds: string[] },
+  o: { view: 'plan' | 'backlog'; projectIds: string[] },
 ): { milestones: Milestone[]; tasks: Task[] } {
   const inScope = new Set(o.projectIds);
   const planned = o.view === 'plan';
@@ -473,12 +328,9 @@ export function doneCandidates(
     if (!allDone(ws, t)) return false;
     const ms = ws.milestone(t.milestoneId);
     if (ms && taken.has(ms.id)) return false;
-    // Im Plan zählt nur, was in einem eingeplanten Milestone liegt. Vorbereitete
-    // Milestones stehen in Backlog und „Ready“; lose ready-Wurzeln nur in „Ready“,
-    // alles übrige nur im Backlog.
+    // Im Plan zählt nur, was in einem eingeplanten Milestone liegt, im Backlog der Rest.
     if (planned) return !!ms?.planned;
-    if (ms) return !ms.planned;
-    return o.view === 'ready' ? isLooseRoot(t) && t.ready : !(isLooseRoot(t) && t.ready);
+    return !ms?.planned;
   });
 
   return { milestones, tasks };

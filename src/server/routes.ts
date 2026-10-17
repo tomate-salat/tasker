@@ -537,7 +537,6 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       parentId: null,
       milestoneId: null,
       groupId: null,
-      ready: false,
       doc: false,
       status: 'open',
       tags: [INTAKE_TAG],

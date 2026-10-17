@@ -941,7 +941,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <dt>Task</dt>
         <dd>
           auf Task: oben/unten = davor/danach, Mitte = hinein · auf Milestone oder Gruppe = hinein · auf
-          Tab „Ready“ = ready · auf Tab „Backlog“ = Unsortiert · auf Projekt = in dessen Backlog
+          Tab „Backlog“ = Unsortiert · auf Projekt = in dessen Backlog
         </dd>
         <dt>Milestone</dt>
         <dd>auf Milestone = Reihenfolge · auf Tab „Archiv“ = archivieren · in den Plan kommt er über sein Release</dd>

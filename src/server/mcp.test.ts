@@ -100,7 +100,7 @@ describe('Werkzeuge', () => {
     const parent = await call('create_task', { projectId, title: 'Level 1' });
     const ms = create(ctx, 'milestone', { projectId, title: 'Alpha' }) as { id: string };
     const group = create(ctx, 'group', { projectId, title: 'Später' }) as { id: string };
-    for (const place of [{ parent: parent.data.ref }, { milestone: ms.id }, { groupId: group.id }, { ready: true }, { doc: true }]) {
+    for (const place of [{ parent: parent.data.ref }, { milestone: ms.id }, { groupId: group.id }, { doc: true }]) {
       const made = await call('create_task', { projectId, title: 'Boden', ...place });
       assert.equal(made.error, false, made.text);
       assert.equal(made.data.place, 'Backlog', JSON.stringify(place));
@@ -123,8 +123,8 @@ describe('Werkzeuge', () => {
     assert.equal(moved.data.milestoneId, ms.id);
     assert.equal(moved.data.parentId, null);
 
-    const loose = await call('update_task', { task: kid.data.id, milestone: 'none', ready: true });
-    assert.equal(loose.data.place, 'Ready');
+    const loose = await call('update_task', { task: kid.data.id, milestone: 'none' });
+    assert.equal(loose.data.place, 'Backlog');
   });
 
   it('nimmt mitgeschickte leere Felder hin, wie der JetBrains-Assistent sie schickt', async () => {
@@ -163,10 +163,10 @@ describe('Werkzeuge', () => {
     const replaced = await call('update_task', { task: made.data.id, tags: ['neu'] });
     assert.deepEqual([...replaced.data.tags].sort(), ['ai-created', 'ai-updated', 'neu']);
 
-    // Auch ein in der App angelegter Task bekommt beim Ändern (hier: Verschieben) nur ai-updated.
+    // Auch ein in der App angelegter Task bekommt beim Ändern (hier: auf Bereit) nur ai-updated.
     const own = create(ctx, 'task', { projectId, title: 'von Hand', tags: ['eigen'] }) as Task;
-    const moved = await call('update_task', { task: own.id, ready: true });
-    assert.equal(moved.data.place, 'Ready');
+    const moved = await call('update_task', { task: own.id, status: 'ready' });
+    assert.equal(moved.data.status, 'ready');
     assert.deepEqual([...moved.data.tags].sort(), ['ai-updated', 'eigen']);
   });
 

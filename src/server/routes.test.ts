@@ -65,8 +65,8 @@ describe('Routen', () => {
     assert.equal(made.status, 201);
     const t = made.body as Record<string, unknown>;
     assert.deepEqual(
-      [t['title'], t['desc'], t['prio'], t['status'], t['parentId'], t['milestoneId'], t['groupId'], t['ready'], t['doc']],
-      ['Keine Hose', 'Am Modell', 1, 'open', null, null, null, false, false],
+      [t['title'], t['desc'], t['prio'], t['status'], t['parentId'], t['milestoneId'], t['groupId'], t['doc']],
+      ['Keine Hose', 'Am Modell', 1, 'open', null, null, null, false],
     );
     assert.deepEqual(t['tags'], ['ai-created']);
     assert.equal(typeof t['ref'], 'number');
@@ -77,7 +77,7 @@ describe('Routen', () => {
     );
 
     // Ort, Status und Labels bestimmt der Server – wer sie mitschickt, wird abgewiesen.
-    for (const extra of [{ milestoneId: m.id }, { status: 'done' }, { tags: ['x'] }, { parentId: t['id'] }, { ready: true }]) {
+    for (const extra of [{ milestoneId: m.id }, { status: 'done' }, { tags: ['x'] }, { parentId: t['id'] }, { status: 'ready' }]) {
       const res = await send('POST', '/intake/task', { projectId: p.id, title: 'X', ...extra });
       assert.equal(res.status, 400, JSON.stringify(extra));
     }

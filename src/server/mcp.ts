@@ -32,7 +32,7 @@ export async function handleMcp(ctx: DbCtx, bus: EventBus, req: Request): Promis
 /* ---------------------------------------------------------------- Hilfen */
 
 const STATUS_HELP =
-  'open = offen, progress = in Arbeit, done = erledigt, unclear = unklar, blocked = blockiert';
+  'open = offen, ready = bereit (fertig geplant), progress = in Arbeit, done = erledigt, unclear = unklar, blocked = blockiert';
 const PRIO_HELP = '0 = keine, 1 = hoch, 2 = mittel, 3 = niedrig';
 
 /** Eine Aufgabe oder ein Milestone per ID ("t…"/"m…") oder Nummer ("$142" oder "142"). */
@@ -85,7 +85,7 @@ function placeOf(boot: Bootstrap, t: Task): string {
   if (t.milestoneId) return `Milestone ${boot.milestones.find((m) => m.id === t.milestoneId)?.title ?? '?'}`;
   if (t.groupId) return `Gruppe ${boot.groups.find((g) => g.id === t.groupId)?.title ?? '?'}`;
   if (t.doc) return 'Dokumentation';
-  return t.ready ? 'Ready' : 'Backlog';
+  return 'Backlog';
 }
 
 function brief(boot: Bootstrap, t: Task) {
@@ -113,7 +113,6 @@ function detail(boot: Bootstrap, t: Task) {
     version: t.version,
     desc: t.desc,
     doc: t.doc,
-    ready: t.ready,
     projectId: t.projectId,
     parentId: t.parentId,
     milestoneId: t.milestoneId,
@@ -260,7 +259,7 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
       title: 'Aufgabe anlegen',
       description:
         'Legt eine Aufgabe an. Sie landet immer im Backlog des Projekts unter „Unsortiert“ – ' +
-        'einen anderen Ort (Milestone, Gruppe, Elternaufgabe, „Ready“, Dokumentation) vergibt der ' +
+        'einen anderen Ort (Milestone, Gruppe, Elternaufgabe, Dokumentation) vergibt der ' +
         'Nutzer selbst. Nicht gebrauchte Felder einfach weglassen.',
       inputSchema: {
         title: z.string().min(1).max(500),
@@ -286,7 +285,6 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
           parentId: null,
           milestoneId: null,
           groupId: null,
-          ready: false,
           doc: false,
         };
         for (const f of ['desc', 'status', 'prio', 'categoryId', 'markId'] as const) {
@@ -327,7 +325,6 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         milestone: opt(z.string().max(64)).describe(`Neuer Milestone, "${NONE}" = keiner.`),
         groupId: opt(z.string().max(64)).describe(`Neue Gruppe, "${NONE}" = keine.`),
         projectId: opt(z.string()).describe('In anderes Projekt, ID oder Name (nur für lose Aufgaben nötig).'),
-        ready: opt(z.boolean()).describe('Nur lose Aufgaben: „Ready“ statt Backlog.'),
         version: opt(z.number().int().positive()).describe('Erwartete Version; ohne gilt die aktuelle.'),
       },
     },
@@ -336,12 +333,12 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
         let boot = loadBootstrap(ctx);
         const t = taskOf(boot, a.task);
         let version = a.version ?? t.version;
-        const { task: _t, version: _v, parent, milestone, groupId, projectId, ready, deps, ...rest } = a;
+        const { task: _t, version: _v, parent, milestone, groupId, projectId, deps, ...rest } = a;
         const fields = { ...rest, categoryId: unlessNone(rest.categoryId), markId: unlessNone(rest.markId) };
 
         // Erst der Ort: `move` nimmt den ganzen Teilbaum mit.
         const relocate = parent !== undefined || milestone !== undefined || groupId !== undefined;
-        const moving = relocate || projectId !== undefined || ready !== undefined;
+        const moving = relocate || projectId !== undefined;
         if (moving) {
           const target = relocate
             ? {
@@ -353,7 +350,6 @@ function buildServer(ctx: DbCtx, bus: EventBus): McpServer {
           const moved = move(ctx, t.id, version, {
             ...target,
             ...(projectId !== undefined ? { projectId: projectOf(boot, projectId) } : {}),
-            ...(ready !== undefined ? { ready } : {}),
           }) as Task;
           changed({ type: 'reload', reason: 'Über MCP verschoben' });
           version = moved.version;

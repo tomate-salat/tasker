@@ -355,78 +355,26 @@ describe('Reihenfolge beim Verschieben', () => {
     assert.deepEqual(order(m.id), ['X', 'A', 'C', 'B']);
   });
 
-  /**
-   * Lose Aufgaben hängen an keinem Milestone und keiner Gruppe, stehen aber in
-   * verschiedenen Behältern: „Unsortiert“ im Backlog (nicht ready) und in
-   * „Ready“ je Markierung, ohne Markierung je Kategorie.
-   */
-  it('nummeriert Unsortiert und die Gruppen in „Ready“ getrennt', () => {
+  /** Lose Aufgaben stehen alle unter „Unsortiert“ – Markierung und Status ändern daran nichts. */
+  it('nummeriert Unsortiert gemeinsam, mit und ohne Markierung', () => {
     const p = mkProject();
     const k = create(ctx, 'mark', { projectId: p.id, emoji: '🐛', name: 'Bug' }) as { id: string };
-    const c = create(ctx, 'category', { projectId: p.id, name: 'Arena' }) as { id: string };
-    for (const title of ['A', 'B']) mkTask({ projectId: p.id, title, markId: k.id });
-    for (const title of ['X', 'Y']) mkTask({ projectId: p.id, title, ready: true, markId: k.id });
-    for (const title of ['R', 'S']) mkTask({ projectId: p.id, title, ready: true, categoryId: c.id });
+    mkTask({ projectId: p.id, title: 'A', markId: k.id });
+    mkTask({ projectId: p.id, title: 'B', status: 'ready' });
+    mkTask({ projectId: p.id, title: 'C' });
     const byTitle = (title: string) => loadBootstrap(ctx).tasks.find((t) => t.title === title)!;
 
-    move(ctx, byTitle('Y').id, byTitle('Y').version, { projectId: p.id, ready: true, markId: k.id, index: 0 });
-    move(ctx, byTitle('S').id, byTitle('S').version, {
-      projectId: p.id,
-      ready: true,
-      markId: null,
-      categoryId: c.id,
-      index: 0,
-    });
-    move(ctx, byTitle('B').id, byTitle('B').version, { projectId: p.id, ready: false, index: 0 });
+    move(ctx, byTitle('C').id, byTitle('C').version, { projectId: p.id, index: 0 });
 
-    const titles = (where: string, ...params: unknown[]) =>
-      (
-        ctx.sqlite
-          .prepare(
-            `SELECT title FROM task WHERE parent_id IS NULL AND milestone_id IS NULL
-               AND group_id IS NULL AND ${where} ORDER BY sort_order`,
-          )
-          .all(...params) as { title: string }[]
-      ).map((r) => r.title);
-
-    assert.deepEqual(titles('ready = 0'), ['B', 'A']);
-    assert.deepEqual(titles('ready = 1 AND mark_id = ?', k.id), ['Y', 'X']);
-    assert.deepEqual(titles('ready = 1 AND category_id = ?', c.id), ['S', 'R']);
-  });
-
-  it('in eine Gruppe von „Ready“ setzt ready, Markierung oder Kategorie; zurück nach Unsortiert lässt beides', () => {
-    const p = mkProject();
-    const k = create(ctx, 'mark', { projectId: p.id, emoji: '🐛', name: 'Bug' }) as { id: string };
-    const c = create(ctx, 'category', { projectId: p.id, name: 'Arena' }) as { id: string };
-    const t = mkTask({ projectId: p.id, title: 'A' });
-
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, ready: true, markId: k.id, index: 0 });
-    assert.deepEqual([one(t.id).ready, one(t.id).markId], [true, k.id]);
-
-    // In eine Kategorie-Gruppe: die Markierung geht, sonst stünde sie bei der Markierung.
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, ready: true, markId: null, categoryId: c.id, index: 0 });
-    assert.deepEqual([one(t.id).ready, one(t.id).markId, one(t.id).categoryId], [true, null, c.id]);
-
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, markId: k.id, index: 0 });
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, ready: false, index: 0 });
-    assert.deepEqual([one(t.id).ready, one(t.id).markId, one(t.id).categoryId], [false, k.id, c.id]);
-  });
-
-  it('ready gibt es nur für lose Wurzeln – in Gruppe, Milestone oder unter eine Aufgabe fällt es weg', () => {
-    const p = mkProject();
-    const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
-    const t = mkTask({ projectId: p.id, title: 'A', ready: true });
-    assert.equal(one(t.id).ready, true);
-
-    move(ctx, t.id, one(t.id).version, { groupId: g.id, index: 0 });
-    assert.equal(one(t.id).ready, false);
-
-    // Zurück lose ohne Angabe: bleibt im Backlog.
-    move(ctx, t.id, one(t.id).version, { projectId: p.id, index: 0 });
-    assert.equal(one(t.id).ready, false);
-
-    const inGroup = mkTask({ projectId: p.id, title: 'B', groupId: g.id, ready: true });
-    assert.equal(one(inGroup.id).ready, false);
+    const titles = (
+      ctx.sqlite
+        .prepare(
+          `SELECT title FROM task WHERE parent_id IS NULL AND milestone_id IS NULL
+             AND group_id IS NULL AND project_id = ? ORDER BY sort_order`,
+        )
+        .all(p.id) as { title: string }[]
+    ).map((r) => r.title);
+    assert.deepEqual(titles, ['C', 'A', 'B']);
   });
 
   it('lässt die Markierung stehen, wenn keine mitgeschickt wird', () => {
@@ -1046,7 +994,6 @@ describe('In Task umwandeln', () => {
     assert.equal(t.ref, s.armor.ref, 'Verweise im Text zeigen weiter aufs Richtige');
     assert.equal(t.parentId, null);
     assert.equal(t.milestoneId, null);
-    assert.equal(t.ready, false, 'er liegt im Backlog');
     assert.equal(out.count, 2);
     assert.equal(boot.milestones.some((m) => m.id === s.armor.id), false, 'der Milestone ist weg');
     assert.deepEqual(
@@ -1276,6 +1223,28 @@ describe('Status der Eltern-Aufgabe', () => {
     set(leaf.id, 'open');
     assert.equal(statusOf(mid.id), 'open');
     assert.equal(statusOf(top.id), 'open');
+  });
+
+  it('Bereit zählt als noch nicht angefangen', () => {
+    const p = mkProject();
+    const top = mkTask({ projectId: p.id, title: 'Oben', status: 'ready' });
+    const a = mkTask({ projectId: p.id, title: 'A', parentId: top.id, status: 'ready' });
+    const b = mkTask({ projectId: p.id, title: 'B', parentId: top.id });
+
+    // Ein offenes Kind lässt die bereite Eltern-Aufgabe stehen – die Anzeige zeigt sie offen.
+    set(b.id, 'open');
+    assert.equal(statusOf(top.id), 'ready');
+
+    set(a.id, 'progress');
+    assert.equal(statusOf(top.id), 'progress');
+
+    // Fällt alles zurück, ist sie bereit, wenn alle Kinder es sind, sonst offen.
+    set(a.id, 'ready');
+    assert.equal(statusOf(top.id), 'open');
+    set(a.id, 'progress');
+    set(b.id, 'ready');
+    set(a.id, 'ready');
+    assert.equal(statusOf(top.id), 'ready');
   });
 
   it('Mehrfachauswahl mit Eltern- und Unteraufgabe scheitert nicht an Versionen', () => {

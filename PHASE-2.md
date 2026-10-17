@@ -45,9 +45,9 @@ Weitere im Prototyp gewachsene Festlegungen, die ins Produkt übernommen werden:
 - **Dokumente** sind technisch normale Tasks in einer eigenen Ansicht; ihr Inspektor ist bewusst anders.
 - **Papierkorb** mit Ablauffrist statt sofortigem Löschen.
 - **Zeichnungen** gehören zu einem Task und werden über `![[zeichnung:Name]]` in die Beschreibung eingebettet.
-- **Kartenansicht (Versuch):** Neben der Liste können Plan, Ready, Backlog und Doku als Karten
+- **Kartenansicht (Versuch):** Neben der Liste können Plan, Backlog und Doku als Karten
   erscheinen, angelehnt an Codecks – der Umschalter „Liste/Karten“ in der Reiterleiste gilt je
-  Ansicht und wird pro Gerät gemerkt (`tasker.layouts`). Vorgabe: Plan und Ready als Karten,
+  Ansicht und wird pro Gerät gemerkt (`tasker.layouts`). Vorgabe: Plan als Karten,
   Backlog und Doku als Liste. Doku-Karten zeigen wie ihr Inspektor weder Status noch Priorität noch
   Fortschritt, statt des Zählers die Zahl der Unterseiten; das Feld „Titelbild“ steht dort für sich.
   Karten gibt es nur für Aufgaben ohne Elternteil, mit Titelbild, Status, Priorität,
@@ -552,7 +552,7 @@ Codecks. Die Ansicht ist ein eigener Reiter **„Tisch“**. Sie **ersetzt die z
   Milestone.
 - Eine bearbeitete Aufgabe gehört immer zu einem Milestone – der Nutzer führt darüber ein
   Changelog. Auf den Tisch kommt ein Task deshalb nur über die bestehenden Wege in den Milestone;
-  einen eigenen Weg aus Ready oder Backlog auf den Tisch gibt es nicht.
+  einen eigenen Weg aus dem Backlog auf den Tisch gibt es nicht.
 
 **Aufbau (Entwurf „Spieltisch hochkant“)**, von oben nach unten – oben, was noch kommt, unten, was
 man gerade in der Hand hat:
@@ -1170,6 +1170,16 @@ Prototyp auch (das frühere zusätzliche „+ Aufgabe“ ist inzwischen entfalle
   zurück in den Backlog nimmt nur `ready` weg. In Milestone, eigene Gruppe oder unter eine Aufgabe
   verliert eine Aufgabe `ready`. Die Migration setzt `ready` bei allem, was bis dahin in einer
   smarten Gruppe stand.
+
+  **Später zurückgenommen (Wunsch des Nutzers) – Status „Bereit“ statt Reiter „Ready“:** der
+  Reiter, das Kennzeichen `task.ready` und die smarten Gruppen sind entfallen. Ob eine Aufgabe
+  fertig geplant ist, sagt jetzt ihr Status: **Offen → Bereit → In Progress → Erledigt** (nur
+  Aufgaben, Milestones kennen „Bereit“ nicht). So bleibt eine bereite Aufgabe in ihrer eigenen
+  Gruppe stehen, und niemand muss ein Kennzeichen wieder abnehmen. Kategorie und Markierung
+  schränkt die Filterleiste ein. Eine bereite Aufgabe mit einer noch offenen Unteraufgabe erscheint
+  gestrichelt offen; auf dem Tisch liegt Offenes gesperrt, die Mitte heißt „Bereit“. Migration
+  `0020_status_bereit`: was ready war, kommt nach „Unsortiert“ und auf Bereit; offene Aufgaben in
+  nicht archivierten Milestones (jede Ebene) ebenfalls auf Bereit.
 - ~~**Zeitplan.**~~ **Erledigt.** Der eigene Reiter mit Hinweistext, Wochenachse (KW-Beschriftung,
   Schrittweite nach Spannweite), einer Zeile je eingeplantem Milestone und dem Balken aus dem
   Prototyp: blasser Vorlauf bei einem Startdatum in der Vergangenheit, schraffierter Überhang über

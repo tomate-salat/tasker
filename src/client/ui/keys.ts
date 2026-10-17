@@ -309,9 +309,10 @@ const rowEl = (id: string): HTMLElement | null => document.querySelector(`[data-
  *
  * Die Reihe läuft nicht im Kreis: bei Erledigt ist Schluss, sonst käme man mit
  * einem Druck zu viel versehentlich wieder auf Offen. Zurück geht es mit
- * Umschalt und Leertaste.
+ * Umschalt und Leertaste. Bei Aufgaben liegt „Bereit“ zwischen Offen und In
+ * Progress; Milestones kennen es nicht.
  */
-const STATUS_CYCLE: Status[] = ['open', 'progress', 'done'];
+const STATUS_CYCLE: Status[] = ['open', 'ready', 'progress', 'done'];
 
 /** Einen Schritt weiter oder zurück; an den Enden bleibt es stehen. */
 const stepStatus = (s: Status, dir: 1 | -1): Status => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Task } from '@shared/model.js';
-import { areaLabel, placeLabel } from '@shared/outline.js';
+import { placeLabel } from '@shared/outline.js';
 import { implicitStatus } from '@shared/parentStatus.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
@@ -159,5 +159,5 @@ function whereShort(ws: Workspace, t: Task): string {
   const ms = ws.milestone(t.milestoneId);
   if (ms) return `◆ ${ms.title}`;
   if (t.doc) return 'Dokumentation';
-  return areaLabel(ws, t) === 'Ready' ? `Ready › ${placeLabel(ws, t)}` : placeLabel(ws, t);
+  return placeLabel(ws, t);
 }

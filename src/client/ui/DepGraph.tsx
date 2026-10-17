@@ -850,7 +850,7 @@ function subtitle(ws: Workspace, x: Item): string {
   const parent = ws.task(x.parentId);
   if (parent) return `unter ${parent.title || 'Ohne Titel'}`;
   const ms = ws.milestone(x.milestoneId);
-  return ms ? `◆ ${ms.title || 'Ohne Titel'}` : x.ready ? 'Ready' : 'Backlog';
+  return ms ? `◆ ${ms.title || 'Ohne Titel'}` : 'Backlog';
 }
 
 function Glyph({ ws, item }: { ws: Workspace; item: Item }) {
@@ -1122,7 +1122,7 @@ function listRows(ws: Workspace, projectId: string, coarse: boolean): { head: st
     ? []
     : ws.tasks
         .filter((t) => t.projectId === projectId && !t.parentId && !t.milestoneId && !t.doc && ws.isActive(t))
-        .sort((a, b) => Number(b.ready) - Number(a.ready) || a.order - b.order);
+        .sort((a, b) => a.order - b.order);
 
   const releases = ws.releases
     .filter((r) => r.projectId === projectId && !isArchived(r))
@@ -1132,7 +1132,7 @@ function listRows(ws: Workspace, projectId: string, coarse: boolean): { head: st
     { head: 'Releases', rows: releases.flatMap((r) => subtree(ws, r)) },
     { head: 'Milestones im Plan', rows: milestones(plannedMilestones(ws, projectId)) },
     { head: 'Vorbereitete Milestones', rows: milestones(draftMilestones(ws, projectId)) },
-    { head: 'Ready & Backlog', rows: tree(loose) },
+    { head: 'Backlog', rows: tree(loose) },
   ].filter((s) => s.rows.length);
 }
 

@@ -1,7 +1,18 @@
 import { isBlocked } from './blocking.js';
 import { checklist } from './checklist.js';
 import { isArchived, isDone, type Milestone, type Task } from './model.js';
+import { implicitStatus } from './parentStatus.js';
 import type { Workspace } from './workspace.js';
+
+/**
+ * Noch nicht fertig geplant (Wunsch des Nutzers): eine offene Aufgabe – oder
+ * eine bereite, unter der noch etwas offen ist. Auf dem Tisch liegt sie gesperrt.
+ */
+export const notReady = (ws: Workspace, t: Task): boolean =>
+  t.status === 'open' || (t.status === 'ready' && implicitStatus(ws, t) === 'open');
+
+/** Gesperrt: angekettet, blockiert oder noch nicht bereit. */
+export const isLocked = (ws: Workspace, t: Task): boolean => isBlocked(ws, t) || notReady(ws, t);
 
 /**
  * Der „Tisch“ (Wunsch des Nutzers): die Arbeit an den aktiven Milestones als
@@ -24,9 +35,12 @@ export function activeMilestones(ws: Workspace, projectId: string): Milestone[] 
 const listOf = (m: Milestone | Milestone[]): Milestone[] => (Array.isArray(m) ? m : [m]);
 
 export type TischLayout = {
-  /** Wurzelaufgaben mit offenen Voraussetzungen oder Status „Blockiert“ – Stapel wie einzelne. */
+  /**
+   * Wurzelaufgaben mit offenen Voraussetzungen, Status „Blockiert“ oder noch
+   * nicht bereit – Stapel wie einzelne.
+   */
   locked: Task[];
-  /** Offene und unklare Wurzelaufgaben, dazu alle nicht erledigten Stapel. */
+  /** Bereite und unklare Wurzelaufgaben, dazu alle übrigen nicht erledigten Stapel. */
   open: Task[];
   /** In Arbeit: Wurzeln und Unteraufgaben ohne eigene Unteraufgaben, von Hand sortiert. */
   play: Task[];
@@ -59,7 +73,7 @@ export function tischLayout(ws: Workspace, m: Milestone | Milestone[]): TischLay
       if (t.status === 'progress' && !ws.kids(t.id).length && !doneAbove(ws, t, root)) out.play.push(t);
     }
     if (isDone(root) || (root.status === 'progress' && !ws.kids(root.id).length)) continue;
-    (isBlocked(ws, root) ? out.locked : out.open).push(root);
+    (isLocked(ws, root) ? out.locked : out.open).push(root);
   }
   // Im Spiel wird von Hand sortiert (`playOrder`); bei Gleichstand bleibt die Baumreihenfolge.
   out.play.sort((a, b) => a.playOrder - b.playOrder);
@@ -81,6 +95,7 @@ export function playRefusal(ws: Workspace, t: Task): string | null {
   if (isDone(t)) return null;
   if (ws.kids(t.id).length) return 'Ein Stapel kommt nicht ins Spiel – spiel seine Unteraufgaben aus';
   if (isBlocked(ws, t)) return 'Die Karte ist noch angekettet';
+  if (notReady(ws, t)) return 'Die Karte ist noch nicht bereit';
   return null;
 }
 

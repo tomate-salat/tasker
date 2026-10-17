@@ -54,12 +54,7 @@ export function Sidebar({
     const inPlan = !!ms?.planned;
     // Der Zeitplan zeigt nur geplante Milestones, zählt also wie der Plan.
     if (view === 'plan' || view === 'timeline') return inPlan;
-    if (inPlan) return false;
-    // Vorbereitete Milestones stehen in Backlog und „Ready“, lose Wurzeln in einem von beiden.
-    if (ms) return true;
-    const root = ws.root(t);
-    const ready = isLooseRoot(root) && root.ready;
-    return view === 'ready' ? ready : view === 'backlog' ? !ready : true;
+    return !inPlan;
   };
 
   const viewTasks = vws.tasks.filter(inView);

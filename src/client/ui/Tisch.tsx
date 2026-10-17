@@ -11,6 +11,8 @@ import {
   doneRefusal,
   doneShelf,
   type DoneShelf,
+  isLocked,
+  notReady,
   playRefusal,
   stackReady,
   tischLayout,
@@ -34,14 +36,15 @@ import './tisch.css';
  * trägt dann die Farbe und den Namen ihres Milestones (`MsTag`), und im Kopf
  * lässt sich der Tisch auf einen einschränken.
  *
- * - **Gesperrt:** Karten mit offenen Voraussetzungen, angekettet.
- * - **Offen:** die große Fläche in der Mitte, dazu alle Stapel.
+ * - **Gesperrt:** Karten mit offenen Voraussetzungen, angekettet – dazu, was
+ *   noch nicht bereit ist (Status Offen, Wunsch des Nutzers).
+ * - **Bereit:** die große Fläche in der Mitte, dazu alle übrigen Stapel.
  * - **Im Spiel:** In Progress; sieben Plätze als Richtwert, begrenzt wird nicht.
  * - **Erledigt-Stapel** rechts daneben. Ein Klick deckt ihn auf: die Ablage
  *   zeigt dann je Woche, was erledigt wurde (`Shelf`).
  *
  * Ziehen zwischen den Zonen setzt den Status. Zwischen zwei Karten abgelegt wird
- * sortiert (Wunsch des Nutzers): in „Offen“ ist das die Reihenfolge im Plan, „Im
+ * sortiert (Wunsch des Nutzers): in „Bereit“ ist das die Reihenfolge im Plan, „Im
  * Spiel“ hat seine eigene (`playOrder`). Ein Task mit Unteraufgaben ist ein
  * Stapel und fächert sich per Klick in eine Schublade auf. Welche Karte wohin
  * gehört, steht in `@shared/tisch.ts`; die Animationen in `tischFx.ts`.
@@ -50,7 +53,7 @@ import './tisch.css';
 type Where = 'locked' | 'open' | 'play' | 'pile' | 'drawer';
 type DropZone = 'open' | 'play' | 'pile';
 
-const STATUS_OF: Record<DropZone, Status> = { open: 'open', play: 'progress', pile: 'done' };
+const STATUS_OF: Record<DropZone, Status> = { open: 'ready', play: 'progress', pile: 'done' };
 
 /** Plätze in „Im Spiel“, die leer angezeigt werden – nur ein Richtwert. */
 const SLOTS = 7;
@@ -271,7 +274,7 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
   const drop = (zone: DropZone) => (e: React.DragEvent, at: number | null) =>
     void onDrop(zone, e, root.current, reveal, shown, at);
 
-  // „Offen“ sortiert nur um, was dort schon liegt. Im Spiel bekommt auch eine
+  // „Bereit“ sortiert nur um, was dort schon liegt. Im Spiel bekommt auch eine
   // Karte ihren Platz, die gerade erst hineinkommt – nur nicht, was gar nicht
   // ins Spiel darf (ein Stapel, eine angekettete Karte).
   const sortsOpen = (ids: string[]): boolean => ids.every((id) => layout.open.some((t) => t.id === id));
@@ -305,7 +308,7 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
         />
       ))}
 
-      {/* Gesperrt und Offen in einem Rahmen – darüber legt sich die Ablage. */}
+      {/* Gesperrt und Bereit in einem Rahmen – darüber legt sich die Ablage. */}
       <div className={`tisch-top ${shelfOpen ? 'shelf-open' : ''}`}>
       {layout.locked.length > 0 && (
         <section className="tzone tzone-locked">
@@ -323,7 +326,7 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
 
       <DropArea zone="open" className="tzone tzone-open" onDrop={drop('open')} sorts={sortsOpen}>
         <h2 className="tzone-head">
-          Offen <span className="tzone-n">{layout.open.length}</span>
+          Bereit <span className="tzone-n">{layout.open.length}</span>
         </h2>
         <div className="tzone-cards">
           {layout.open.map((t) => (
@@ -409,8 +412,8 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
 
 /**
  * Eine Karte auf dem Erledigt-Stapel. Die oberste lässt sich wieder
- * herausziehen (Wunsch des Nutzers) – auf „Offen“ oder ins Spiel. Ein Klick
- * deckt den Stapel auf (wie ein Stapel in „Offen“ seine Schublade), der
+ * herausziehen (Wunsch des Nutzers) – auf „Bereit“ oder ins Spiel. Ein Klick
+ * deckt den Stapel auf (wie ein Stapel in „Bereit“ seine Schublade), der
  * Doppelklick öffnet wie überall den Inspektor.
  */
 function PileCard({
@@ -467,9 +470,9 @@ const dayMonth = (start: string): string => `${start.slice(8, 10)}.${start.slice
 
 /**
  * Der aufgedeckte Erledigt-Stapel (Wunsch des Nutzers): legt sich
- * über „Gesperrt“ und „Offen“ und zeigt je Woche, was erledigt wurde – mit
+ * über „Gesperrt“ und „Bereit“ und zeigt je Woche, was erledigt wurde – mit
  * Wochenziel, bester Woche und Serie. Jede Karte lässt sich von hier zurück auf
- * „Offen“ oder ins Spiel ziehen; solange gezogen wird, tritt die Ablage dafür
+ * „Bereit“ oder ins Spiel ziehen; solange gezogen wird, tritt die Ablage dafür
  * zur Seite. Die Zahlen stehen in `doneShelf`.
  */
 function Shelf({
@@ -732,7 +735,7 @@ function TischCard({
   const done = isDone(task);
   // In der Schublade: was im Spiel liegt, hinterlässt nur seinen Umriss.
   const away = where === 'drawer' && !stack && task.status === 'progress';
-  const locked = !done && task.status !== 'progress' && isBlocked(ws, task);
+  const locked = !done && task.status !== 'progress' && isLocked(ws, task);
   const ready = stack && stackReady(ws, task);
   const drag = dragSource('task', task.id, !done && !away);
 
@@ -820,6 +823,7 @@ function TischCard({
 
 function lockTitle(ws: Workspace, t: Task): string {
   const list = blockers(ws, t);
+  if (!list.length && !isBlocked(ws, t) && notReady(ws, t)) return 'Noch nicht bereit';
   if (!list.length) return 'Als Blockiert markiert';
   return `Wartet auf: ${list.map((b) => b.title || 'Ohne Titel').join(', ')}`;
 }
@@ -892,7 +896,7 @@ const CELL = { w: 142, h: 190 };
 
 /**
  * Das Raster einer Zone: wo es beginnt, wie groß ein Platz ist und wie viele
- * nebeneinander passen. „Im Spiel“ ist eine einzige Reihe, „Offen“ bricht um.
+ * nebeneinander passen. „Im Spiel“ ist eine einzige Reihe, „Bereit“ bricht um.
  */
 function gridOf(zone: HTMLElement): { left: number; top: number; w: number; h: number; cols: number } | null {
   const row = zone.querySelector<HTMLElement>(':scope > .tzone-cards');
@@ -1101,7 +1105,7 @@ function sortAt(ws: Workspace, ms: Milestone[], zone: DropZone, tasks: Task[], a
     const m = ws.milestone((tasks[0] as Task).milestoneId);
     if (!m || tasks.some((t) => t.milestoneId !== m.id)) return null;
     const own = (t: Task): boolean => t.milestoneId === m.id;
-    // „Offen“ zeigt die Wurzeln des Milestones in der Reihenfolge des Plans –
+    // „Bereit“ zeigt die Wurzeln des Milestones in der Reihenfolge des Plans –
     // dazwischen liegen dort auch die gesperrten, ausgespielten und erledigten.
     const roots = ws.msRoots(m).filter((t) => !dragged.has(t.id));
     const open = layout.open.filter((t) => !dragged.has(t.id));
@@ -1155,8 +1159,8 @@ async function onDrop(
       : zone === 'pile'
         ? tasks.map((t) => doneRefusal(ws, t)).find(Boolean)
         : null;
-  // Zwischen zwei Karten abgelegt wird sortiert. In „Offen“ bleibt der Status
-  // dabei, wie er ist – sonst machte das Umsortieren aus „Unklar“ ein „Offen“.
+  // Zwischen zwei Karten abgelegt wird sortiert. In „Bereit“ bleibt der Status
+  // dabei, wie er ist – sonst machte das Umsortieren aus „Unklar“ ein „Bereit“.
   const sort = refusal || at === null ? null : sortAt(ws, ms, zone, tasks, at);
   const changing = sort ? [] : tasks.filter((t) => t.status !== status);
 
@@ -1412,15 +1416,15 @@ function measure(root: HTMLElement): Map<string, Spot> {
 
 /* ---------------------------------------------------------- Tastatur */
 
-const CYCLE: Status[] = ['open', 'progress', 'done'];
+const CYCLE: Status[] = ['open', 'ready', 'progress', 'done'];
 
 /**
  * Pfeiltasten wandern von Karte zu Karte – links und rechts in der Reihenfolge
  * auf dem Tisch, hoch und runter zur nächsten Reihe darüber bzw. darunter. Die
  * Leertaste schaltet den Status der markierten Karte weiter (mit Umschalt
- * zurück), wie in der Liste: Offen → In Progress → Erledigt; aus Unklar und
- * Blockiert geht es zurück auf Offen. Ein Stapel kommt nie ins Spiel – bei ihm
- * springt sie von Offen direkt auf Erledigt. Die Karte wandert dann mit
+ * zurück), wie in der Liste: Offen → Bereit → In Progress → Erledigt; aus Unklar
+ * und Blockiert geht es zurück auf Offen. Ein Stapel kommt nie ins Spiel – bei
+ * ihm springt sie von Bereit direkt auf Erledigt. Die Karte wandert dann mit
  * denselben Animationen wie beim Ziehen.
  */
 function useTischKeys(rootRef: React.RefObject<HTMLDivElement | null>, ws: Workspace): void {
@@ -1474,7 +1478,7 @@ function useTischKeys(rootRef: React.RefObject<HTMLDivElement | null>, ws: Works
     const stack = ws.kids(t.id).length > 0;
     const at = CYCLE.indexOf(t.status);
     let next: Status = at < 0 ? 'open' : (CYCLE[Math.max(0, Math.min(CYCLE.length - 1, at + dir))] ?? t.status);
-    if (stack && next === 'progress') next = dir > 0 ? 'done' : 'open';
+    if (stack && next === 'progress') next = dir > 0 ? 'done' : 'ready';
     if (next === t.status) return;
 
     const refusal = next === 'progress' ? playRefusal(ws, t) : next === 'done' ? doneRefusal(ws, t) : null;

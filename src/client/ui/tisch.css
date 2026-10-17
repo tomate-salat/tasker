@@ -563,7 +563,7 @@
 
 /* ----------------------------------------------------------------- Ablage */
 
-/* Gesperrt und Offen in einem Rahmen; darüber legt sich die Ablage. */
+/* Gesperrt und Bereit in einem Rahmen; darüber legt sich die Ablage. */
 .tisch-top {
   position: relative;
   flex: 1 0 auto;
@@ -596,7 +596,7 @@
   transition: opacity 160ms ease;
 }
 
-/* Solange eine Karte gezogen wird, tritt die Ablage zur Seite – darunter liegt „Offen“. */
+/* Solange eine Karte gezogen wird, tritt die Ablage zur Seite – darunter liegt „Bereit“. */
 .tshelf.aside {
   opacity: 0.12;
   pointer-events: none;

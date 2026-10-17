@@ -158,7 +158,7 @@ const track = (e: DragEvent): void => {
  * Auswahl aus dem Backlog direkt auf einen Milestone im Plan legen.
  */
 const SPRING_MS = 600;
-const SPRING_VIEWS: View[] = ['plan', 'ready', 'backlog', 'docs'];
+const SPRING_VIEWS: View[] = ['plan', 'backlog', 'docs'];
 
 let tabHover: { view: View; el: HTMLElement; since: number } | null = null;
 
@@ -364,7 +364,7 @@ function zoneFor(drag: Drag, target: Target, e: React.DragEvent): Zone | null {
         return at < 0.28 ? 'before' : at > 0.72 ? 'after' : 'child';
       }
       if (target.type === 'tab') {
-        return ['plan', 'ready', 'backlog', 'docs', 'archive'].includes(target.view) ? 'into' : null;
+        return ['plan', 'backlog', 'docs', 'archive'].includes(target.view) ? 'into' : null;
       }
       return 'into';
     case 'milestone': {
@@ -530,17 +530,9 @@ async function dropTasks(ws: Workspace, drag: Drag, target: Target, zone: Zone):
         if (target.view === 'backlog') {
           if (!many) return toBacklog(t);
           return move(
-            { ...loose, doc: false, ready: false, index: END },
+            { ...loose, doc: false, index: END },
             undefined,
             (n) => `${tasksWord(n)} liegen jetzt im Backlog › Unsortiert`,
-          );
-        }
-        if (target.view === 'ready') {
-          // Markierung und Kategorie bleiben – sie bestimmen die Gruppe in „Ready“.
-          return move(
-            { ...loose, doc: false, ready: true, index: END },
-            (_, now) => `Liegt jetzt ${whereNow(now)}`,
-            (n) => `${tasksWord(n)} sind jetzt ready`,
           );
         }
         if (target.view === 'docs') {
@@ -555,7 +547,7 @@ async function dropTasks(ws: Workspace, drag: Drag, target: Target, zone: Zone):
       case 'project': {
         const p = target.project;
         return move(
-          { ...loose, doc: false, ready: false, projectId: p.id, index: END },
+          { ...loose, doc: false, projectId: p.id, index: END },
           () => `In den Backlog von ${p.name} verschoben`,
           (n) => `${tasksWord(n)} in den Backlog von ${p.name} verschoben`,
         );
@@ -578,7 +570,6 @@ async function dropTasks(ws: Workspace, drag: Drag, target: Target, zone: Zone):
             groupId: dest.place.groupId ?? null,
             projectId: dest.projectId,
             doc: false,
-            ...placeFields(dest.place),
             index: many ? END : countIn(ws, dest.projectId, dest.place, t.id),
           },
           (_, now) => `Liegt jetzt ${whereNow(now)}`,
@@ -612,22 +603,6 @@ async function dropTasks(ws: Workspace, drag: Drag, target: Target, zone: Zone):
     ...(onto.parentId ? {} : { doc: onto.doc }),
     index: at + (zone === 'after' ? 1 : 0),
   });
-}
-
-/**
- * Was ein loser Behälter an der Aufgabe festlegt: Unsortiert nimmt „ready“
- * weg und lässt Markierung und Kategorie stehen; eine Gruppe in „Ready“ setzt
- * „ready“ und ihre Markierung – eine Kategorie-Gruppe ihre Kategorie und
- * nimmt die Markierung weg, sonst stünde die Aufgabe bei der Markierung.
- * Milestones und eigene Gruppen lassen beides, wie es ist.
- */
-export function placeFields(place: Placement): Record<string, unknown> {
-  if (place.milestoneId || place.groupId) return {};
-  return {
-    ready: !!place.ready,
-    ...(place.markId !== undefined ? { markId: place.markId } : {}),
-    ...(place.categoryId !== undefined ? { categoryId: place.categoryId } : {}),
-  };
 }
 
 async function dropMilestone(ws: Workspace, id: string, target: Target, zone: Zone): Promise<void> {

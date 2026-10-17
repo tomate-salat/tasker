@@ -259,7 +259,7 @@ function Shell({
           <FilterBar ws={ws} />
 
           {view === 'tisch' && <Tisch ws={ws} />}
-          {(view === 'plan' || view === 'ready' || view === 'backlog' || view === 'docs') && (
+          {(view === 'plan' || view === 'backlog' || view === 'docs') && (
             <Outline ws={ws} view={view} />
           )}
           {view === 'timeline' && <Timeline ws={ws} />}
@@ -322,7 +322,6 @@ function Shell({
 
 /** Was man auf einen Reiter ziehen kann – die Titel aus dem Prototyp. */
 const TAB_DROP_TITLE: Partial<Record<View, string>> = {
-  ready: 'Task hierher ziehen = ready',
   backlog: 'Task hierher ziehen = zurück in den Backlog',
   docs: 'Task hierher ziehen = in die Dokumentation',
   archive: 'Hierher ziehen = archivieren',
@@ -380,7 +379,7 @@ function Tab({ view, on, onClick }: { view: View; on: boolean; onClick: () => vo
 function ArchiveDone({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   const state = useStore();
   const { view, archiveDone } = state;
-  if (view !== 'plan' && view !== 'ready' && view !== 'backlog') return null;
+  if (view !== 'plan' && view !== 'backlog') return null;
 
   const found = doneCandidates(ws, {
     view,

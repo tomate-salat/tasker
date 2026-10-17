@@ -4,11 +4,9 @@ import { dayKey } from '@shared/burnup.js';
 import type { ChangeEvent } from '@shared/events.js';
 import { isArchived, type Milestone, type Task } from '@shared/model.js';
 import {
-  areaLabel,
   doneCandidates,
-  isLooseRoot,
-  looseBoxId,
   placeLabel,
+  unsortedId,
   visibility,
   type OutlineFilter,
 } from '@shared/outline.js';
@@ -29,7 +27,6 @@ import { MS_STATUS } from './ui/icons.js';
 export const VIEWS = [
   'tisch',
   'plan',
-  'ready',
   'backlog',
   'docs',
   'timeline',
@@ -40,17 +37,16 @@ export const VIEWS = [
 ] as const;
 export type View = (typeof VIEWS)[number];
 
-/** Darstellung von Plan, Ready, Backlog und Doku. */
+/** Darstellung von Plan, Backlog und Doku. */
 export type Layout = 'list' | 'cards';
 
 /** Die Ansichten, die als Liste oder als Karten erscheinen können. */
-export const LAYOUT_VIEWS = ['plan', 'ready', 'backlog', 'docs'] as const;
+export const LAYOUT_VIEWS = ['plan', 'backlog', 'docs'] as const;
 export type LayoutView = (typeof LAYOUT_VIEWS)[number];
 
 /** Vorgabe je Ansicht (Wunsch des Nutzers). */
 const LAYOUT_DEFAULT: Record<LayoutView, Layout> = {
   plan: 'cards',
-  ready: 'cards',
   backlog: 'list',
   docs: 'list',
 };
@@ -60,7 +56,6 @@ export const isLayoutView = (v: View): v is LayoutView => (LAYOUT_VIEWS as reado
 export const VIEW_LABEL: Record<View, string> = {
   tisch: 'Tisch',
   plan: 'Plan',
-  ready: 'Ready',
   backlog: 'Backlog',
   docs: 'Doku',
   timeline: 'Zeitplan',
@@ -72,13 +67,12 @@ export const VIEW_LABEL: Record<View, string> = {
 
 /**
  * Die Reiter im Kopf. Der Papierkorb hängt wie im Prototyp unten in der Seitenleiste.
- * „Ready“ gibt es im Prototyp nicht – auf Wunsch dazugekommen, zwischen Plan und Backlog.
- * „Bilder“ ebenso: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
+ * „Bilder“ gibt es im Prototyp nicht – auf Wunsch dazugekommen: die Galerie ist ein Bestand wie das Archiv, kein Teil der Liste.
  * „Tisch“ (Wunsch des Nutzers) steht als erster: der aktive Milestone als Kartenspiel.
  * „Releases“ steht vor dem Plan – im Plan steht, was einem Release angehört –, die Doku hinter
  * dem Zeitplan (Wunsch des Nutzers).
  */
-export const TABS: View[] = ['tisch', 'releases', 'plan', 'ready', 'backlog', 'timeline', 'docs', 'bilder', 'archive'];
+export const TABS: View[] = ['tisch', 'releases', 'plan', 'backlog', 'timeline', 'docs', 'bilder', 'archive'];
 
 export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help' | 'search';
 
@@ -645,7 +639,7 @@ export const useStore = create<State>((set, get) => ({
       const root = ws.root(t);
       if (root.milestoneId) collapsed[root.milestoneId] = false;
       else if (root.groupId) collapsed[root.groupId] = false;
-      else if (!ws.isDoc(root)) collapsed[looseBoxId(root, ws)] = false;
+      else if (!ws.isDoc(root)) collapsed[unsortedId(root.projectId)] = false;
     }
     writeLocal(COLLAPSED_KEY, collapsed);
     set({ collapsed });
@@ -749,7 +743,7 @@ export const useStore = create<State>((set, get) => ({
   archiveDone: async () => {
     const state = get();
     const { ws, view } = state;
-    if (!ws || (view !== 'plan' && view !== 'ready' && view !== 'backlog')) return;
+    if (!ws || (view !== 'plan' && view !== 'backlog')) return;
 
     const found = doneCandidates(ws, { view, projectIds: scopeProjectIds(state) });
     const steps: Step[] = [
@@ -992,7 +986,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       const { id: msId, count, undo } = await api.convert(id, task.version);
       await get().load();
-      // Der neue Milestone steht im Backlog bzw. in „Ready“ – gleich hinschauen.
+      // Der neue Milestone steht im Backlog – gleich hinschauen.
       get().reveal(msId);
       remember(
         `„${task.title || 'Ohne Titel'}“ ist jetzt ein Milestone mit ${count} ${
@@ -1054,9 +1048,6 @@ export const useStore = create<State>((set, get) => ({
             parentId: current.parentId,
             milestoneId: current.milestoneId,
             groupId: current.groupId,
-            markId: current.markId,
-            ready: current.ready,
-            categoryId: current.categoryId,
             projectId: current.projectId,
             doc: current.doc,
             order: current.order,
@@ -1512,7 +1503,7 @@ export function whereLabel(ws: Workspace, t: Task): string {
   const m = ws.milestone(t.milestoneId);
   if (m) return `in ◆ ${m.title}${m.planned ? '' : ' (Backlog)'}`;
   if (t.doc) return `in Dokumentation · ${project}`;
-  return `${areaLabel(ws, t) === 'Ready' ? 'in Ready' : 'im Backlog'} › ${placeLabel(ws, t)} · ${project}`;
+  return `im Backlog › ${placeLabel(ws, t)} · ${project}`;
 }
 
 /**
@@ -1658,19 +1649,16 @@ export const scopeProjectIds = (s: State): string[] =>
 /**
  * Die Ansicht, in der ein aktiver Task oder Milestone steht. `hint` ist die
  * Ansicht, in der man gerade ist, und entscheidet nur, wo es mehrere gibt:
- * ein Milestone im Plan steht auch im Zeitplan, ein vorbereiteter Milestone
- * in Backlog und „Ready“. Ohne Hinweis (`null`) gilt dort „Ready“.
+ * ein Milestone im Plan steht auch im Zeitplan.
  */
 export function homeView(ws: Workspace, id: string, hint: View | null): View {
   const m = ws.milestone(id);
   const t = m ? null : ws.task(id);
   const ms = m ?? (t ? ws.milestone(ws.root(t).milestoneId) : null);
-  const root = t ? ws.root(t) : null;
   if (hint === 'timeline' && m) return 'timeline';
   if (ms?.planned) return 'plan';
   if (t && ws.isDoc(t)) return 'docs';
-  if (ms) return hint === 'ready' || hint === null ? 'ready' : 'backlog';
-  return root && isLooseRoot(root) && root.ready ? 'ready' : 'backlog';
+  return 'backlog';
 }
 
 /** Steht es in mehr als einer Ansicht? Dann gehört die Ansicht in die Adresse. */

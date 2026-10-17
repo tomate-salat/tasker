@@ -25,7 +25,7 @@ import './cards.css';
 
 /**
  * Die Kartenansicht – ein Versuch, auf Wunsch des Nutzers neben der Liste.
- * Plan, Ready, Backlog und Doku wählen das je für sich (`layouts` im Speicher) und zeigen dann nur die Aufgaben bzw. Seiten
+ * Plan, Backlog und Doku wählen das je für sich (`layouts` im Speicher) und zeigen dann nur die Aufgaben bzw. Seiten
  * ohne Elternteil, als Karten nebeneinander. Den Baum darunter zeigt der
  * Inspektor (`Hierarchy`), und zwar immer von der Wurzel an – auch wenn
  * gerade eine Unteraufgabe ausgewählt ist.
@@ -45,7 +45,7 @@ import './cards.css';
 /** Unter diesem Schlüssel merkt sich `collapsed`, ob der Baum im Inspektor zu ist. */
 const HIER_KEY = 'inspector:hierarchy';
 
-/** Ob die Karten gerade gelten – je Ansicht gewählt, in Plan, Ready, Backlog und Doku. */
+/** Ob die Karten gerade gelten – je Ansicht gewählt, in Plan, Backlog und Doku. */
 export const cardsOn = (s: { layouts: Record<LayoutView, Layout>; view: View }): boolean =>
   isLayoutView(s.view) && s.layouts[s.view] === 'cards';
 
@@ -203,7 +203,7 @@ export function CardGrid({
 
 /**
  * Ein Raster, in dem die Karten beim Sortieren auseinanderrücken (`cardGap.ts`,
- * vorerst Plan und Ready): das Kennzeichen dafür und der Landeplatz in der
+ * vorerst im Plan): das Kennzeichen dafür und der Landeplatz in der
  * Lücke. In den anderen Ansichten bleibt es bei der Einfügemarke.
  */
 function useGapGrid(view: OutlineView): { events: React.HTMLAttributes<HTMLDivElement>; land: React.ReactNode } {

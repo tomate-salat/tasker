@@ -24,8 +24,8 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-/** Fortschrittskette plus die beiden Sonderstatus. */
-export const TASK_STATUS = ['open', 'progress', 'done', 'unclear', 'blocked'] as const;
+/** Fortschrittskette plus die beiden Sonderstatus; „Bereit“ gibt es nur bei Aufgaben. */
+export const TASK_STATUS = ['open', 'ready', 'progress', 'done', 'unclear', 'blocked'] as const;
 export const MILESTONE_STATUS = ['open', 'progress', 'done', 'unclear', 'blocked'] as const;
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
@@ -237,12 +237,6 @@ export const tasks = sqliteTable(
     order: integer('sort_order').notNull().default(0),
     categoryId: text('category_id').references(() => categories.id, { onDelete: 'set null' }),
     markId: text('mark_id').references(() => marks.id, { onDelete: 'set null' }),
-    /**
-     * Fertig vorbereitet: eine lose Wurzel mit diesem Kennzeichen steht nicht im
-     * Backlog, sondern im Reiter „Ready“. An Aufgaben in Milestone, Gruppe oder
-     * unter einer anderen Aufgabe ist es immer aus.
-     */
-    ready: integer('ready', { mode: 'boolean' }).notNull().default(false),
     /**
      * Titelbild der Karte (Kartenansicht, Versuch). Wie beim Bild selbst ohne
      * Fremdschlüssel: das endgültige Löschen eines Bildes leert das Feld.

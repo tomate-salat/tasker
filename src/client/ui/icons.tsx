@@ -42,6 +42,7 @@ export const THEME_ICON: Record<Settings['theme'], React.ReactNode> = {
 
 export const STATUS_LABEL: Record<Status, string> = {
   open: 'Offen',
+  ready: 'Bereit',
   progress: 'In Progress',
   done: 'Erledigt',
   unclear: 'Unklar',
@@ -93,6 +94,7 @@ export function StatusIcon({ status }: { status: Status }) {
   return (
     <svg className="st-ico" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
       <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      {status === 'ready' && <circle cx="7" cy="7" r="2" fill="currentColor" />}
       {status === 'progress' && <path d="M7 2.4a4.6 4.6 0 010 9.2z" fill="currentColor" />}
       {status === 'unclear' && (
         <>
@@ -130,6 +132,7 @@ const SEG_CLASS: Record<Status, string> = {
   progress: 'prog',
   blocked: 'blocked',
   unclear: 'unclear',
+  ready: 'ready',
   open: 'open',
 };
 
@@ -140,7 +143,8 @@ const RANK: Record<string, number> = {
   cl: 2,
   blocked: 3,
   unclear: 4,
-  open: 5,
+  ready: 5,
+  open: 6,
 };
 
 /** Ein durchgehender Balken, ein Abschnitt je Checklisten-Punkt und Blatt-Aufgabe. */
@@ -174,6 +178,7 @@ const SEG_TITLE: Record<string, string> = {
   cl: 'Checkliste offen',
   blocked: 'blockiert',
   unclear: 'unklar',
+  ready: 'bereit',
   open: 'offen',
 };
 

@@ -44,8 +44,7 @@ export async function addChild(t: Task): Promise<void> {
 
 /**
  * Legt eine Aufgabe in einem Behälter an – hinter dem „+“ einer Gruppe und
- * hinter „Neuer Task hier“ im Kontextmenü. Die Markierung gehört dazu: sie
- * entscheidet über die smarte Gruppe.
+ * hinter „Neuer Task hier“ im Kontextmenü.
  */
 export async function addIn(projectId: string, place: Placement): Promise<void> {
   const store = useStore.getState();
@@ -55,9 +54,6 @@ export async function addIn(projectId: string, place: Placement): Promise<void> 
     projectId,
     milestoneId: place.milestoneId ?? null,
     groupId: place.groupId ?? null,
-    ...(place.ready ? { ready: true } : {}),
-    ...(place.markId ? { markId: place.markId } : {}),
-    ...(place.categoryId ? { categoryId: place.categoryId } : {}),
   });
 }
 
@@ -92,7 +88,7 @@ export async function outdent(ws: Workspace, t: Task): Promise<void> {
  */
 export async function toBacklog(t: Task): Promise<void> {
   const store = useStore.getState();
-  if (isLooseRoot(t) && !t.ready) {
+  if (isLooseRoot(t)) {
     store.say('Liegt schon unter „Unsortiert“');
     return;
   }
@@ -103,7 +99,6 @@ export async function toBacklog(t: Task): Promise<void> {
       milestoneId: null,
       groupId: null,
       doc: false,
-      ready: false,
       index: Number.MAX_SAFE_INTEGER,
     },
     () => `„${t.title}“ liegt jetzt im Backlog › Unsortiert`,

@@ -4,7 +4,7 @@ import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { implicitStatus } from '@shared/parentStatus.js';
-import { categoryColorIndex, isCollapsed, type OutlineRow } from '@shared/outline.js';
+import { isCollapsed, type OutlineRow } from '@shared/outline.js';
 import { doneCount, progressPct, total } from '@shared/progress.js';
 import { releaseLabel } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
@@ -278,11 +278,7 @@ export function MilestoneRow({
   );
 }
 
-/**
- * Überschriftzeile für Gruppen, den Sammelbereich „Unsortiert“ und die smarten
- * Gruppen. Eine smarte Gruppe ist keine Ablage, sondern die Markierung oder
- * Kategorie selbst: was hier landet, bekommt sie automatisch.
- */
+/** Überschriftzeile für Gruppen und den Sammelbereich „Unsortiert“. */
 export function GroupRow({
   row,
   count,
@@ -293,8 +289,8 @@ export function GroupRow({
   count: number;
   onAdd: () => void;
 }) {
-  const { collapsed, setCollapsed, editing, edit, remove, openMarks, openCategories, ws } = useStore();
-  const { id, group, mark, smart, category } = row;
+  const { collapsed, setCollapsed, editing, edit, remove } = useStore();
+  const { id, group } = row;
   // Eine leere Gruppe ist von sich aus zu – geklappt wird darum gegen das, was
   // dasteht, sonst liefe der erste Klick ins Leere.
   const open = !isCollapsed(collapsed, id, !row.tasks.length);
@@ -302,27 +298,19 @@ export function GroupRow({
   const target = { type: 'group', row } as const;
   const zone = useZone(target);
   const dragging = useDragging(group?.id ?? id);
-  const hue = category && ws ? categoryHue(categoryColorIndex(ws, category)) : null;
-  const smartTitle = mark
-    ? `Smarte Gruppe: Tasks hier bekommen automatisch ${mark.emoji} ${mark.name}`
-    : smart
-      ? `Smarte Gruppe: Tasks hier bekommen automatisch ${category ? `die Kategorie ${category.name}` : 'keine Kategorie'}`
-      : null;
 
   return (
     <div
       data-row={id}
       className={[
         'row grp-row',
-        !group && !smart ? 'unsorted' : '',
-        smart ? 'smart' : '',
+        !group ? 'unsorted' : '',
         dragging ? 'dragging' : '',
         zone ? `dz-${zone}` : '',
       ]
         .filter(Boolean)
         .join(' ')}
       style={{ '--d': 0 } as React.CSSProperties}
-      {...(smartTitle ? { title: smartTitle } : {})}
       // Wie im Prototyp: ein Klick auf die Zeile klappt sie auf oder zu – außer im
       // Eingabefeld und auf den Knöpfen, die ihre eigene Handlung haben.
       onClick={(e) => {
@@ -333,12 +321,6 @@ export function GroupRow({
       {...dropTarget(target)}
     >
       <Caret open={open} hasKids onToggle={toggle} />
-      {mark && <span className="mk-emoji">{mark.emoji}</span>}
-      {hue !== null && (
-        <span className="mk-emoji">
-          <span className="cat-sw" style={{ '--h': hue } as React.CSSProperties} />
-        </span>
-      )}
 
       {group && editing === group.id ? (
         <TitleEdit kind="group" id={group.id} title={group.title} />
@@ -353,32 +335,16 @@ export function GroupRow({
         </span>
       )}
 
-      {smart && <span className="smart-badge">smart</span>}
       <span className="ms-spacer" />
 
       <span className="row-actions">
         <button
-          title={
-            mark
-              ? `Task mit ${mark.name} anlegen`
-              : category
-                ? `Task mit ${category.name} anlegen`
-                : 'Task in dieser Gruppe anlegen'
-          }
+          title="Task in dieser Gruppe anlegen"
           aria-label="Task anlegen"
           onClick={onAdd}
         >
           +
         </button>
-        {smart && (
-          <button
-            title={smart === 'mark' ? 'Markierungen verwalten' : 'Kategorien verwalten'}
-            aria-label={smart === 'mark' ? 'Markierungen verwalten' : 'Kategorien verwalten'}
-            onClick={() => (smart === 'mark' ? openMarks(row.projectId) : openCategories(row.projectId))}
-          >
-            ✎
-          </button>
-        )}
         {group && (
           <>
             <button title="Umbenennen" aria-label="Umbenennen" onClick={() => edit(group.id)}>
@@ -460,6 +426,7 @@ const IMPLICIT_WHY: Partial<Record<Status, string>> = {
   progress: 'eine Unteraufgabe ist in Arbeit',
   blocked: 'eine Unteraufgabe ist blockiert',
   unclear: 'eine Unteraufgabe ist unklar',
+  open: 'eine Unteraufgabe ist noch offen',
 };
 
 /** Statuspunkt; ein von den Unteraufgaben geerbter Status erscheint gestrichelt. */

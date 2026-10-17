@@ -101,7 +101,6 @@ export class Builder {
       order: this.n++,
       categoryId: null,
       markId: null,
-      ready: false,
       coverImageId: null,
       playOrder: 0,
       changelog: '',

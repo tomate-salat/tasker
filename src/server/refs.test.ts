@@ -99,7 +99,8 @@ describe('Verweis-Nummern', () => {
     assert.deepEqual([refOf('task', a.id), refOf('milestone', m.id), refOf('task', b.id)], [1, 2, 3]);
 
     const after = (ctx.sqlite.prepare('SELECT * FROM task ORDER BY id').all() as Record<string, unknown>[]).map(
-      // `ready`, `cover_image_id`, `play_order` und die Changelog-Spalten kommen mit späteren Migrationen dazu.
+      // `cover_image_id`, `play_order` und die Changelog-Spalten kommen mit späteren Migrationen dazu
+      // (`ready` kam und ging wieder).
       ({ ref: _ref, ready: _ready, cover_image_id: _cover, play_order: _play, changelog: _cl, changelog_skip: _cs, changelog_order: _co, ...rest }) => rest,
     );
     assert.deepEqual(after, before);
@@ -109,28 +110,35 @@ describe('Verweis-Nummern', () => {
   });
 });
 
-describe('Migration „ready“', () => {
-  it('was in einer smarten Gruppe stand, steht danach in „Ready“ – sonst bleibt alles im Backlog', () => {
-    const ctx = open(migrationsUpTo(6));
-    const p = oldProject(ctx);
-    // Vor Migration 0014 gelten Markierungen für alle Projekte.
-    const k = { id: 'k1' };
-    ctx.sqlite.prepare("INSERT INTO mark (id, emoji, name) VALUES ('k1', '🐛', 'Bug')").run();
-    const g = create(ctx, 'group', { projectId: p.id, title: 'G' }) as { id: string };
+describe('Migration „Bereit“', () => {
+  it('was ready war, steht danach unter Unsortiert auf Bereit; Offenes in aktiven Milestones ebenso', () => {
+    const ctx = open(migrationsUpTo(19));
+    const p = create(ctx, 'project', { name: 'Spiel' }) as { id: string };
     const task = (o: Record<string, unknown>) => (create(ctx, 'task', { projectId: p.id, ...o }) as Task).id;
-    const smart = task({ title: 'smart', markId: k.id });
-    const plain = task({ title: 'lose' });
-    const grouped = task({ title: 'in Gruppe', groupId: g.id, markId: k.id });
-    const child = task({ title: 'Kind', parentId: smart, markId: k.id });
-    const page = task({ title: 'Seite', doc: true, markId: k.id });
+    const ms = (title: string) => (create(ctx, 'milestone', { projectId: p.id, title }) as Milestone).id;
+    const aktiv = ms('aktiv');
+    const alt = ms('archiviert');
+    ctx.sqlite.prepare("UPDATE milestone SET archived_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").run(alt);
+
+    const war = task({ title: 'war ready' });
+    const warUnklar = task({ title: 'war ready, unklar', status: 'unclear' });
+    ctx.sqlite.prepare('UPDATE task SET ready = 1 WHERE id IN (?, ?)').run(war, warUnklar);
+    const lose = task({ title: 'lose' });
+    const wurzel = task({ title: 'Wurzel', milestoneId: aktiv });
+    const kind = task({ title: 'Kind', parentId: wurzel });
+    const unklar = task({ title: 'unklar', parentId: wurzel, status: 'unclear' });
+    const fertig = task({ title: 'fertig', milestoneId: aktiv, status: 'done' });
+    const imArchiv = task({ title: 'im Archiv', milestoneId: alt });
 
     migrate(ctx.db, { migrationsFolder: 'db/migrations' });
 
-    const readyOf = (id: string) =>
-      (ctx.sqlite.prepare('SELECT ready FROM task WHERE id = ?').get(id) as { ready: number }).ready;
+    const statusOf = (id: string) =>
+      (ctx.sqlite.prepare('SELECT status FROM task WHERE id = ?').get(id) as { status: string }).status;
     assert.deepEqual(
-      [smart, plain, grouped, child, page].map(readyOf),
-      [1, 0, 0, 0, 0],
+      [war, warUnklar, lose, wurzel, kind, unklar, fertig, imArchiv].map(statusOf),
+      ['ready', 'unclear', 'open', 'ready', 'ready', 'unclear', 'done', 'open'],
     );
+    const columns = (ctx.sqlite.prepare('PRAGMA table_info(task)').all() as { name: string }[]).map((c) => c.name);
+    assert.equal(columns.includes('ready'), false);
   });
 });

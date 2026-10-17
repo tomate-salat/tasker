@@ -6,8 +6,15 @@
  * zu Arrays), der Client bekommt genau diese Form.
  */
 
-export const TASK_STATUS = ['open', 'progress', 'done', 'unclear', 'blocked'] as const;
+/**
+ * Fortschrittskette Offen → Bereit → In Progress → Erledigt plus die beiden
+ * Sonderstatus. „Bereit“ heißt: fertig geplant, kann losgehen – nur bei Aufgaben.
+ */
+export const TASK_STATUS = ['open', 'ready', 'progress', 'done', 'unclear', 'blocked'] as const;
 export type Status = (typeof TASK_STATUS)[number];
+
+/** Milestones kennen kein „Bereit“ – gestartet ist für sie dasselbe. */
+export const MILESTONE_STATUS = ['open', 'progress', 'done', 'unclear', 'blocked'] as const satisfies readonly Status[];
 
 /** 0 = keine, 1 = hoch, 2 = mittel, 3 = niedrig. */
 export type Prio = 0 | 1 | 2 | 3;
@@ -142,8 +149,6 @@ export type Task = {
   order: number;
   categoryId: string | null;
   markId: string | null;
-  /** Fertig vorbereitet – nur an losen Wurzeln: steht dann in „Ready“ statt im Backlog. */
-  ready: boolean;
   /** Titelbild der Karte (Kartenansicht, Versuch) – ID eines Galeriebildes. */
   coverImageId: string | null;
   /** Platz in „Im Spiel“ auf dem Tisch; bei Gleichstand gilt die Baumreihenfolge. */

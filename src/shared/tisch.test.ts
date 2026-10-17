@@ -34,8 +34,8 @@ describe('Tisch', () => {
       .project('p')
       .milestone('m1', 'p', { status: 'progress' })
       .milestone('m2', 'p', { status: 'progress' })
-      .task('a', 'p', { milestoneId: 'm1' })
-      .task('b', 'p', { milestoneId: 'm2' })
+      .task('a', 'p', { milestoneId: 'm1', status: 'ready' })
+      .task('b', 'p', { milestoneId: 'm2', status: 'ready' })
       .task('c', 'p', { milestoneId: 'm1', status: 'progress', playOrder: 2 })
       .task('d', 'p', { milestoneId: 'm2', status: 'progress', playOrder: 1 })
       .task('e', 'p', { milestoneId: 'm2', status: 'done', doneAt: '2026-01-02T10:00:00Z' })
@@ -53,16 +53,18 @@ describe('Tisch', () => {
     const ws = new Builder()
       .project('p')
       .milestone('m', 'p', { status: 'progress' })
-      .task('frei', 'p', { milestoneId: 'm' })
+      .task('frei', 'p', { milestoneId: 'm', status: 'ready' })
       .task('unklar', 'p', { milestoneId: 'm', status: 'unclear' })
       .task('wartet', 'p', { milestoneId: 'm', deps: ['frei'] })
       .task('blockiert', 'p', { milestoneId: 'm', status: 'blocked' })
       .task('läuft', 'p', { milestoneId: 'm', status: 'progress', deps: ['frei'] })
       .task('fertig', 'p', { milestoneId: 'm', status: 'done', doneAt: '2026-09-01T00:00:00Z' })
+      // Noch nicht bereit: liegt gesperrt (Wunsch des Nutzers).
+      .task('roh', 'p', { milestoneId: 'm' })
       .build();
     const l = tischLayout(ws, ws.milestone('m')!);
     assert.deepEqual(ids(l.open), ['frei', 'unklar']);
-    assert.deepEqual(ids(l.locked), ['wartet', 'blockiert']);
+    assert.deepEqual(ids(l.locked), ['wartet', 'blockiert', 'roh']);
     assert.deepEqual(ids(l.play), ['läuft']);
     assert.deepEqual(ids(l.pile), ['fertig']);
   });
@@ -115,17 +117,34 @@ describe('Tisch', () => {
     assert.deepEqual(ids(tischLayout(ws, ws.milestone('m')!).pile), ['eben', 'alt']);
   });
 
-  it('gesperrte und Stapel dürfen nicht ins Spiel', () => {
+  it('gesperrte, nicht bereite und Stapel dürfen nicht ins Spiel', () => {
     const ws = new Builder()
       .project('p')
-      .task('a', 'p')
-      .task('b', 'p', { deps: ['a'] })
-      .task('stapel', 'p')
-      .task('kind', 'p', { parentId: 'stapel' })
+      .task('a', 'p', { status: 'ready' })
+      .task('b', 'p', { status: 'ready', deps: ['a'] })
+      .task('roh', 'p')
+      .task('stapel', 'p', { status: 'ready' })
+      .task('kind', 'p', { parentId: 'stapel', status: 'ready' })
       .build();
     assert.equal(playRefusal(ws, ws.task('a')!), null);
     assert.ok(playRefusal(ws, ws.task('b')!));
+    assert.ok(playRefusal(ws, ws.task('roh')!));
     assert.ok(playRefusal(ws, ws.task('stapel')!));
+  });
+
+  it('ein bereiter Stapel mit einer offenen Unteraufgabe liegt gesperrt', () => {
+    const ws = new Builder()
+      .project('p')
+      .milestone('m', 'p', { status: 'progress' })
+      .task('halb', 'p', { milestoneId: 'm', status: 'ready' })
+      .task('k1', 'p', { parentId: 'halb', status: 'ready' })
+      .task('k2', 'p', { parentId: 'halb' })
+      .task('ganz', 'p', { milestoneId: 'm', status: 'ready' })
+      .task('k3', 'p', { parentId: 'ganz', status: 'ready' })
+      .build();
+    const l = tischLayout(ws, ws.milestone('m')!);
+    assert.deepEqual(ids(l.locked), ['halb']);
+    assert.deepEqual(ids(l.open), ['ganz']);
   });
 
   it('ein Stapel darf erst auf den Erledigt-Stapel, wenn alles darunter erledigt ist', () => {

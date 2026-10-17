@@ -8,7 +8,7 @@ import { onBeforeFlip } from './dropFlip.js';
 /**
  * Karten: beim Sortieren rücken die Karten eines Rasters auseinander und lassen
  * eine Lücke in Kartengröße, in der die gezogene Karte landet – wie auf dem
- * Tisch (Wunsch des Nutzers, vorerst in Plan und Ready). Anders als dort lässt
+ * Tisch (Wunsch des Nutzers, vorerst im Plan). Anders als dort lässt
  * sich eine Karte hier auch **auf** eine andere legen (sie wird Unteraufgabe),
  * und beides muss nebeneinander gehen.
  *
@@ -32,7 +32,7 @@ import { onBeforeFlip } from './dropFlip.js';
  */
 
 /** Wo die Lücke gilt. */
-export const gapView = (view: OutlineView): boolean => view === 'plan' || view === 'ready';
+export const gapView = (view: OutlineView): boolean => view === 'plan';
 
 /** So breit ist der Rand einer Karte, an dem „davor/danach“ gilt – wie bisher in `dnd.ts`. */
 const EDGE = 0.28;

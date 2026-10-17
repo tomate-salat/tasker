@@ -35,6 +35,19 @@ describe('Status der Eltern-Aufgabe folgt den Unteraufgaben', () => {
     assert.equal(parentStatusAfter('unclear', 'progress', ['progress']), null);
     assert.equal(parentStatusAfter('blocked', 'open', ['open']), null);
   });
+
+  it('„Bereit“ zählt wie Offen als noch nicht angefangen', () => {
+    assert.equal(parentStatusAfter('ready', 'progress', ['progress', 'open']), 'progress');
+    // Ein offenes Kind ändert am bereiten Elternteil nichts – das zeigt die Anzeige.
+    assert.equal(parentStatusAfter('ready', 'open', ['open', 'ready']), null);
+    assert.equal(parentStatusAfter('open', 'ready', ['ready', 'ready']), null);
+  });
+
+  it('fällt alles zurück, ist die Eltern-Aufgabe bereit, wenn alle Kinder es sind', () => {
+    assert.equal(parentStatusAfter('progress', 'ready', ['ready', 'ready']), 'ready');
+    assert.equal(parentStatusAfter('progress', 'ready', ['ready', 'open']), 'open');
+    assert.equal(parentStatusAfter('done', 'ready', ['ready']), 'ready');
+  });
 });
 
 describe('Status, den ein Task von seinen Unteraufgaben erbt', () => {
@@ -74,5 +87,14 @@ describe('Status, den ein Task von seinen Unteraufgaben erbt', () => {
   it('ein offener Task, unter dem gearbeitet wird, erscheint in Arbeit', () => {
     assert.equal(build({}, { status: 'progress' }), 'progress');
     assert.equal(build({ status: 'progress' }, { status: 'progress' }), null);
+  });
+
+  it('ein bereiter Task mit einer offenen Unteraufgabe erscheint offen', () => {
+    assert.equal(build({ status: 'ready' }, { status: 'ready' }, { parentId: 'k0' }), 'open');
+    assert.equal(build({ status: 'ready' }, { status: 'ready' }), null);
+    // Unklar gewinnt vor offen.
+    assert.equal(build({ status: 'ready' }, {}, { status: 'unclear' }), 'unclear');
+    // Ein offener Task mit offenen Kindern zeigt einfach seinen eigenen Status.
+    assert.equal(build({}, {}), null);
   });
 });

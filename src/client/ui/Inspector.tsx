@@ -4,7 +4,7 @@ import { dependsOn, inheritedBlock } from '@shared/blocking.js';
 import { checklist, checklistItems, convertibleItems, headingSections } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
-import { areaLabel, placeLabel } from '@shared/outline.js';
+import { placeLabel } from '@shared/outline.js';
 import {
   allDone,
   doneCount,
@@ -53,7 +53,7 @@ import { categorySub, docMenu, markSub, milestoneMenu, releaseSub, taskMenu } fr
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
 
 /** Fortschrittskette links, Sonderstatus rechts – zusammen eine Auswahl. */
-const PROGRESS_CHAIN: Status[] = ['open', 'progress', 'done'];
+const PROGRESS_CHAIN: Status[] = ['open', 'ready', 'progress', 'done'];
 const SPECIAL: Status[] = ['unclear', 'blocked'];
 const MS_KEYS: Status[] = ['open', 'progress', 'done'];
 
@@ -181,7 +181,7 @@ function Crumbs({
     // Wie im Prototyp als Text – das Symbol-Raster brach hier die Zeile um.
     else if (root.doc) middle.push(<span key="doc">📄 Dokumentation</span>);
     else {
-      middle.push(<span key="bl">{areaLabel(ws, root)}</span>);
+      middle.push(<span key="bl">Backlog</span>);
       middle.push(<span key="grp">{placeLabel(ws, root)}</span>);
     }
     for (const a of ws.ancestors(task)) middle.push(link(a, a.title || 'Ohne Titel'));
@@ -1316,7 +1316,7 @@ function whereLabel(ws: Workspace, x: Task | Milestone): string {
   const ms = ws.milestone(x.milestoneId);
   if (ms) return `in ◆ ${ms.title}${ms.planned ? '' : ' (Backlog)'}`;
   if (x.doc) return 'in Dokumentation';
-  return `${areaLabel(ws, x) === 'Ready' ? 'in Ready' : 'im Backlog'} › ${placeLabel(ws, x)}`;
+  return `im Backlog › ${placeLabel(ws, x)}`;
 }
 
 /* ---------------------------------------------------------------- Teile */

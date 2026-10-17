@@ -8,8 +8,8 @@ import { ambiguousView, archiveWorkspace, homeView, useStore, VIEWS, type View }
  * Wo man gerade ist, steht in der Adresse:
  * `/<projekt|all>/<ansicht>[?label=…&kategorie=…&markierung=…]`, mit Auswahl
  * `/<projekt|all>/<id>`. Die Ansicht ergibt sich dann aus dem Task oder
- * Milestone; nur wo er in mehreren steht (vorbereiteter Milestone: Backlog
- * und „Ready“, Milestone: Plan und Zeitplan) oder im Archiv, kommt sie dazu:
+ * Milestone; nur wo er in mehreren steht (Milestone: Plan und Zeitplan) oder
+ * im Archiv, kommt sie dazu:
  * `/<projekt|all>/<ansicht>/<id>`. Auch dann ist sie nur ein Hinweis – was
  * sich inzwischen bewegt hat, wird beim Laden dort gesucht, wo es jetzt ist.
  *
@@ -39,6 +39,8 @@ const parse = (): Place | null => {
   if (VIEWS.includes(second as View)) {
     return { scope, view: second as View, selected: third ?? null, filter };
   }
+  // Den Reiter „Ready“ gibt es nicht mehr – alte Adressen landen im Backlog.
+  if (second === 'ready') return { scope, view: 'backlog', selected: third ?? null, filter };
   return { scope, selected: second ?? null, filter };
 };
 
@@ -138,7 +140,7 @@ export function syncUrl(): void {
     // Inspektor, ohne dass sie den Reiter bestimmt.
     if (archived || PLACES.includes(s.view)) return;
     // Die Ansicht aus der Adresse steht schon im Store und dient `reveal` als
-    // Hinweis. Passt sie nicht (mehr), zählt sie wie keine – dann gilt „Ready“.
+    // Hinweis. Passt sie nicht (mehr), zählt sie wie keine.
     if (homeView(ws, id, s.view) !== s.view) {
       quietly(() => useStore.setState({ view: homeView(ws, id, null) }));
     }
@@ -153,8 +155,8 @@ export function syncUrl(): void {
     if (!place) return;
     checked = false;
     const s = useStore.getState();
-    // Ohne Ansicht: mit Auswahl zählt, wo sie steht – beim vorbereiteten Milestone „Ready“.
-    const view = place.view ?? (place.selected ? 'ready' : 'plan');
+    // Ohne Ansicht: mit Auswahl zählt, wo sie steht – `check` rückt den Reiter zurecht.
+    const view = place.view ?? (place.selected ? 'backlog' : 'plan');
     quietly(() =>
       useStore.setState({
         ...place,
