@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DETACHED, openDetached } from '../detached.js';
 import { dependsOn, inheritedBlock } from '@shared/blocking.js';
 import { checklist, checklistItems, convertibleItems, headingSections } from '@shared/checklist.js';
-import { effectiveCategory, effectiveTags, projectTags } from '@shared/inherit.js';
+import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
 import { isArchived, isDone, type Milestone, type Status, type Task } from '@shared/model.js';
 import { areaLabel, placeLabel } from '@shared/outline.js';
 import {
@@ -19,6 +19,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
 import { useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
+import { cellMenu } from './cellMenu.js';
 import { CoverRow, Hierarchy, InspectorCover } from './Cards.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dropTarget, useDrag, useZone } from './dnd.js';
@@ -407,7 +408,7 @@ function TaskHead({
             {x.tag}
           </span>
         ))}
-        <TagInput ws={ws} task={task} />
+        <TagInput task={task} menu={menu} />
       </MetaRow>
 
       {!doc && ws.milestoneOf(task) && <ChangelogRow task={task} />}
@@ -455,46 +456,17 @@ function ChangelogRow({ task }: { task: Task }) {
   );
 }
 
-/** Neues Label mit Vorschlägen aus denen des eigenen Projekts. */
-function TagInput({ ws, task }: { ws: Workspace; task: Task }) {
-  const patch = useStore((s) => s.patch);
-  const [value, setValue] = useState('');
-  const all = useMemo(
-    () => projectTags(ws, [task.projectId]).filter((g) => !task.tags.includes(g)),
-    [ws, task.projectId, task.tags],
-  );
-
-  const commit = (): void => {
-    const tag = value.trim();
-    setValue('');
-    if (tag && !task.tags.includes(tag)) void patch('task', task.id, { tags: [...task.tags, tag] });
-  };
-
+/** Dasselbe Label-Menü wie in der Liste: mehrere anklicken, es bleibt offen. */
+function TagInput({ task, menu }: { task: Task; menu: ReturnType<typeof useMenu> }) {
   return (
-    <>
-      <input
-        id="d-tag"
-        className="prop-tag"
-        list="tag-list"
-        placeholder="+ Label"
-        aria-label="Label hinzufügen"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            commit();
-          }
-          if (e.key === 'Escape') setValue('');
-        }}
-      />
-      <datalist id="tag-list">
-        {all.map((g) => (
-          <option key={g} value={g} />
-        ))}
-      </datalist>
-    </>
+    <button
+      className="prop empty"
+      title="Labels ändern"
+      aria-haspopup="menu"
+      onClick={(e) => menu.openAt(e.currentTarget, cellMenu('tags', task.id), e.detail === 0)}
+    >
+      + Label
+    </button>
   );
 }
 

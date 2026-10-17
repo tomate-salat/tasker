@@ -1889,25 +1889,6 @@ button.prop:hover {
   border-color: var(--accent);
 }
 
-.prop-tag {
-  height: 26px;
-  border: 1px dashed var(--line);
-  background: transparent;
-  border-radius: 6px;
-  padding: 0 8px;
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink);
-  width: 84px;
-}
-
-.prop-tag:focus {
-  border-style: solid;
-  border-color: var(--accent);
-  outline: none;
-  width: 130px;
-}
-
 .d-head .tag button {
   border: 0;
   background: none;
