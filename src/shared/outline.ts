@@ -65,11 +65,6 @@ export function outline(
     projectIds: string[];
     collapsed: Record<string, boolean>;
     filter?: OutlineFilter;
-    /**
-     * Auch gefiltert jeden Milestone und jede Gruppe zeigen – solange gezogen
-     * wird, braucht es die Ziele (Wunsch des Nutzers). Ihr Inhalt bleibt gefiltert.
-     */
-    allBoxes?: boolean;
   },
 ): OutlineRow[] {
   const rows: OutlineRow[] = [];
@@ -79,8 +74,8 @@ export function outline(
   // Gefiltert gilt ein eigener Klappzustand, der offen beginnt (siehe `collapsedOf` im Client).
   const open = (id: string, empty = false): boolean => !isCollapsed(o.collapsed, id, empty);
   const many = o.projectIds.length > 1;
-  /** Ein Behälter ohne Treffer fällt beim Filtern weg – außer beim Ziehen. */
-  const hidden = (tasks: Task[]): boolean => filtering && !o.allBoxes && !tasks.some(show);
+  /** Ein Behälter ohne Treffer fällt beim Filtern weg. */
+  const hidden = (tasks: Task[]): boolean => filtering && !tasks.some(show);
 
   const walk = (task: Task, depth: number): void => {
     if (!show(task)) return;

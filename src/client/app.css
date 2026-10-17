@@ -4615,3 +4615,135 @@ body:has(.bulk) .toast {
     display: none;
   }
 }
+
+/* ------------------------------------------------- Inspektor in Bewegung
+   Wunsch des Nutzers: der Inspektor gleitet herein und hinaus. Beim Ziehen
+   einer Aufgabe tritt er zur Seite und macht dem Ablage-Panel Platz – die
+   Spalte bleibt, damit die Liste nicht springt. */
+
+@keyframes detail-in {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+}
+
+@keyframes detail-out {
+  to {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+}
+
+.app:not(.detached) > .detail {
+  transition:
+    transform 180ms ease-out 140ms,
+    opacity 180ms ease-out 140ms;
+}
+
+.app.detail-enter > .detail {
+  animation: detail-in 220ms ease-out;
+}
+
+.app.detail-leave > .detail {
+  animation: detail-out 180ms ease-in forwards;
+}
+
+/* Beim Ziehen: erst geht der Inspektor, dann kommt das Panel – danach umgekehrt. */
+.app.drag-panel > .detail {
+  transform: translateX(32px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 160ms ease-in,
+    opacity 160ms ease-in;
+}
+
+/* ------------------------------------------------------- Ablage-Panel */
+
+.drop-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, 90vw);
+  padding: 16px 14px;
+  overflow: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transform: translateX(calc(100% + 24px));
+  visibility: hidden;
+  transition:
+    transform 200ms ease-in,
+    visibility 0s linear 200ms;
+}
+
+.drop-panel.in {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform 220ms ease-out,
+    visibility 0s;
+}
+
+/* Mit offenem Inspektor kommt das Panel erst, wenn er gegangen ist. */
+.app.with-detail .drop-panel.in {
+  transition:
+    transform 220ms ease-out 120ms,
+    visibility 0s;
+}
+
+.dp-head {
+  margin-bottom: 6px;
+  font: 600 14px var(--body);
+}
+
+.dp-sec h3 {
+  margin: 14px 0 6px;
+  font: 500 11px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.dp-tile {
+  margin-bottom: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    background 80ms,
+    border-color 80ms;
+}
+
+.dp-tile.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dp-ms {
+  color: var(--accent);
+}
+
+.dp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app > .detail,
+  .drop-panel,
+  .drop-panel.in {
+    transition: none !important;
+    animation: none !important;
+  }
+}

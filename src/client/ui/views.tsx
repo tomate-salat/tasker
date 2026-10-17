@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { isDone, type Milestone, type Task } from '@shared/model.js';
 import { outline, type OutlineRow, type OutlineView } from '@shared/outline.js';
 import { milestoneProgressPct, milestoneStats } from '@shared/progress.js';
@@ -8,7 +8,6 @@ import type { Workspace } from '@shared/workspace.js';
 import { collapsedOf, currentProjectId, scopeProjectIds, useStore } from '../store.js';
 import { addIn } from './actions.js';
 import { bulkMenu } from './BulkBar.js';
-import { useDrag } from './dnd.js';
 import { useDropFlip } from './dropFlip.js';
 import { useHideDone } from './hideDone.js';
 import { useKeys } from './keys.js';
@@ -23,32 +22,10 @@ import { cardArea, CardGrid, cardRows, cardsOn, chunkCards, useCardsOpen } from 
  * Die drei Arbeitsansichten teilen sich eine Zeilenfolge (`outline`), damit
  * Anzeige, Tastatur und Drag & Drop dieselbe Reihenfolge sehen.
  */
-/**
- * Beim Ziehen stehen auch gefiltert alle Ziele da (Wunsch des Nutzers) – aber
- * erst nach dem Start: baut sich die Liste noch im `dragstart` um, bricht der
- * Browser das Ziehen sofort wieder ab.
- */
-function useDragTargets(): boolean {
-  const dragging = useDrag((s) => s.drag !== null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const id = setTimeout(() => setShown(dragging), 0);
-    return () => clearTimeout(id);
-  }, [dragging]);
-  return shown && dragging;
-}
-
 export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
   const state = useStore();
   const { settings, filter } = state;
-  const dragging = useDragTargets();
-  const full = outline(ws, {
-    view,
-    projectIds: scopeProjectIds(state),
-    collapsed: collapsedOf(state),
-    filter,
-    allBoxes: dragging,
-  });
+  const full = outline(ws, { view, projectIds: scopeProjectIds(state), collapsed: collapsedOf(state), filter });
   const all = useHideDone(full, view === 'plan' && state.hideDone);
   // Karten: nur die Wurzeln; die Tastatur läuft zusätzlich durch die offenen Schubladen.
   const cardsOpen = useCardsOpen();

@@ -5,7 +5,8 @@ import { DETACHED } from './detached.js';
 import { Login } from './Login.js';
 import { doneCandidates } from '@shared/outline.js';
 import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VIEW_LABEL, type View } from './store.js';
-import { dropTarget, useZone } from './ui/dnd.js';
+import { dropTarget, useDraggedTask, useZone } from './ui/dnd.js';
+import { DropPanel } from './ui/DropPanel.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { categoryHue } from './ui/colors.js';
 import { ARCHIVE_ICON, SIDE_ICON, STATUS_LABEL } from './ui/icons.js';
@@ -26,6 +27,36 @@ import { Tisch } from './ui/Tisch.js';
 import { HideDoneSwitch } from './ui/hideDone.js';
 import { SearchButton, SearchPalette } from './ui/Search.js';
 import { useWheelScrollX } from './ui/wheelX.js';
+
+/**
+ * Der Inspektor gleitet herein und hinaus (Wunsch des Nutzers). Beim Schließen
+ * bleibt er dafür noch einen Augenblick mit dem zuletzt Gezeigten stehen;
+ * zwischen zwei Auswahlen bewegt sich nichts.
+ */
+function useDetailMotion(
+  selected: string | null,
+  many: boolean,
+): { id: string | null; open: boolean; phase: 'enter' | 'leave' | null } {
+  const open = !!selected || many;
+  const last = useRef<string | null>(null);
+  const [prev, setPrev] = useState(open);
+  const [phase, setPhase] = useState<'enter' | 'leave' | null>(null);
+  // Noch im selben Durchgang umstellen – sonst stünde einen Moment lang gar kein Inspektor da.
+  if (prev !== open) {
+    setPrev(open);
+    setPhase(open ? 'enter' : last.current ? 'leave' : null);
+  }
+  useEffect(() => {
+    if (!phase) return;
+    const t = setTimeout(() => setPhase(null), phase === 'enter' ? 260 : 200);
+    return () => clearTimeout(t);
+  }, [phase]);
+  const leaving = phase === 'leave' && !open;
+  const id = selected ?? (leaving ? last.current : null);
+  // Nur eine einzelne Auswahl gleitet hinaus, eine Mehrfachauswahl nicht.
+  if (selected || many) last.current = many ? null : selected;
+  return { id, open: open || leaving, phase };
+}
 
 /** Das Abhängigkeits-Board bringt React Flow mit – erst laden, wenn es aufgeht. */
 const DepGraph = lazy(() => import('./ui/DepGraph.js'));
@@ -124,6 +155,11 @@ function Shell({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Beim Ziehen einer Aufgabe in Plan und Backlog gleitet das Ablage-Panel herein.
+  const dragged = useDraggedTask();
+  const panel = dragged && (view === 'plan' || view === 'backlog') ? dragged : null;
+  const detail = useDetailMotion(selected, multi.size > 1);
+
   // Als eigenes Fenster heißt es wie der Eintrag, den es zeigt – so findet man es in der Taskleiste.
   const shown = selected ? (ws?.task(selected) ?? ws?.milestone(selected)) : null;
   const shownTitle = shown ? shown.title || 'Ohne Titel' : null;
@@ -211,9 +247,16 @@ function Shell({
   return (
     <>
       <div
-        className={`app ${selected || multi.size > 1 ? 'with-detail' : ''} ${
-          state.sideCollapsed ? 'side-collapsed' : ''
-        } ${state.sideOpen ? 'side-open' : ''}`}
+        className={[
+          'app',
+          detail.open ? 'with-detail' : '',
+          detail.phase ? `detail-${detail.phase}` : '',
+          panel ? 'drag-panel' : '',
+          state.sideCollapsed ? 'side-collapsed' : '',
+          state.sideOpen ? 'side-open' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         <Sidebar
           ws={ws}
@@ -273,11 +316,12 @@ function Shell({
         {multi.size > 1 ? (
           <MultiDetail ws={ws} />
         ) : (
-          selected && (
+          detail.id && (
             // Im Archiv sieht der Inspektor auch das Archivierte.
-            <Inspector ws={(view === 'archive' && archiveWorkspace(state)) || ws} id={selected} />
+            <Inspector ws={(view === 'archive' && archiveWorkspace(state)) || ws} id={detail.id} />
           )
         )}
+        <DropPanel ws={ws} drag={panel} />
 
         <BulkBar ws={ws} />
         <BadgeDrawingEditor />

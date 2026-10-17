@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import {
   container,
@@ -43,7 +44,7 @@ export type Zone = 'before' | 'after' | 'child' | 'into';
 
 type DragKind = 'task' | 'milestone' | 'group' | 'project' | 'release' | 'image' | 'folder';
 
-type Drag = {
+export type Drag = {
   kind: DragKind;
   id: string;
   /** Die Aufgaben, die mitwandern – bei einer Mehrfachauswahl alle obersten. */
@@ -74,7 +75,8 @@ export type Target =
   | { type: 'milestone'; milestone: Milestone }
   | { type: 'group'; row: GroupRowT }
   | { type: 'empty'; row: EmptyRowT }
-  | { type: 'tab'; view: View }
+  /** `panel`: die Kachel im Ablage-Panel – öffnet beim Verweilen keinen Reiter. */
+  | { type: 'tab'; view: View; panel?: boolean }
   /** Nimmt Aufgaben (in diesen Backlog), Projekte (Reihenfolge) und ein Galeriebild als Kartenbild. */
   | { type: 'project'; project: Project }
   /** Kategorie und Markierung in der Seitenleiste: ein Galeriebild wird ihr Kartenbild. */
@@ -243,6 +245,21 @@ useDrag.subscribe((s, prev) => {
   }
 });
 
+/**
+ * Die gezogene Aufgabe für das Ablage-Panel – erst einen Augenblick nach dem
+ * Start. Ändert sich die Seite noch im `dragstart`, bricht der Browser das
+ * Ziehen sofort wieder ab.
+ */
+export function useDraggedTask(): Drag | null {
+  const drag = useDrag((s) => (s.drag?.kind === 'task' ? s.drag : null));
+  const [shown, setShown] = useState<Drag | null>(null);
+  useEffect(() => {
+    const id = setTimeout(() => setShown(drag), drag ? 30 : 0);
+    return () => clearTimeout(id);
+  }, [drag]);
+  return drag && shown;
+}
+
 /** Die Zone, die gerade über diesem Ziel angezeigt wird. */
 export const useZone = (target: Target | null): Zone | null => {
   const key = target ? keyOf(target) : null;
@@ -314,7 +331,7 @@ export function dropTarget(target: Target) {
       }
       const zone = zoneFor(drag, target, e);
       if (!zone) return;
-      if (target.type === 'tab') hoverTab(target.view, e.currentTarget as HTMLElement);
+      if (target.type === 'tab' && !target.panel) hoverTab(target.view, e.currentTarget as HTMLElement);
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
