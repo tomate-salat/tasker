@@ -1,4 +1,5 @@
 import { deepLinkPath } from '@shared/deeplink.js';
+import { TASK_STATUS, type Status } from '@shared/model.js';
 import type { OutlineFilter } from '@shared/outline.js';
 import { pushEntry, replaceEntry } from './back.js';
 import { keepDetached } from './detached.js';
@@ -21,8 +22,12 @@ import { ambiguousView, archiveWorkspace, homeView, useStore, VIEWS, type View }
 type Place = { scope: string; view?: View; selected: string | null; filter: OutlineFilter };
 type S = ReturnType<typeof useStore.getState>;
 
-const PARAMS = { tag: 'label', categoryId: 'kategorie', markId: 'markierung' } as const;
-const FILTER_KEYS = ['tag', 'categoryId', 'markId'] as const;
+const PARAMS = { tag: 'label', categoryId: 'kategorie', markId: 'markierung', status: 'status' } as const;
+const FILTER_KEYS = ['tag', 'categoryId', 'markId', 'status'] as const;
+
+/** Ein unbekannter Status in der Adresse zählt wie keiner. */
+const asStatus = (v: string | null): Status | null =>
+  (TASK_STATUS as readonly string[]).includes(v ?? '') ? (v as Status) : null;
 
 const parse = (): Place | null => {
   const [scope, second, third] = location.pathname
@@ -35,6 +40,7 @@ const parse = (): Place | null => {
     tag: q.get(PARAMS.tag),
     categoryId: q.get(PARAMS.categoryId),
     markId: q.get(PARAMS.markId),
+    status: asStatus(q.get(PARAMS.status)),
   };
   if (VIEWS.includes(second as View)) {
     return { scope, view: second as View, selected: third ?? null, filter };

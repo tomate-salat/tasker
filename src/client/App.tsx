@@ -8,7 +8,7 @@ import { archiveWorkspace, currentProjectId, scopeProjectIds, TABS, useStore, VI
 import { dropTarget, useZone } from './ui/dnd.js';
 import { CategoriesDialog, HelpDialog, MarksDialog, ProfileDialog } from './ui/dialogs.js';
 import { categoryHue } from './ui/colors.js';
-import { ARCHIVE_ICON, SIDE_ICON } from './ui/icons.js';
+import { ARCHIVE_ICON, SIDE_ICON, STATUS_LABEL } from './ui/icons.js';
 import { tagStyle } from './ui/rows.js';
 import { Inspector } from './ui/Inspector.js';
 import { NewThing } from './ui/NewThing.js';
@@ -406,7 +406,7 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
   const { filter, setFilter, settings, setVelocity, view } = useStore();
   const category = ws.category(filter.categoryId ?? null);
   const mark = ws.mark(filter.markId ?? null);
-  const any = filter.tag || category || mark;
+  const any = filter.tag || category || mark || filter.status;
 
   if (view === 'archive') return <ArchiveBar />;
   if (view === 'trash') return <TrashBar ws={ws} />;
@@ -469,6 +469,11 @@ function FilterBar({ ws }: { ws: import('@shared/workspace.js').Workspace }) {
       {mark && (
         <button className="tag filter-mark" onClick={() => setFilter({ markId: null })} title="Filter entfernen">
           {mark.emoji} {mark.name} ×
+        </button>
+      )}
+      {filter.status && (
+        <button className="tag filter-mark" onClick={() => setFilter({ status: null })} title="Filter entfernen">
+          {STATUS_LABEL[filter.status]} ×
         </button>
       )}
     </div>

@@ -120,6 +120,21 @@ describe('Backlog-Aufbau', () => {
     assert.deepEqual(titles(rows), ['Unsortiert', 'Nice to have']);
     assert.equal(rows.filter((r) => r.type === 'empty').length, 0);
   });
+
+  it('filtert nach dem eigenen Status – die Eltern-Aufgabe bleibt als Pfad stehen', () => {
+    const ws = new Builder()
+      .project('p')
+      .task('roh', 'p')
+      .task('fertig', 'p', { status: 'ready' })
+      .task('eltern', 'p')
+      .task('kind', 'p', { parentId: 'eltern', status: 'ready' })
+      .build();
+    const rows = outline(ws, { view: 'backlog', projectIds: ['p'], collapsed: {}, filter: { status: 'ready' } });
+    assert.deepEqual(
+      rows.filter((r) => r.type === 'task').map((r) => r.id),
+      ['fertig', 'eltern', 'kind'],
+    );
+  });
 });
 
 describe('Behälter loser Aufgaben', () => {

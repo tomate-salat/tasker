@@ -165,6 +165,26 @@
   opacity: 0.45;
 }
 
+/* Statusfilter: das Zeichen in der Farbe des Status, wie in der Zeile. */
+.st-nav {
+  display: inline-grid;
+  place-items: center;
+  color: var(--faint);
+}
+.st-nav.st-ready,
+.st-nav.st-progress {
+  color: var(--accent);
+}
+.st-nav.st-done {
+  color: var(--ok);
+}
+.st-nav.st-unclear {
+  color: var(--unclear);
+}
+.st-nav.st-blocked {
+  color: var(--p1);
+}
+
 .nav-i span:nth-child(2) {
   min-width: 0;
   overflow: hidden;

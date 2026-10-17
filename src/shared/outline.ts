@@ -1,6 +1,6 @@
 import { effectiveCategory, effectiveTags } from './inherit.js';
 import { allDone } from './progress.js';
-import { isArchived, type Category, type Group, type Mark, type Milestone, type Project, type Task } from './model.js';
+import { isArchived, type Category, type Group, type Mark, type Milestone, type Project, type Status, type Task } from './model.js';
 import type { Workspace } from './workspace.js';
 
 /**
@@ -54,6 +54,8 @@ export type OutlineFilter = {
   tag?: string | null;
   categoryId?: string | null;
   markId?: string | null;
+  /** Nur Aufgaben mit genau diesem eigenen Status (Wunsch des Nutzers). */
+  status?: Status | null;
 };
 
 export function outline(
@@ -167,7 +169,7 @@ export function outline(
 }
 
 const isFiltering = (f: OutlineFilter | undefined): boolean =>
-  !!(f && (f.tag || f.categoryId || f.markId));
+  !!(f && (f.tag || f.categoryId || f.markId || f.status));
 
 /**
  * Ein Task ist sichtbar, wenn er selbst passt oder eine seiner Unteraufgaben –
@@ -180,6 +182,7 @@ export function visibility(ws: Workspace, f: OutlineFilter | undefined): (t: Tas
     if (f?.tag && !effectiveTags(ws, t).tags.includes(f.tag)) return false;
     if (f?.categoryId && effectiveCategory(ws, t)?.category.id !== f.categoryId) return false;
     if (f?.markId && t.markId !== f.markId) return false;
+    if (f?.status && t.status !== f.status) return false;
     return true;
   };
 

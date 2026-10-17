@@ -1,19 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
-import { isDone, type Project, type Task } from '@shared/model.js';
+import { isDone, TASK_STATUS, type Project, type Task } from '@shared/model.js';
 import { categoriesOf, categoryColorIndex, isLooseRoot, marksOf } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import type { Account } from '../api.js';
 import { archiveWorkspace, currentProjectId, useStore } from '../store.js';
 import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useZone } from './dnd.js';
-import { SIDE_ICON, THEME_ICON, THEME_LABEL } from './icons.js';
+import { SIDE_ICON, STATUS_LABEL, StatusIcon, THEME_ICON, THEME_LABEL } from './icons.js';
 import { useMenu } from './Menu.js';
 import { projectMenu } from './rowMenu.js';
 
 /**
  * Die Seitenleiste, Aufbau und Verhalten wie im Prototyp: Projekte mit „Alle
- * Projekte“, darunter Kategorien, Markierungen und Labels als Filter, unten
+ * Projekte“, darunter Status, Kategorien, Markierungen und Labels als Filter, unten
  * Konto und Fußzeile.
  *
  * Die Zahlen beziehen sich auf die aktuelle Ansicht, nicht auf den gesamten
@@ -164,6 +164,27 @@ export function Sidebar({
             void state.addProject(name);
           }}
         />
+      </div>
+
+      {/* Nach dem eigenen Status filtern (Wunsch des Nutzers) – der geerbte zählt nicht. */}
+      <div className="nav" aria-label="Status">
+        <div className="nav-h">Status</div>
+        {TASK_STATUS.map((st) => {
+          const n = countBy((t) => t.status === st);
+          return (
+            <button
+              key={st}
+              className={`nav-i ${filter.status === st ? 'on' : ''}`}
+              onClick={() => setFilter({ status: filter.status === st ? null : st })}
+            >
+              <span className={`hash mk st-nav st-${st}`}>
+                <StatusIcon status={st} />
+              </span>
+              <span>{STATUS_LABEL[st]}</span>
+              <span className={n ? 'n' : 'n zero'}>{n}</span>
+            </button>
+          );
+        })}
       </div>
 
       {projectId && scope !== 'all' && (

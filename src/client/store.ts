@@ -391,7 +391,7 @@ export const useStore = create<State>((set, get) => ({
   setDialog: (dialog) => set({ dialog }),
   scope: readLocal<string>(SCOPE_KEY, 'all'),
   lastProject: null,
-  filter: { tag: null, categoryId: null, markId: null },
+  filter: { tag: null, categoryId: null, markId: null, status: null },
   sideCollapsed: readLocal<boolean>(SIDE_KEY, false),
   layouts: readLayouts(),
   setLayout: (view, layout) => {
@@ -680,7 +680,7 @@ export const useStore = create<State>((set, get) => ({
     const hidden = t && !visibility(ws, filter)(t);
     set({
       ...scoped,
-      ...(hidden ? { filter: { tag: null, categoryId: null, markId: null } } : {}),
+      ...(hidden ? { filter: { tag: null, categoryId: null, markId: null, status: null } } : {}),
       view,
       collapsed,
       selected: id,
