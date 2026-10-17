@@ -64,7 +64,7 @@ describe('Release', () => {
   });
 
   it('zählt die archivierten Milestones mit, die das Release mitbringt', () => {
-    const gone = (id: string) => ({ id, ref: 1, title: id, done: 1, total: 1, deps: [], dependents: [], inherited: false });
+    const gone = (id: string) => ({ id, ref: 1, title: id, done: 1, total: 1, deps: [], dependents: [], inherited: false, startDate: null, endDate: null });
     const ws = new Builder().project('p').release('r', 'p').build();
     assert.equal(releaseStatus(ws, { ...ws.release('r')!, archivedMilestones: [gone('a'), gone('b')] }), 'ready');
     const open = new Builder().project('p').release('r', 'p').milestone('m', 'p', { releaseId: 'r' }).build();

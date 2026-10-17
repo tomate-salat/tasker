@@ -1,6 +1,14 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { isArchived, type ArchivedMember } from '@shared/model.js';
 import { releaseGroups, releaseLabel, type ReleaseGroup } from '@shared/release.js';
-import { dateFromWeeks, isoWeek, schedule, timelineMilestones, type ScheduledMilestone } from '@shared/schedule.js';
+import {
+  dateFromWeeks,
+  isoWeek,
+  schedule,
+  timelineMilestones,
+  weeksFromToday,
+  type ScheduledMilestone,
+} from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { scopeProjectIds, useStore } from '../store.js';
 import { MS_STATUS, STATUS_LABEL } from './icons.js';
@@ -21,6 +29,10 @@ type Segment = { cls: string; from: number; to: number; title: string };
  * gruppiert: über jeder Gruppe ein Band über ihren ganzen Zeitraum, mit einer
  * Marke am Ende – dann ist das Release fertig. Was zu keinem gehört, steht je
  * Projekt darunter. Ohne Releases sieht der Zeitplan aus wie im Prototyp.
+ *
+ * Archivierte Milestones eines noch nicht archivierten Releases stehen
+ * erledigt mit in seiner Gruppe (Wunsch des Nutzers) – mit Balken, wenn ihr
+ * Zeitraum gesetzt war. Gerechnet wird mit ihnen nichts.
  */
 export function Timeline({ ws }: { ws: Workspace }) {
   const state = useStore();
@@ -33,11 +45,16 @@ export function Timeline({ ws }: { ws: Workspace }) {
   if (!list.length) return <div className="empty-state">Kein Milestone mit Aufgaben oder Zeitraum.</div>;
   const groups = releaseGroups(ws, list);
   const grouped = groups.some((g) => g.release);
+  const archivedOf = (g: ReleaseGroup): ArchivedMember[] =>
+    g.release && !isArchived(g.release) ? g.release.archivedMilestones : [];
+  const archivedStarts = groups
+    .flatMap(archivedOf)
+    .flatMap((a) => (a.startDate ? [weeksFromToday(a.startDate)] : []));
 
   // Die Achse umfasst alles, was Platz braucht – auch Vergangenes und auch
   // Milestones aus anderen Projekten, damit die Balken vergleichbar bleiben.
   const shown = all.filter((x) => x.open || x.fixed || x.fixedEnd);
-  const minW = Math.min(0, Math.floor(Math.min(0, ...shown.map((x) => x.start))));
+  const minW = Math.min(0, Math.floor(Math.min(0, ...shown.map((x) => x.start), ...archivedStarts)));
   const maxW = Math.max(
     minW + 4,
     Math.ceil(Math.max(...all.map((x) => Math.max(x.end, x.forecastEnd)))),
@@ -94,6 +111,16 @@ export function Timeline({ ws }: { ws: Workspace }) {
               onOpen={() => state.setView('releases')}
             />
           )}
+          {archivedOf(g).map((a) => (
+            <ArchivedRow
+              key={a.id}
+              a={a}
+              color={ws.project(g.projectId)?.color ?? 'var(--accent)'}
+              span={span}
+              pos={pos}
+              showToday={minW < 0}
+            />
+          ))}
           {g.rows.map((x) => (
             <Row
               key={x.milestone.id}
@@ -314,6 +341,69 @@ function Row({
             />
           ))}
         {note}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ein archivierter Milestone des Releases: erledigt, nicht anklickbar (der
+ * Inspektor kennt hier nur Aktives). Ein Balken nur, wenn sein Zeitraum
+ * gesetzt war – wie bei einem erledigten aktiven Milestone.
+ */
+function ArchivedRow({
+  a,
+  color,
+  span,
+  pos,
+  showToday,
+}: {
+  a: ArchivedMember;
+  color: string;
+  span: number;
+  pos: (w: number) => number;
+  showToday: boolean;
+}) {
+  const start = a.startDate ? weeksFromToday(a.startDate) : null;
+  const end = a.endDate ? weeksFromToday(a.endDate) : null;
+  const bar = start !== null && end !== null && end > start;
+  const dates =
+    a.startDate && a.endDate
+      ? `${day(new Date(a.startDate))} → ${day(new Date(a.endDate))}`
+      : a.startDate
+        ? `${day(new Date(a.startDate))} →`
+        : '–';
+  return (
+    <div className="tl-row archived">
+      <div>
+        <div className="tl-name">
+          <span className="dot" style={{ background: color }} aria-hidden="true" />
+          <span title="Liegt im Archiv">{a.title || 'Ohne Titel'}</span>
+        </div>
+        <div className="tl-sub">
+          archiviert · {a.done}/{a.total} erledigt
+          {a.inherited && ' · über Abhängigkeit'}
+        </div>
+      </div>
+
+      <div className="tl-dates">{dates}</div>
+
+      <div className="tl-track" style={{ '--wk': `${100 / span}%` } as CSSProperties}>
+        {showToday && <span className="tl-today" style={{ left: `${pos(0)}%` }} title="Heute" />}
+        {bar ? (
+          <>
+            <i
+              className="tl-bar donebar"
+              style={{ left: `${pos(start)}%`, width: `${pos(end) - pos(start)}%`, background: color }}
+              title="Archiviert"
+            />
+            <span className="tl-done" style={{ paddingLeft: `${pos(end)}%` }}>
+              ✓
+            </span>
+          </>
+        ) : (
+          <span className="tl-done">✓ archiviert</span>
+        )}
       </div>
     </div>
   );

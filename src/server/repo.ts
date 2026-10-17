@@ -268,7 +268,12 @@ export function archivedMembers(ctx: DbCtx, projectId?: string): Map<string, Arc
 
   const ms = all<{
     id: string; project_id: string; ref: number; title: string; archived_at: string | null; release_id: string | null;
-  }>(`SELECT id, project_id, ref, title, archived_at, release_id FROM milestone ${only} ORDER BY queue_order, id`, ...params);
+    start_date: string | null; end_date: string | null;
+  }>(
+    `SELECT id, project_id, ref, title, archived_at, release_id, start_date, end_date FROM milestone ${only}
+      ORDER BY queue_order, id`,
+    ...params,
+  );
   const out = new Map<string, ArchivedMember[]>();
   if (!ms.some((m) => m.archived_at)) return out;
 
@@ -335,6 +340,8 @@ export function archivedMembers(ctx: DbCtx, projectId?: string): Map<string, Arc
       deps: depsOfMs.get(m.id) ?? [],
       dependents: waitingOn.get(m.id) ?? [],
       inherited: m.release_id !== releaseId,
+      startDate: m.start_date,
+      endDate: m.end_date,
     });
     out.set(releaseId, list);
   }

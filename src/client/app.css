@@ -3593,6 +3593,12 @@ button.prop:hover {
   color: var(--ink);
 }
 
+/* Ein archivierter Milestone des Releases: erledigt und blass, wie in den Releases. */
+.tl-row.archived .tl-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .tl-sub {
   margin-top: 3px;
   padding-left: 17px;

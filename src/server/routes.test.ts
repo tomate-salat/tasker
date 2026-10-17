@@ -120,7 +120,7 @@ describe('Routen', () => {
         ['Remake', 2, 4, false, [base.id], []],
       ],
     );
-    assert.deepEqual(Object.keys(got?.[0] ?? {}).sort(), ['dependents', 'deps', 'done', 'id', 'inherited', 'ref', 'title', 'total']);
+    assert.deepEqual(Object.keys(got?.[0] ?? {}).sort(), ['dependents', 'deps', 'done', 'endDate', 'id', 'inherited', 'ref', 'startDate', 'title', 'total']);
 
     // Wartet ein aktiver Milestone auf einen archivierten, ändert sich die Liste
     // mit – die anderen Fenster laden deshalb neu, statt nur ihn zu ersetzen.

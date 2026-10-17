@@ -97,6 +97,9 @@ export type ArchivedMember = {
   dependents: string[];
   /** Nicht zugeordnet, sondern über eine Abhängigkeit mitgezählt. */
   inherited: boolean;
+  /** Der geplante Zeitraum, wie am Milestone gesetzt – für den Zeitplan. */
+  startDate: string | null;
+  endDate: string | null;
 };
 
 /** Eine Veröffentlichung je Kanal (itch-Seite, Steam-Demo, …). */
