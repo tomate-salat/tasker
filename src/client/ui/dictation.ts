@@ -8,8 +8,8 @@ import { useStore } from '../store.js';
  * aber beim Start mit `network`, Firefox hat sie gar nicht.
  *
  * Ohne Schnittstelle gibt es keinen Knopf. Scheitert sie beim Start, sagt
- * Tasker das und blendet den Knopf auf diesem Gerät aus, statt still nichts
- * zu tun.
+ * Tasker das samt dem Fehler des Browsers und blendet den Knopf aus, bis der
+ * Editor neu geöffnet wird – nicht dauerhaft, denn auch Edge scheitert mal.
  */
 
 type Recognition = {
@@ -29,15 +29,12 @@ const Ctor = (): (new () => Recognition) | null => {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
 
-/** Auf diesem Gerät schon einmal gescheitert – dann kein Knopf mehr. */
-const OFF_KEY = 'tasker.diktatAus';
-const off = (): boolean => {
-  try {
-    return localStorage.getItem(OFF_KEY) === '1';
-  } catch {
-    return false;
-  }
-};
+// Früher blendete ein Fehlschlag den Knopf auf dem Gerät für immer aus.
+try {
+  localStorage.removeItem('tasker.diktatAus');
+} catch {
+  // Privates Fenster – dort stand ohnehin nichts.
+}
 
 /** Fehler, nach denen es hier nie klappen wird – anders als ein verweigertes Mikrofon. */
 const UNAVAILABLE = new Set(['network', 'service-not-allowed', 'language-not-supported']);
@@ -49,7 +46,7 @@ export function useDictation(onText: (text: string) => void): {
   interim: string;
   toggle: () => void;
 } {
-  const [supported, setSupported] = useState(() => !!Ctor() && !off());
+  const [supported, setSupported] = useState(() => !!Ctor());
   const [active, setActive] = useState(false);
   const [interim, setInterim] = useState('');
   const rec = useRef<Recognition | null>(null);
@@ -82,13 +79,8 @@ export function useDictation(onText: (text: string) => void): {
     r.onerror = (e) => {
       const say = useStore.getState().say;
       if (UNAVAILABLE.has(e.error)) {
-        try {
-          localStorage.setItem(OFF_KEY, '1');
-        } catch {
-          // Privates Fenster – dann eben nur jetzt.
-        }
         setSupported(false);
-        say('Spracherkennung ist in diesem Browser nicht verfügbar – in Edge funktioniert sie.');
+        say(`Spracherkennung ist hier nicht verfügbar (${e.error}).`);
       } else if (e.error === 'not-allowed') {
         say('Das Mikrofon ist für Tasker nicht freigegeben.');
       } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
