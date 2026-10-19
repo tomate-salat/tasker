@@ -18,7 +18,24 @@ export type ChangeEvent =
   | { type: 'reload'; reason: string }
   | { type: 'settings'; settings: Settings }
   /** Zeichnungen einer Aufgabe haben sich geändert (Name, Anzahl, Inhalt). */
-  | { type: 'drawings'; ownerId: string };
+  | { type: 'drawings'; ownerId: string }
+  /** Welche Editor-Addons gerade verbunden sind – immer die ganze Liste. */
+  | { type: 'addons'; addons: AddonPresence[] }
+  /** Wie es um einen Auftrag „In Godot verfeinern“ steht. */
+  | { type: 'godot'; requestId: string; taskId: string; state: RefineState; message: string | null };
+
+/** Ein verbundenes Editor-Addon, siehe `addons.ts` im Server. */
+export type AddonPresence = {
+  projectId: string;
+  addon: 'godot';
+  /** Wie sich das Addon nennt, etwa der Name des Godot-Projekts. */
+  name: string;
+  /** Seit wann es verbunden ist – über kurze Aussetzer hinweg. */
+  since: string;
+};
+
+/** `sent`: verschickt, noch nicht angenommen. */
+export type RefineState = 'sent' | 'accepted' | 'working' | 'done' | 'failed';
 
 /** Jede Nachricht sagt, von welchem Tab sie stammt – der eigene Hall wird übergangen. */
 export type Envelope = { id: number; origin: string | null; event: ChangeEvent };

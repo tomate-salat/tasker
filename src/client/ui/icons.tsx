@@ -349,6 +349,13 @@ const tool = (children: React.ReactNode) => (
 );
 
 export const TOOL_ICON = {
+  /** Diktieren: ein Mikrofon. */
+  mic: tool(
+    <>
+      <rect x="5.6" y="1.6" width="4.8" height="8" rx="2.4" />
+      <path d="M3.2 7.6a4.8 4.8 0 0 0 9.6 0M8 12.4v2" />
+    </>,
+  ),
   todo: tool(
     <>
       <rect x="1.8" y="1.8" width="12.4" height="12.4" rx="3" />

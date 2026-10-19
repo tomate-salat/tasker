@@ -40,6 +40,20 @@ export const intakeTask = z
     markId: id.optional(),
     categoryId: id.optional(),
     prio: prio.optional(),
+    /** Mit Claude angelegt – dann bekommt die Aufgabe das Label `ai-created`. Vorgabe: ja. */
+    aiCreated: z.boolean().optional(),
+  })
+  .strict();
+
+/** Die Web-App bittet das verbundene Godot, eine Aufgabe zu verfeinern – nur Aufgabe und Modus. */
+export const refineBody = z.object({ taskId: id, mode: z.enum(['rewrite']) }).strict();
+
+/** Das Addon meldet, wie es um einen Auftrag steht. */
+export const refineStatusBody = z
+  .object({
+    requestId: z.string().min(1).max(64),
+    state: z.enum(['accepted', 'working', 'done', 'failed']),
+    message: z.string().max(300).optional(),
   })
   .strict();
 

@@ -1690,6 +1690,83 @@ button.caret:hover {
 
 /* ---- Der Kopf: beschriftete Werte, ab genug Breite zweispaltig ---- */
 
+/* „In Godot verfeinern“ unter dem Kopf des Inspektors. */
+.d-godot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.d-godot .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.d-godot.done .d-godot-state {
+  color: var(--accent);
+}
+
+.d-godot.failed .d-godot-state {
+  color: var(--bad);
+}
+
+.d-spin {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: d-spin 0.8s linear infinite;
+}
+
+@keyframes d-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Diktieren: der Knopf leuchtet, darunter das gerade Gehörte. */
+.d-tool.on {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+
+.d-dictation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.d-dictation-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  animation: d-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes d-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d-spin,
+  .d-dictation-dot {
+    animation: none;
+  }
+}
+
 .d-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

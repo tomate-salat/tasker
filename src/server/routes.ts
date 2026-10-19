@@ -17,6 +17,8 @@ import {
   folderSort,
   graphLayout,
   intakeTask,
+  refineBody,
+  refineStatusBody,
   kindSchema,
   moveBody,
   purgeBody,
@@ -33,6 +35,7 @@ import { convertCodecksRefs, importCodecks } from './codecks.js';
 import type { DbCtx } from './db.js';
 import { drawable, renderDrawing } from './drawingImage.js';
 import { createDrawing, drawingPreview, loadDrawings, patchDrawing, removeDrawing } from './drawings.js';
+import { AddonHub, type HubTimes } from './addons.js';
 import { appEvents, type EventBus } from './events.js';
 import {
   addFolder,
@@ -103,18 +106,19 @@ const STREAM_MS = 10 * 60_000;
 export function dataRoutes(
   ctx: DbCtx,
   bus: EventBus = appEvents,
-  /** Für Tests: wie lange ein Änderungs-Strom hält. */
-  o: { streamMs?: number } = {},
+  /** Für Tests: wie lange ein Änderungs-Strom hält, und die Fristen für Editor-Addons. */
+  o: { streamMs?: number } & HubTimes = {},
 ): Hono {
   const app = new Hono();
   const run = (...args: RunArgs) => runWith(ctx, ...args);
+  const addons = new AddonHub(bus, o);
 
   /* ------------------------------------------------------------- Lesen */
 
   // Das Burnup-Protokoll kommt mit; ein neuer Tag bekommt dabei seinen Eintrag.
   app.get('/bootstrap', (c) => {
     logScopes(ctx);
-    return c.json({ ...loadBootstrap(ctx), milestoneLog: loadLogs(ctx) });
+    return c.json({ ...loadBootstrap(ctx), milestoneLog: loadLogs(ctx), addons: addons.list() });
   });
 
   app.get('/archive', (c) => {
@@ -202,13 +206,34 @@ export function dataRoutes(
    * Anfrage nach 15 Minuten hart ab (im Browser `ERR_HTTP2_PROTOCOL_ERROR`).
    * Vorher geht ein `retry` mit kurzer Wartezeit raus, dann verbindet sich der
    * Browser sofort neu und lädt einmal nach – ohne dass „offline“ aufblitzt.
+   *
+   * Ein Editor-Addon meldet sich hierüber an: per Token, mit
+   * `?addon=godot&project=<id>&name=<Anzeigename>` (siehe `addons.ts`). An
+   * seinen Strom gehen dann auch die Aufträge, als benanntes Ereignis
+   * `godot-refine` – die Web-App liest nur unbenannte Nachrichten.
    */
-  app.get('/events', (c) =>
-    streamSSE(c, async (stream) => {
+  app.get('/events', (c) => {
+    const viaToken = (c.get as (key: string) => unknown)('viaToken') === true;
+    const project = c.req.query('project') ?? '';
+    const asAddon =
+      viaToken && c.req.query('addon') === 'godot' && !!ctx.sqlite.prepare('SELECT 1 FROM project WHERE id = ?').get(project)
+        ? { projectId: project, name: (c.req.query('name') ?? '').trim().slice(0, 60) || 'Godot' }
+        : null;
+    return streamSSE(c, async (stream) => {
       const unsubscribe = bus.subscribe((envelope) => {
         void stream.writeSSE({ id: String(envelope.id), data: JSON.stringify(envelope) });
       });
-      stream.onAbort(unsubscribe);
+      const leave = asAddon
+        ? addons.connect({
+            ...asAddon,
+            addon: 'godot',
+            send: (event, data) => void stream.writeSSE({ event, data: JSON.stringify(data) }),
+          })
+        : () => {};
+      stream.onAbort(() => {
+        unsubscribe();
+        leave();
+      });
 
       const until = Date.now() + (o.streamMs ?? STREAM_MS);
       await stream.writeSSE({ event: 'ready', data: '1', retry: 3000 });
@@ -223,8 +248,39 @@ export function dataRoutes(
         if (until - Date.now() > 0) await stream.writeSSE({ event: 'ping', data: '' });
       }
       unsubscribe();
-    }),
-  );
+      leave();
+    });
+  });
+
+  /* ---------------------------------------------- In Godot verfeinern */
+
+  /**
+   * Die Web-App bittet das verbundene Godot, eine Aufgabe zu verfeinern – nur
+   * mit Sitzung (per Token nicht freigegeben). Geschickt werden nur Aufgabe und
+   * Modus, keine freien Befehle; was das Addon daraus macht, trägt es selbst
+   * über die üblichen Routen ein.
+   */
+  app.post('/godot/refine', async (c) => {
+    const body = refineBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    const task = ctx.sqlite.prepare('SELECT project_id FROM task WHERE id = ?').get(body.data.taskId) as
+      | { project_id: string }
+      | undefined;
+    if (!task) return c.json({ error: 'Nicht gefunden.' }, 404);
+    const requestId = addons.refine(body.data.taskId, task.project_id, body.data.mode);
+    if (!requestId) return c.json({ error: 'Für dieses Projekt ist gerade kein Godot verbunden.' }, 409);
+    return c.json({ requestId }, 202);
+  });
+
+  /** Das Addon meldet, wie es um einen Auftrag steht – per Token, siehe index.ts. */
+  app.post('/godot/status', async (c) => {
+    const body = refineStatusBody.safeParse(await json(c));
+    if (!body.success) return fail(c, body.error);
+    const { requestId, state, message } = body.data;
+    return addons.status(requestId, state, message ?? null)
+      ? c.json({ ok: true })
+      : c.json({ error: 'Diesen Auftrag gibt es nicht (mehr).' }, 404);
+  });
 
   /* --------------------------------------------------------------- Bilder */
 
@@ -554,14 +610,16 @@ export function dataRoutes(
   app.post('/intake/task', async (c) => {
     const body = intakeTask.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
+    const { aiCreated, ...fields } = body.data;
     const input = {
-      ...body.data,
+      ...fields,
       parentId: null,
       milestoneId: null,
       groupId: null,
       doc: false,
       status: 'open',
-      tags: [INTAKE_TAG],
+      // Das Label nur, wenn Claude beteiligt war – ohne Angabe wie bisher.
+      tags: aiCreated === false ? [] : [INTAKE_TAG],
     };
     return run(c, bus, () => create(ctx, 'task', input), {
       status: 201,

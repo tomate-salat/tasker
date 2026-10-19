@@ -48,6 +48,7 @@ import { imagesIn } from './imageFile.js';
 import { markdownParts, checkboxClick, subtaskClick } from './markdown.js';
 import { focusAtEnd, insertCommand, useSmartEditor } from './editor.js';
 import { replaceText } from './caretMenu.js';
+import { useDictation } from './dictation.js';
 import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, releaseSub, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
@@ -120,6 +121,8 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
         {task && <TaskHead ws={ws} task={task} menu={menu} />}
         {milestone && <MilestoneHead ws={ws} milestone={milestone} />}
       </div>
+
+      {task && <GodotRefine task={task} />}
 
       <Content
         ws={ws}
@@ -270,6 +273,55 @@ function ArchiveBanner({
 }
 
 /* ------------------------------------------------------------ Kopf: Task */
+
+/**
+ * „In Godot verfeinern“ (Wunsch des Nutzers): nur, solange für das Projekt ein
+ * Godot-Addon verbunden ist. Der Knopf schickt die Aufgabe hin; das Addon
+ * nimmt einen Schnappschuss des Editors, lässt Claude die Aufgabe überarbeiten
+ * und trägt das Ergebnis selbst ein. Daneben steht, wie weit es ist – das
+ * dauert eine halbe bis eine Minute.
+ */
+function GodotRefine({ task }: { task: Task }) {
+  const editor = useStore((s) => s.addons.find((a) => a.projectId === task.projectId));
+  const run = useStore((s) => s.refines[task.id]);
+  const refine = useStore((s) => s.refineInGodot);
+  if (!editor && !run) return null;
+
+  const busy = !!run && (run.state === 'sent' || run.state === 'accepted' || run.state === 'working');
+  const told = run?.message ? `: ${run.message}` : '';
+  const text = !run
+    ? null
+    : run.state === 'sent'
+      ? 'An Godot geschickt …'
+      : run.state === 'accepted'
+        ? 'Godot hat übernommen …'
+        : run.state === 'working'
+          ? `${run.message ?? 'Godot arbeitet'} …`
+          : run.state === 'done'
+            ? `Fertig${told}`
+            : `Fehlgeschlagen${told}`;
+
+  return (
+    <div className={`d-godot ${run?.state ?? ''}`}>
+      {editor && (
+        <button
+          className="btn tiny"
+          disabled={busy}
+          title={`An ${editor.name} schicken – Claude überarbeitet die Aufgabe mit Blick auf die offene Szene`}
+          onClick={() => void refine(task.id)}
+        >
+          {busy && <span className="d-spin" aria-hidden />}
+          In Godot verfeinern
+        </button>
+      )}
+      {text && (
+        <span className="d-godot-state" aria-live="polite">
+          {text}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function TaskHead({
   ws,
@@ -631,6 +683,13 @@ function Content({
   const resolve = useRefResolver();
   const picker = useSmartEditor(ws, ref, { projectId: item.projectId, self: item.id });
   const uploader = useUpload(item.projectId);
+  // Diktiertes kommt an die Schreibmarke, mit Leerzeichen davor, wo es fehlt.
+  const dictation = useDictation((text) => {
+    const el = ref.current;
+    if (!el) return;
+    const before = el.value.slice(0, el.selectionStart);
+    replaceText(el, el.selectionStart, el.selectionEnd, (before && !/s$/.test(before) ? ' ' : '') + text);
+  });
 
   /**
    * Eingefügte oder hereingezogene Bilder. Im Editor kommt der Verweis an die
@@ -764,6 +823,18 @@ function Content({
           <>
             {button('Checkliste', TOOL_ICON.todo, write((el) => insertCommand(el, 'todo')))}
             {button('Liste', TOOL_ICON.list, write((el) => insertCommand(el, 'list')))}
+            {dictation.supported && (
+              <button
+                type="button"
+                className={`d-tool ${dictation.active ? 'on' : ''}`}
+                title={dictation.active ? 'Diktieren beenden' : 'Diktieren – der Text kommt an die Schreibmarke'}
+                aria-label={dictation.active ? 'Diktieren beenden' : 'Diktieren'}
+                aria-pressed={dictation.active}
+                onClick={dictation.toggle}
+              >
+                {TOOL_ICON.mic}
+              </button>
+            )}
             {button(
               'Verweis auf Task oder Milestone ($)',
               TOOL_ICON.ref,
@@ -848,6 +919,11 @@ function Content({
           }}
         />
         {picker.node}
+        {dictation.active && (
+          <p className="d-dictation" aria-live="polite">
+            <span className="d-dictation-dot" aria-hidden /> {dictation.interim || 'Hört zu …'}
+          </p>
+        )}
         <div className="d-editbar">
           <button className="btn tiny ghost" onClick={() => setEditing(false)} title="Änderungen verwerfen">
             Abbrechen

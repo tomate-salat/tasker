@@ -138,8 +138,12 @@ app.all('/mcp', async (c) => {
  */
 const TOKEN_ROUTES = /^\/api\/(bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
 const TOKEN_READ_ROUTES = /^\/api\/(settings|zeichnungsbild|bilder\/[^/]+)$/;
-/** Nur POST: eine Aufgabe hereinreichen, die der Server selbst im Backlog ablegt. */
-const TOKEN_POST_ROUTES = /^\/api\/intake\/task$/;
+/**
+ * Nur POST: eine Aufgabe hereinreichen, die der Server selbst im Backlog ablegt,
+ * und melden, wie es um einen Auftrag „In Godot verfeinern“ steht. Den Auftrag
+ * selbst gibt nur die Web-App, mit Sitzung.
+ */
+const TOKEN_POST_ROUTES = /^\/api\/(intake\/task|godot\/status)$/;
 
 app.use('/api/*', async (c, next) => {
   const path = c.req.path;

@@ -10,6 +10,7 @@ import type {
   Undoable,
 } from '@shared/api.js';
 import type { LogEntry } from '@shared/burnup.js';
+import type { AddonPresence } from '@shared/events.js';
 import type { ChangelogData } from '@shared/changelog.js';
 import { CLIENT_HEADER } from '@shared/events.js';
 import type { Data, Milestone, Task } from '@shared/model.js';
@@ -59,6 +60,8 @@ export type Bootstrap = Data & {
   drawings: DrawingMeta[];
   /** Burnup-Protokoll je aktivem Milestone; den heutigen Stand rechnet der Client selbst. */
   milestoneLog: Record<string, LogEntry[]>;
+  /** Welche Editor-Addons (Godot) gerade verbunden sind. */
+  addons?: AddonPresence[];
 };
 
 export class ApiError extends Error {
@@ -263,6 +266,9 @@ export const api = {
   bulk: (items: BulkItem[], action: BulkAction) => post<Undoable>('/api/bulk', { items, action }),
 
   steps: (steps: Step[]) => post<Undoable>('/api/steps', { steps }),
+
+  /** Das verbundene Godot bitten, eine Aufgabe zu verfeinern. */
+  refineInGodot: (taskId: string) => post<{ requestId: string }>('/api/godot/refine', { taskId, mode: 'rewrite' }),
 
   importCodecks: (csv: string, dryRun: boolean) =>
     post<CodecksSummary>('/api/import/codecks', { csv, dryRun }),

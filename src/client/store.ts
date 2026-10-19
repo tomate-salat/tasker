@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { BulkAction, Kind, Step } from '@shared/api.js';
 import { dayKey } from '@shared/burnup.js';
-import type { ChangeEvent } from '@shared/events.js';
+import type { AddonPresence, ChangeEvent, RefineState } from '@shared/events.js';
 import { isArchived, type Milestone, type Task } from '@shared/model.js';
 import {
   doneCandidates,
@@ -331,6 +331,12 @@ type State = {
 
   /** Eine Änderung aus einem anderen Tab oder Gerät einspielen. */
   applyEvent: (event: ChangeEvent) => void;
+
+  /** Welche Editor-Addons (Godot) gerade verbunden sind. */
+  addons: AddonPresence[];
+  /** Je Aufgabe der letzte Auftrag „In Godot verfeinern“ und wie es darum steht. */
+  refines: Record<string, { requestId: string; state: RefineState; message: string | null }>;
+  refineInGodot: (taskId: string) => Promise<void>;
   /** Steht die Verbindung zum Änderungs-Strom? */
   live: boolean;
   setLive: (live: boolean) => void;
@@ -438,7 +444,7 @@ export const useStore = create<State>((set, get) => ({
       const ws = new Workspace(boot);
       // Was inzwischen weg ist – archiviert, gelöscht, woanders hin – fällt aus der Auswahl.
       const multi = new Set([...get().multi].filter((id) => ws.task(id)));
-      set({ boot, ws, settings, scope, lastProject, loading: false, multi });
+      set({ boot, ws, settings, scope, lastProject, loading: false, multi, addons: boot.addons ?? [] });
       /**
        * Archiv und Papierkorb ziehen mit: offen neu geholt, sonst verworfen und
        * beim nächsten Öffnen geladen. So zeigt keine Ansicht einen alten Stand.
@@ -1158,6 +1164,21 @@ export const useStore = create<State>((set, get) => ({
   live: false,
   setLive: (live) => set({ live }),
 
+  addons: [],
+  refines: {},
+  refineInGodot: async (taskId) => {
+    try {
+      const { requestId } = await api.refineInGodot(taskId);
+      // Die Meldungen des Addons kommen über den Strom; bis dahin gilt „verschickt“.
+      const now = get().refines[taskId];
+      if (now?.requestId !== requestId) {
+        set({ refines: { ...get().refines, [taskId]: { requestId, state: 'sent', message: null } } });
+      }
+    } catch (e) {
+      set({ toast: e instanceof Error ? e.message : 'Godot ist nicht erreichbar', toastUndo: false });
+    }
+  },
+
   applyEvent: (event) => {
     const boot = get().boot;
     if (!boot) return;
@@ -1165,6 +1186,17 @@ export const useStore = create<State>((set, get) => ({
     switch (event.type) {
       case 'upsert':
         set(upsert(boot, event.kind, event.object as Entity));
+        return;
+      case 'addons':
+        set({ addons: event.addons });
+        return;
+      case 'godot':
+        set({
+          refines: {
+            ...get().refines,
+            [event.taskId]: { requestId: event.requestId, state: event.state, message: event.message },
+          },
+        });
         return;
       case 'delete':
         set(drop(boot, event.kind, event.id));
