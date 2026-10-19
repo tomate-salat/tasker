@@ -57,6 +57,19 @@ const send = async (method: string, path: string, body?: unknown, client?: strin
 const mk = async (kind: string, input: unknown) => (await send('POST', `/kind/${kind}`, input)).body as { id: string; version: number };
 
 describe('Routen', () => {
+  it('der Änderungs-Strom endet von selbst und bittet um schnellen Neuversuch', async () => {
+    // Railway bricht eine Anfrage nach 15 Minuten hart ab – der Server muss vorher selbst schließen.
+    const short = dataRoutes(opened[opened.length - 1] as DbCtx, bus, { streamMs: 150 });
+    const started = Date.now();
+    const res = await short.request('/events');
+    assert.equal(res.headers.get('content-type'), 'text/event-stream');
+    const body = await res.text();
+    assert.ok(Date.now() - started < 5000, 'der Strom ist zu Ende');
+    assert.match(body, /^event: ready\ndata: 1\nretry: 3000\n\n/);
+    assert.match(body, /event: renew\ndata: \nretry: 250\n\n$/);
+    assert.doesNotMatch(body, /ping/);
+  });
+
   it('eine hereingereichte Aufgabe landet im Backlog – mehr lässt sich nicht bestimmen', async () => {
     const p = await mk('project', { name: 'P' });
     const m = await mk('milestone', { projectId: p.id, title: 'M' });

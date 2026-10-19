@@ -95,7 +95,17 @@ const INTAKE_TAG = 'ai-created';
 /** Längere Kante eines Zeichnungsbilds, wenn der Client keine nennt. */
 const DRAWING_EDGE = 1600;
 
-export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
+/** Lebenszeichen im Änderungs-Strom, damit Proxys die Verbindung nicht schließen. */
+const PING_MS = 25_000;
+/** So lange hält ein Strom, dann beginnt der Browser einen neuen – unter Railways 15 Minuten. */
+const STREAM_MS = 10 * 60_000;
+
+export function dataRoutes(
+  ctx: DbCtx,
+  bus: EventBus = appEvents,
+  /** Für Tests: wie lange ein Änderungs-Strom hält. */
+  o: { streamMs?: number } = {},
+): Hono {
   const app = new Hono();
   const run = (...args: RunArgs) => runWith(ctx, ...args);
 
@@ -187,6 +197,11 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
   /**
    * Der Strom hält offen und schickt jede Änderung weiter. Alle 25 Sekunden
    * geht ein Lebenszeichen raus, sonst schließen Proxys die Verbindung.
+   *
+   * Nach `o.streamMs` beendet der Server den Strom selbst: Railway bricht eine
+   * Anfrage nach 15 Minuten hart ab (im Browser `ERR_HTTP2_PROTOCOL_ERROR`).
+   * Vorher geht ein `retry` mit kurzer Wartezeit raus, dann verbindet sich der
+   * Browser sofort neu und lädt einmal nach – ohne dass „offline“ aufblitzt.
    */
   app.get('/events', (c) =>
     streamSSE(c, async (stream) => {
@@ -195,11 +210,17 @@ export function dataRoutes(ctx: DbCtx, bus: EventBus = appEvents): Hono {
       });
       stream.onAbort(unsubscribe);
 
+      const until = Date.now() + (o.streamMs ?? STREAM_MS);
       await stream.writeSSE({ event: 'ready', data: '1', retry: 3000 });
       while (!stream.closed && !stream.aborted) {
-        await stream.sleep(25_000);
+        const left = until - Date.now();
+        if (left <= 0) {
+          await stream.writeSSE({ event: 'renew', data: '', retry: 250 });
+          break;
+        }
+        await stream.sleep(Math.min(PING_MS, left));
         if (stream.closed || stream.aborted) break;
-        await stream.writeSSE({ event: 'ping', data: '' });
+        if (until - Date.now() > 0) await stream.writeSSE({ event: 'ping', data: '' });
       }
       unsubscribe();
     }),
