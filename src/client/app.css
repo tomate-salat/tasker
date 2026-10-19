@@ -980,9 +980,10 @@
   line-height: 1;
 }
 
-/* Labels und Kategorie stehen an festen Positionen ab Listenanfang. */
+/* Labels und Kategorie stehen an festen Positionen ab Listenanfang. In breiten
+   Listen wächst der Titel mit; den Labels bleiben rechts gut 250px. */
 .list .task-row {
-  --tagcol: clamp(300px, 55cqw, 520px);
+  --tagcol: max(300px, 55cqw, 100cqw - 480px);
 }
 
 .list .task-row .cat-col {
