@@ -842,6 +842,13 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>Rückgängig</dd>
         <dt>
+          <kbd>Strg</kbd>+<kbd>N</kbd>
+        </dt>
+        <dd>
+          Schnell ein Task – aus jeder Ansicht, landet im Backlog unter „Unsortiert“ (mit verbundenem Godot:{' '}
+          <kbd>Strg</kbd>+<kbd>Enter</kbd> schickt ihn gleich zum Verfeinern)
+        </dd>
+        <dt>
           <kbd>/</kbd> oder <kbd>Strg</kbd>+<kbd>K</kbd>
         </dt>
         <dd>

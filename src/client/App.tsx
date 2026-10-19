@@ -26,6 +26,7 @@ import { Outline } from './ui/views.js';
 import { Tisch } from './ui/Tisch.js';
 import { HideDoneSwitch } from './ui/hideDone.js';
 import { SearchButton, SearchPalette } from './ui/Search.js';
+import { QuickAdd } from './ui/QuickAdd.js';
 import { useWheelScrollX } from './ui/wheelX.js';
 
 /**
@@ -122,7 +123,7 @@ function Shell({
     return () => clearTimeout(t);
   }, [toast, say]);
 
-  // Kürzel, die überall gelten: Suche, Hilfe und Seitenleiste.
+  // Kürzel, die überall gelten: Suche, schnell ein Task, Hilfe und Seitenleiste.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const el = e.target as HTMLElement | null;
@@ -134,6 +135,14 @@ function Shell({
         e.preventDefault();
         const s = useStore.getState();
         s.setDialog(s.dialog === 'search' ? 'none' : 'search');
+        return;
+      }
+      // Strg+N ebenso – ein neuer Task, egal wo man gerade ist.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'n' || e.key === 'N')) {
+        if (busy) return;
+        e.preventDefault();
+        const s = useStore.getState();
+        s.setDialog(s.dialog === 'quick' ? 'none' : 'quick');
         return;
       }
       if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
@@ -243,6 +252,7 @@ function Shell({
           </Suspense>
         )}
         {dialog === 'search' && <SearchPalette ws={ws} onClose={() => setDialog('none')} />}
+        {dialog === 'quick' && <QuickAdd ws={ws} onClose={() => setDialog('none')} />}
         {toastBox}
       </div>
     );
@@ -359,6 +369,7 @@ function Shell({
         )}
         {dialog === 'help' && <HelpDialog onClose={() => setDialog('none')} />}
         {dialog === 'search' && <SearchPalette ws={ws} onClose={() => setDialog('none')} />}
+        {dialog === 'quick' && <QuickAdd ws={ws} onClose={() => setDialog('none')} />}
 
         {toastBox}
       </div>

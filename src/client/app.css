@@ -4548,6 +4548,29 @@ body:has(.bulk) .toast {
   color: var(--faint);
 }
 
+.search-card.quick {
+  max-width: 520px;
+}
+
+.quick-dictation {
+  margin: 0;
+  padding: 8px 14px 0;
+}
+
+.quick-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 14px 10px;
+  font-size: 12px;
+}
+
+.quick-foot kbd {
+  font-size: 11px;
+}
+
 .search-scope {
   display: flex;
   align-items: center;

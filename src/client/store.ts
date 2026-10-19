@@ -75,7 +75,7 @@ export const VIEW_LABEL: Record<View, string> = {
  */
 export const TABS: View[] = ['tisch', 'releases', 'plan', 'backlog', 'timeline', 'docs', 'bilder', 'archive'];
 
-export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help' | 'search';
+export type Dialog = 'none' | 'categories' | 'marks' | 'profile' | 'help' | 'search' | 'quick';
 
 /**
  * Der gesamte aktive Datenbestand liegt im Speicher – wie `S` im Prototyp.

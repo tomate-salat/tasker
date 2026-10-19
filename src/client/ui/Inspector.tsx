@@ -827,10 +827,14 @@ function Content({
               <button
                 type="button"
                 className={`d-tool ${dictation.active ? 'on' : ''}`}
-                title={dictation.active ? 'Diktieren beenden' : 'Diktieren – der Text kommt an die Schreibmarke'}
+                title={
+                  dictation.active
+                    ? 'Diktieren beenden'
+                    : 'Diktieren – klicken oder gedrückt halten; der Text kommt an die Schreibmarke'
+                }
                 aria-label={dictation.active ? 'Diktieren beenden' : 'Diktieren'}
                 aria-pressed={dictation.active}
-                onClick={dictation.toggle}
+                {...dictation.press}
               >
                 {TOOL_ICON.mic}
               </button>
