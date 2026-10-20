@@ -123,8 +123,6 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
         {milestone && <MilestoneHead ws={ws} milestone={milestone} />}
       </div>
 
-      {task && <GodotRefine task={task} />}
-
       <Content
         ws={ws}
         kind={kind}
@@ -136,6 +134,10 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
 
       {milestone && <Burnup ws={ws} milestone={milestone} />}
       {milestone && <MilestoneChildren ws={ws} milestone={milestone} />}
+
+      {/* Unten über den Abhängigkeiten, damit es oben keinen Platz wegnimmt (Wunsch
+          des Nutzers) – tiefer geht nicht, der Baum klebt als Fuß am Rand. */}
+      {task && <GodotRefine task={task} />}
 
       {/* Doku-Seiten haben wie im Prototyp keine Abhängigkeiten. */}
       {!(task && ws.isDoc(task)) && <Deps ws={ws} kind={kind} item={item} />}

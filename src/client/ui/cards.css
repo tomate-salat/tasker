@@ -504,6 +504,16 @@
   margin-top: 0;
 }
 
+/* Steht die Godot-Leiste darüber, nimmt sie den freien Platz über sich. */
+.detail > .d-godot {
+  margin-top: auto;
+}
+
+.detail > .d-godot + .deps-sec,
+.detail > .d-godot + .hier-sec {
+  margin-top: 0;
+}
+
 .hier-toggle {
   display: flex;
   align-items: center;
