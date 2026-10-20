@@ -39,6 +39,8 @@ export type DrawingMeta = {
   name: string;
   order: number;
   updatedAt: string;
+  /** Liegt ein Bild für Godot vor? Sonst zeichnet die Web-App es nach (`previews.ts`). */
+  preview: boolean;
 };
 
 export type Drawing = DrawingMeta & { scene: Scene };

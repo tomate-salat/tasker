@@ -28,7 +28,7 @@ import { parentStatusAfter } from '../shared/parentStatus.js';
 import { refsIn, type RefStub } from '../shared/refs.js';
 import { effectiveReleases } from '../shared/releaseOf.js';
 import type { DbCtx } from './db.js';
-import { loadDrawingMeta, type DrawingMeta } from './drawings.js';
+import { dropPreviews, loadDrawingMeta, type DrawingMeta } from './drawings.js';
 import { purgeImagesFor, untrashImage } from './images.js';
 import { newId, type IdPrefix } from './ids.js';
 
@@ -816,6 +816,9 @@ function syncParentStatus(ctx: DbCtx, childId: string): void {
  * Archivieren setzt das Datum am Eintrag selbst und markiert den Teilbaum als
  * verdeckt – aber nur dort, wo noch nichts steht: ein zuvor für sich
  * archiviertes Kind behält seinen eigenen Bezug.
+ *
+ * Die Zeichnungen darin verlieren ihr Bild für Godot (`dropPreviews`), die
+ * Szenen bleiben; zurückgeholt zeichnet die Web-App es nach.
  */
 export function archive(ctx: DbCtx, kind: 'task' | 'milestone', id: string): unknown {
   return ctx.sqlite.transaction(() => {
@@ -829,13 +832,16 @@ export function archive(ctx: DbCtx, kind: 'task' | 'milestone', id: string): unk
       .run(nowIso(), nowIso(), id);
 
     const roots = kind === 'task' ? [id] : milestoneRoots(ctx, id);
+    const taskIds = kind === 'task' ? [id] : [];
 
     for (const rootId of roots) {
       const subtree = descendantIds(ctx, rootId);
       // Der Milestone verdeckt auch seine Wurzelaufgaben, ein Task nur seine Kinder.
       const ids = kind === 'milestone' ? [rootId, ...subtree] : subtree;
       hideAll(ctx, ids, id);
+      taskIds.push(...ids);
     }
+    dropPreviews(ctx, { taskIds, milestoneIds: kind === 'milestone' ? [id] : [] });
 
     return read(ctx, kind, id);
   })();

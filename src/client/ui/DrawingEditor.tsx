@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ApiError, api, type Drawing, type Scene } from '../api.js';
 import { useBackClose } from '../back.js';
 import { useStore } from '../store.js';
+import { imageOf } from './previews.js';
 
 /**
  * Der Zeichen-Editor ist Excalidraw. Das Paket ist groß, deshalb wird es erst
@@ -28,28 +29,6 @@ const signature = (elements: unknown[]): string =>
       return `${x.id}:${x.version}:${x.isDeleted ? 1 : 0}`;
     })
     .join('|');
-
-/**
- * Die Szene als SVG, hell und ohne eingebettete Schriften: die dunkle Fassung
- * und die Schriften bringt der Server selbst mit. Eine leere Zeichnung hat
- * keins, und scheitert das Zeichnen, wird eben ohne Bild gespeichert.
- */
-async function imageOf(scene: Scene): Promise<string | undefined> {
-  const elements = scene.elements.filter((e) => !(e as { isDeleted?: boolean }).isDeleted);
-  if (!elements.length) return undefined;
-  try {
-    const { exportToSvg } = await import('./excalidraw-lazy.js');
-    const svg = await exportToSvg({
-      elements: elements as never,
-      appState: { exportBackground: false, exportWithDarkMode: false } as never,
-      files: (scene.files ?? null) as never,
-      skipInliningFonts: true,
-    });
-    return svg.outerHTML;
-  } catch {
-    return undefined;
-  }
-}
 
 const dark = (): boolean =>
   document.documentElement.dataset['theme'] === 'dark' ||

@@ -1,6 +1,7 @@
 import type { Step, Undoable } from '../shared/api.js';
 import type { DbCtx } from './db.js';
 import { newId } from './ids.js';
+import { isPacked, pack, unpack } from './packing.js';
 import { Conflict, NotFound } from './repo.js';
 
 /**
@@ -15,6 +16,11 @@ import { Conflict, NotFound } from './repo.js';
  * Neben der Szene liegt ihr Bild als SVG (`preview_svg`), gezeichnet von der
  * Web-App beim Speichern – der Server kann Excalidraw nicht selbst zeichnen.
  * Es gilt nur für genau diese Szene: wer die Szene ohne SVG ändert, leert es.
+ *
+ * Szene und SVG liegen gepackt in der Datenbank (`packing.ts`). Beim
+ * Archivieren fällt das SVG weg – es braucht nur das Godot-Addon, und die
+ * Web-App zeichnet es nach, sobald der Eintrag zurückkommt und geöffnet wird
+ * (`preview` sagt ihr, wo es fehlt).
  */
 
 export type Scene = {
@@ -35,6 +41,8 @@ export type DrawingMeta = {
   name: string;
   order: number;
   updatedAt: string;
+  /** Liegt ein Bild für Godot vor? Sonst zeichnet die Web-App es nach. */
+  preview: boolean;
 };
 
 export type Drawing = DrawingMeta & { scene: Scene };
@@ -49,7 +57,12 @@ type Row = {
   shapes: string;
   preview_svg: string | null;
   updated_at: string;
+  /** Aus der Abfrage: ob `preview_svg` gesetzt ist, ohne es zu laden. */
+  has_preview: number;
 };
+
+/** Alle Spalten und dazu, ob ein Bild da ist. */
+const COLUMNS = '*, preview_svg IS NOT NULL AS has_preview';
 
 const nowIso = (): string => new Date().toISOString();
 
@@ -66,6 +79,7 @@ const toMeta = (r: Row): DrawingMeta => ({
   name: r.name,
   order: r.sort_order,
   updatedAt: r.updated_at,
+  preview: !!r.has_preview,
 });
 
 /** Alte Zeilen hielten nur ein Formen-Array; beides wird gelesen. */
@@ -80,14 +94,15 @@ function toScene(raw: string): Scene {
   }
 }
 
-const toDrawing = (r: Row): Drawing => ({ ...toMeta(r), scene: toScene(r.shapes) });
+const toDrawing = (r: Row): Drawing => ({ ...toMeta(r), scene: toScene(unpack(r.shapes)) });
 
 /** Nur die Namen – das reicht dem Startpaket für die Anzeige in der Liste. */
 export const loadDrawingMeta = (ctx: DbCtx): DrawingMeta[] =>
   (
     ctx.sqlite
       .prepare(
-        'SELECT id, version, task_id, milestone_id, name, sort_order, updated_at FROM drawing ORDER BY sort_order',
+        `SELECT id, version, task_id, milestone_id, name, sort_order, updated_at,
+                preview_svg IS NOT NULL AS has_preview FROM drawing ORDER BY sort_order`,
       )
       .all() as Row[]
   ).map(toMeta);
@@ -95,7 +110,7 @@ export const loadDrawingMeta = (ctx: DbCtx): DrawingMeta[] =>
 export const loadDrawings = (ctx: DbCtx, owner: Owner): Drawing[] =>
   (
     ctx.sqlite
-      .prepare(`SELECT * FROM drawing WHERE ${COLUMN[owner.kind]} = ? ORDER BY sort_order`)
+      .prepare(`SELECT ${COLUMNS} FROM drawing WHERE ${COLUMN[owner.kind]} = ? ORDER BY sort_order`)
       .all(owner.id) as Row[]
   ).map(toDrawing);
 
@@ -112,7 +127,7 @@ export function drawingPreview(
   const row = ctx.sqlite
     .prepare(`SELECT id, version, preview_svg FROM drawing WHERE ${COLUMN[owner.kind]} = ? AND name = ?`)
     .get(owner.id, name) as Pick<Row, 'id' | 'version' | 'preview_svg'> | undefined;
-  return row ? { id: row.id, version: row.version, svg: row.preview_svg } : null;
+  return row ? { id: row.id, version: row.version, svg: row.preview_svg && unpack(row.preview_svg) } : null;
 }
 
 export function createDrawing(ctx: DbCtx, owner: Owner, name?: string): Drawing {
@@ -140,7 +155,7 @@ export function patchDrawing(
   changes: { name?: string; scene?: Scene; svg?: string; order?: number },
 ): Drawing {
   return ctx.sqlite.transaction(() => {
-    const row = ctx.sqlite.prepare('SELECT * FROM drawing WHERE id = ?').get(id) as Row | undefined;
+    const row = ctx.sqlite.prepare(`SELECT ${COLUMNS} FROM drawing WHERE id = ?`).get(id) as Row | undefined;
     if (!row) throw new NotFound();
     if (row.version !== version) throw new Conflict(toDrawing(row));
 
@@ -160,10 +175,10 @@ export function patchDrawing(
       .run(
         name,
         changes.order ?? row.sort_order,
-        changes.scene ? JSON.stringify(changes.scene) : row.shapes,
+        changes.scene ? pack(JSON.stringify(changes.scene)) : row.shapes,
         // Eine neue Szene ohne Bild macht das alte ungültig; ein Bild allein
         // gilt der Szene, die schon da ist (die Version ist geprüft).
-        changes.svg ?? (changes.scene ? null : row.preview_svg),
+        changes.svg ? pack(changes.svg) : changes.scene ? null : row.preview_svg,
         nowIso(),
         id,
       );
@@ -223,7 +238,7 @@ export const stripEmbed = (desc: string, name: string): string =>
     .trim();
 
 function readDrawing(ctx: DbCtx, id: string): Drawing {
-  const row = ctx.sqlite.prepare('SELECT * FROM drawing WHERE id = ?').get(id) as Row | undefined;
+  const row = ctx.sqlite.prepare(`SELECT ${COLUMNS} FROM drawing WHERE id = ?`).get(id) as Row | undefined;
   if (!row) throw new NotFound();
   return toDrawing(row);
 }
@@ -234,4 +249,92 @@ function uniqueName(wanted: string | undefined, existing: { name: string }[]): s
   const taken = new Set(existing.map((d) => d.name));
   if (!taken.has(base)) return base;
   for (let i = 2; ; i++) if (!taken.has(`${base} ${i}`)) return `${base} ${i}`;
+}
+
+/**
+ * Archivieren: die Bilder der Zeichnungen fallen weg, die Szenen bleiben. Ohne
+ * neue Version – das Bild hängt nur an der Szene, und ein offener Editor soll
+ * deshalb nicht in einen Konflikt laufen.
+ */
+export function dropPreviews(ctx: DbCtx, owners: { taskIds: string[]; milestoneIds: string[] }): void {
+  const drop = (column: string, ids: string[]): void => {
+    for (let i = 0; i < ids.length; i += 500) {
+      const part = ids.slice(i, i + 500);
+      ctx.sqlite
+        .prepare(`UPDATE drawing SET preview_svg = NULL WHERE ${column} IN (${part.map(() => '?').join(',')})`)
+        .run(...part);
+    }
+  };
+  drop('task_id', owners.taskIds);
+  drop('milestone_id', owners.milestoneIds);
+}
+
+/** Packt die Zeichnungen einer Zeile, wie sie im Papierkorb steckt. */
+function packRow(row: Record<string, unknown>): boolean {
+  let changed = false;
+  for (const key of ['shapes', 'preview_svg']) {
+    const v = row[key];
+    if (typeof v === 'string' && !isPacked(v)) {
+      const packed = pack(v);
+      if (packed !== v) {
+        row[key] = packed;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+/**
+ * Einmalig beim Start, und danach ohne Wirkung: packt, was noch ungepackt
+ * liegt – auch die Zeichnungen im Papierkorb –, nimmt archivierten Einträgen
+ * das Bild und gibt den frei gewordenen Platz an das Dateisystem zurück.
+ * Gibt zurück, wie viele Zeichnungen und Papierkorb-Einträge es angefasst hat.
+ */
+export function packStoredDrawings(ctx: DbCtx): { drawings: number; trash: number } {
+  const result = ctx.sqlite.transaction(() => {
+    let drawings = 0;
+    const rows = ctx.sqlite.prepare('SELECT id, shapes, preview_svg FROM drawing').all() as Pick<
+      Row,
+      'id' | 'shapes' | 'preview_svg'
+    >[];
+    const update = ctx.sqlite.prepare('UPDATE drawing SET shapes = ?, preview_svg = ? WHERE id = ?');
+    for (const r of rows) {
+      const row: Record<string, unknown> = { ...r };
+      if (packRow(row)) {
+        update.run(row['shapes'], row['preview_svg'], r.id);
+        drawings++;
+      }
+    }
+
+    // Was schon im Archiv liegt, braucht sein Bild ebenso wenig.
+    drawings += ctx.sqlite
+      .prepare(
+        `UPDATE drawing SET preview_svg = NULL WHERE preview_svg IS NOT NULL AND (
+           task_id IN (SELECT id FROM task WHERE archived_at IS NOT NULL OR hidden_by IS NOT NULL)
+           OR milestone_id IN (SELECT id FROM milestone WHERE archived_at IS NOT NULL))`,
+      )
+      .run().changes;
+
+    let trash = 0;
+    const entries = ctx.sqlite
+      .prepare("SELECT id, payload FROM trash WHERE payload LIKE '%\"shapes\"%'")
+      .all() as { id: string; payload: string }[];
+    for (const e of entries) {
+      const p = JSON.parse(e.payload) as { kind: string; row?: Record<string, unknown>; drawings?: Record<string, unknown>[] };
+      let changed = p.kind === 'drawing' && p.row ? packRow(p.row) : false;
+      for (const d of p.drawings ?? []) changed = packRow(d) || changed;
+      if (changed) {
+        ctx.sqlite.prepare('UPDATE trash SET payload = ? WHERE id = ?').run(JSON.stringify(p), e.id);
+        trash++;
+      }
+    }
+    return { drawings, trash };
+  })();
+  if (result.drawings || result.trash) {
+    ctx.sqlite.exec('VACUUM');
+    // Sonst bliebe die Datei der Änderungen so groß, wie das Neupacken sie gemacht hat.
+    ctx.sqlite.pragma('wal_checkpoint(TRUNCATE)');
+  }
+  return result;
 }

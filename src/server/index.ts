@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { DATABASE_PATH, HOST, PORT, PRODUCTION, warnIfNotPersistent } from './env.js';
 import { appDb, recordBoot } from './db.js';
 import { dataRoutes } from './routes.js';
+import { packStoredDrawings } from './drawings.js';
 import { appEvents } from './events.js';
 import { handleMcp } from './mcp.js';
 import { createToken, listTokens, revokeToken, tokenValid } from './tokens.js';
@@ -32,6 +33,13 @@ warnIfNotPersistent();
 runMigrations();
 await bootstrapAccount();
 purgeExpiredSessions();
+{
+  // Zeichnungen gepackt ablegen – einmalig für den Bestand, danach ohne Wirkung.
+  const packed = packStoredDrawings(appDb);
+  if (packed.drawings || packed.trash) {
+    console.log(`Zeichnungen gepackt: ${packed.drawings} im Bestand, ${packed.trash} im Papierkorb.`);
+  }
+}
 const boot = recordBoot();
 
 const app = new Hono<{ Variables: { viaToken: boolean } }>();

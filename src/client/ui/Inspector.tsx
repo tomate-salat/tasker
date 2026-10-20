@@ -16,7 +16,7 @@ import {
 import { releaseLabel } from '@shared/release.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
-import { imageMarkdown } from '../api.js';
+import { drawingsOf, imageMarkdown } from '../api.js';
 import { collapsedOf, useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
 import { cellMenu } from './cellMenu.js';
@@ -52,6 +52,7 @@ import { markdownParts, checkboxClick, subtaskClick } from './markdown.js';
 import { focusAtEnd, insertCommand, useSmartEditor } from './editor.js';
 import { replaceText } from './caretMenu.js';
 import { useDictation } from './dictation.js';
+import { fillPreviews } from './previews.js';
 import { LangChip } from './LangChip.js';
 import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, releaseSub, taskMenu } from './rowMenu.js';
@@ -76,6 +77,16 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
   // Der Inhalt wird als Ganzes bearbeitet – beim Wechsel des Objekts zurück.
   const [editing, setEditing] = useState(false);
   useEffect(() => setEditing(false), [id]);
+
+  // Fehlt einer Zeichnung das Bild für Godot (etwa nach dem Archiv), entsteht
+  // es beim Öffnen im Hintergrund neu – nur für Aktives, nicht in der Archivansicht.
+  const drawings = useStore((s) => s.boot?.drawings);
+  useEffect(() => {
+    const live = useStore.getState().ws;
+    if (!live?.task(id) && !live?.milestone(id)) return;
+    const missing = drawingsOf(drawings, id).filter((d) => !d.preview);
+    if (missing.length) void fillPreviews(missing);
+  }, [id, drawings]);
 
   if (!task && !milestone) return null;
   const kind = task ? 'task' : 'milestone';

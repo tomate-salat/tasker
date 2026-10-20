@@ -24,6 +24,7 @@ import {
   type TrashList,
 } from './api.js';
 import { MS_STATUS } from './ui/icons.js';
+import { fillPreviews } from './ui/previews.js';
 
 export const VIEWS = [
   'tisch',
@@ -1259,6 +1260,13 @@ export const useStore = create<State>((set, get) => ({
     try {
       const r = await api.restore<Task | Milestone>(kind, id);
       await get().load();
+      // Im Archiv fielen die Bilder der Zeichnungen weg – jetzt im Hintergrund nachzeichnen.
+      const back = get().ws;
+      if (back) {
+        void fillPreviews(
+          (get().boot?.drawings ?? []).filter((d) => !d.preview && (back.task(d.taskId) ?? back.milestone(d.milestoneId))),
+        );
+      }
       // Die Meldung des Prototyps: wohin es zurückkam, und warum, wenn es woanders liegt.
       const ws = get().ws;
       const m = kind === 'milestone' ? ws?.milestone(id) : null;
