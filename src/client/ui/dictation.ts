@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent } from 'react';
 import { useStore } from '../store.js';
 
 /**
  * Diktieren in den Editor (Wunsch des Nutzers) über die Spracherkennung des
- * Browsers, auf Deutsch, mit Zwischenergebnissen. Edge erkennt zuverlässig
+ * Browsers, mit Zwischenergebnissen. Edge erkennt zuverlässig
  * (über einen Dienst von Microsoft), Brave bietet die Schnittstelle an, scheitert
  * aber beim Start mit `network`, Firefox hat sie gar nicht.
  *
@@ -16,6 +16,10 @@ import { useStore } from '../store.js';
  *
  * Der Knopf kann beides: kurz klicken schaltet ein und aus, gedrückt halten
  * nimmt auf, bis man loslässt.
+ *
+ * Die Sprache – Deutsch oder Englisch – stellt das Kürzel neben dem Knopf um
+ * (Wunsch des Nutzers); sie gilt für alle Diktierknöpfe und bleibt auf dem
+ * Gerät. Von selbst erkennt der Browser die Sprache nicht.
  */
 
 /** Ab so langem Drücken gilt es als Halten statt als Klick. */
@@ -37,6 +41,43 @@ const Ctor = (): (new () => Recognition) | null => {
   const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
+
+/* ------------------------------------------------------------- Sprache */
+
+export type DictationLang = 'de' | 'en';
+const LANG_KEY = 'tasker.diktatSprache';
+const LOCALE: Record<DictationLang, string> = { de: 'de-DE', en: 'en-US' };
+
+let lang: DictationLang = (() => {
+  try {
+    return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'de';
+  } catch {
+    return 'de';
+  }
+})();
+const listeners = new Set<() => void>();
+
+/** Die Sprache, in der diktiert wird – dieselbe für alle Knöpfe. */
+export function useDictationLang(): [DictationLang, () => void] {
+  const now = useSyncExternalStore(
+    (on) => {
+      listeners.add(on);
+      return () => listeners.delete(on);
+    },
+    () => lang,
+  );
+  return [now, toggleLang];
+}
+
+function toggleLang(): void {
+  lang = lang === 'de' ? 'en' : 'de';
+  try {
+    localStorage.setItem(LANG_KEY, lang);
+  } catch {
+    // Privates Fenster – dann gilt es nur bis zum Neuladen.
+  }
+  for (const on of listeners) on();
+}
 
 // Früher blendete ein Fehlschlag den Knopf auf dem Gerät für immer aus.
 try {
@@ -69,6 +110,12 @@ export function useDictation(onText: (text: string) => void): {
   const deliver = useRef(onText);
   deliver.current = onText;
 
+  // Umgestellt, während zugehört wird: kurz neu ansetzen, in der neuen Sprache.
+  const [current] = useDictationLang();
+  useEffect(() => {
+    if (rec.current && wanted.current) rec.current.stop();
+  }, [current]);
+
   const stop = useCallback(() => {
     wanted.current = false;
     rec.current?.stop();
@@ -86,7 +133,7 @@ export function useDictation(onText: (text: string) => void): {
     const C = Ctor();
     if (!C) return;
     const r = new C();
-    r.lang = 'de-DE';
+    r.lang = LOCALE[lang];
     r.continuous = true;
     r.interimResults = true;
     r.onresult = (e) => {
@@ -114,6 +161,8 @@ export function useDictation(onText: (text: string) => void): {
     r.onend = () => {
       if (wanted.current) {
         try {
+          // Inzwischen umgestellt? Dann geht es in der neuen Sprache weiter.
+          r.lang = LOCALE[lang];
           r.start();
           return;
         } catch {

@@ -1889,6 +1889,26 @@ textarea.title-edit {
   }
 }
 
+/* Die Diktiersprache neben dem Mikrofon: ein kleines Kürzel zum Umschalten. */
+.d-lang {
+  flex: none;
+  height: 20px;
+  min-width: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font: 600 10px var(--mono, monospace);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.d-lang:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
 /* Diktieren: der Knopf leuchtet, darunter das gerade Gehörte. */
 .d-tool.on {
   color: var(--bad);

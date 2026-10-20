@@ -15,6 +15,7 @@ import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { addChild, indent, outdent } from './actions.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
 import { useDictation } from './dictation.js';
+import { LangChip } from './LangChip.js';
 import {
   AI_ICON,
   CHECK_ICON,
@@ -769,6 +770,7 @@ export function TitleEdit({
       onMouseDown={(e) => e.target !== ref.current && e.preventDefault()}
     >
       {input}
+      {dictation.supported && <LangChip />}
       {dictation.supported && (
         <button
           type="button"

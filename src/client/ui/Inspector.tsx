@@ -52,6 +52,7 @@ import { markdownParts, checkboxClick, subtaskClick } from './markdown.js';
 import { focusAtEnd, insertCommand, useSmartEditor } from './editor.js';
 import { replaceText } from './caretMenu.js';
 import { useDictation } from './dictation.js';
+import { LangChip } from './LangChip.js';
 import { refClick, useRefResolver } from './refs.js';
 import { categorySub, docMenu, markSub, milestoneMenu, releaseSub, taskMenu } from './rowMenu.js';
 import { type MenuItem, PropButton, useMenu } from './Menu.js';
@@ -345,6 +346,7 @@ function GodotRefine({ task }: { task: Task }) {
               }
             }}
           />
+          {dictation.supported && <LangChip />}
           {dictation.supported && (
             <button
               type="button"
@@ -886,6 +888,7 @@ function Content({
           <>
             {button('Checkliste', TOOL_ICON.todo, write((el) => insertCommand(el, 'todo')))}
             {button('Liste', TOOL_ICON.list, write((el) => insertCommand(el, 'list')))}
+            {dictation.supported && <LangChip />}
             {dictation.supported && (
               <button
                 type="button"

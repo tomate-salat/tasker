@@ -3,6 +3,7 @@ import type { Workspace } from '@shared/workspace.js';
 import { useBackClose } from '../back.js';
 import { currentProjectId, useStore } from '../store.js';
 import { useDictation } from './dictation.js';
+import { LangChip } from './LangChip.js';
 import { TOOL_ICON } from './icons.js';
 
 /**
@@ -77,6 +78,7 @@ export function QuickAdd({ ws, onClose }: { ws: Workspace; onClose: () => void }
               void create(e.ctrlKey || e.metaKey);
             }}
           />
+          {dictation.supported && <LangChip />}
           {dictation.supported && (
             <button
               type="button"
