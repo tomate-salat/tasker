@@ -46,7 +46,14 @@ export const intakeTask = z
   .strict();
 
 /** Die Web-App bittet das verbundene Godot, eine Aufgabe zu verfeinern – nur Aufgabe und Modus. */
-export const refineBody = z.object({ taskId: id, mode: z.enum(['rewrite']) }).strict();
+export const refineBody = z
+  .object({
+    taskId: id,
+    mode: z.enum(['rewrite']),
+    /** Was der Nutzer geändert haben will – ohne überarbeitet Claude nach eigenem Ermessen. */
+    prompt: z.string().trim().max(2000).optional(),
+  })
+  .strict();
 
 /** Das Addon meldet, wie es um einen Auftrag steht. */
 export const refineStatusBody = z

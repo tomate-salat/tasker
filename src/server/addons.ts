@@ -99,7 +99,7 @@ export class AddonHub {
   }
 
   /** Schickt einen Auftrag an das Addon des Projekts – `null`, wenn keins verbunden ist. */
-  refine(taskId: string, projectId: string, mode: 'rewrite'): string | null {
+  refine(taskId: string, projectId: string, mode: 'rewrite', prompt?: string): string | null {
     const target = [...this.conns.values()]
       .filter((c) => c.projectId === projectId && !c.leaving)
       .sort((a, b) => b.since.localeCompare(a.since) || b.id - a.id)[0];
@@ -114,7 +114,7 @@ export class AddonHub {
       until: setTimeout(() => this.fail(requestId, 'Zeitüberschreitung – Godot ist nicht fertig geworden.'), this.finishMs),
     };
     this.requests.set(requestId, request);
-    target.send('godot-refine', { requestId, taskId, mode });
+    target.send('godot-refine', { requestId, taskId, mode, ...(prompt ? { prompt } : {}) });
     this.report(requestId, request, null);
     return requestId;
   }

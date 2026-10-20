@@ -33,6 +33,7 @@ import {
   SegBar,
   STATUS_LABEL,
   StatusIcon,
+  AI_ICON,
   TOOL_ICON,
   WINDOW_ICON,
 } from './icons.js';
@@ -276,15 +277,29 @@ function ArchiveBanner({
 
 /**
  * „In Godot verfeinern“ (Wunsch des Nutzers): nur, solange für das Projekt ein
- * Godot-Addon verbunden ist. Der Knopf schickt die Aufgabe hin; das Addon
- * nimmt einen Schnappschuss des Editors, lässt Claude die Aufgabe überarbeiten
- * und trägt das Ergebnis selbst ein. Daneben steht, wie weit es ist – das
- * dauert eine halbe bis eine Minute.
+ * Godot-Addon verbunden ist. Die Leiste schickt die Aufgabe hin, auf Wunsch mit
+ * einem eigenen Auftrag (getippt oder diktiert); das Addon nimmt einen
+ * Schnappschuss des Editors, lässt Claude die Aufgabe überarbeiten und trägt
+ * das Ergebnis selbst ein. Darunter steht, wie weit es ist – das dauert eine
+ * halbe bis eine Minute.
  */
 function GodotRefine({ task }: { task: Task }) {
   const editor = useStore((s) => s.addons.find((a) => a.projectId === task.projectId));
   const run = useStore((s) => s.refines[task.id]);
   const refine = useStore((s) => s.refineInGodot);
+  const [prompt, setPrompt] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  const dictation = useDictation((heard) => {
+    const el = input.current;
+    if (!el) return;
+    const at = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, at);
+    const add = (before && !/s$/.test(before) ? ' ' : '') + heard;
+    setPrompt(before + add + el.value.slice(el.selectionEnd ?? at));
+    requestAnimationFrame(() => el.setSelectionRange(at + add.length, at + add.length));
+  });
+  // Ein anderer Task, ein neues Feld.
+  useEffect(() => setPrompt(''), [task.id]);
   if (!editor && !run) return null;
 
   const busy = !!run && (run.state === 'sent' || run.state === 'accepted' || run.state === 'working');
@@ -301,23 +316,70 @@ function GodotRefine({ task }: { task: Task }) {
             ? `Fertig${told}`
             : `Fehlgeschlagen${told}`;
 
+  const send = (): void => {
+    if (busy || !editor) return;
+    dictation.stop();
+    void refine(task.id, prompt.trim() || undefined);
+    setPrompt('');
+  };
+
   return (
-    <div className={`d-godot ${run?.state ?? ''}`}>
+    <div className={`d-godot ${run?.state ?? ''} ${busy ? 'busy' : ''}`}>
       {editor && (
-        <button
-          className="btn tiny"
-          disabled={busy}
-          title={`An ${editor.name} schicken – Claude überarbeitet die Aufgabe mit Blick auf die offene Szene`}
-          onClick={() => void refine(task.id)}
-        >
-          {busy && <span className="d-spin" aria-hidden />}
-          In Godot verfeinern
-        </button>
+        <div className="d-godot-bar">
+          <span className="d-godot-ai" title="Claude überarbeitet die Aufgabe mit Blick auf die offene Szene">
+            {AI_ICON}
+          </span>
+          <input
+            ref={input}
+            value={prompt}
+            disabled={busy}
+            placeholder="Was soll sich ändern? (optional)"
+            aria-label="Auftrag für Claude in Godot"
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          {dictation.supported && (
+            <button
+              type="button"
+              className={`d-tool ${dictation.active ? 'on' : ''}`}
+              disabled={busy}
+              title={dictation.active ? 'Diktieren beenden' : 'Diktieren – klicken oder gedrückt halten'}
+              aria-label={dictation.active ? 'Diktieren beenden' : 'Diktieren'}
+              aria-pressed={dictation.active}
+              onMouseDown={(e) => e.preventDefault()}
+              {...dictation.press}
+            >
+              {TOOL_ICON.mic}
+            </button>
+          )}
+          <button
+            type="button"
+            className="d-godot-go"
+            disabled={busy}
+            title={`An ${editor.name} schicken (Enter)`}
+            onClick={send}
+          >
+            {busy ? <span className="d-spin" aria-hidden /> : AI_ICON}
+            In Godot verfeinern
+          </button>
+        </div>
+      )}
+      {dictation.active && (
+        <p className="d-dictation">
+          <span className="d-dictation-dot" aria-hidden />
+          {dictation.interim || 'Hört zu …'}
+        </p>
       )}
       {text && (
-        <span className="d-godot-state" aria-live="polite">
+        <p className="d-godot-state" aria-live="polite">
           {text}
-        </span>
+        </p>
       )}
     </div>
   );

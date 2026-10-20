@@ -268,7 +268,8 @@ export const api = {
   steps: (steps: Step[]) => post<Undoable>('/api/steps', { steps }),
 
   /** Das verbundene Godot bitten, eine Aufgabe zu verfeinern. */
-  refineInGodot: (taskId: string) => post<{ requestId: string }>('/api/godot/refine', { taskId, mode: 'rewrite' }),
+  refineInGodot: (taskId: string, prompt?: string) =>
+    post<{ requestId: string }>('/api/godot/refine', { taskId, mode: 'rewrite', ...(prompt ? { prompt } : {}) }),
 
   importCodecks: (csv: string, dryRun: boolean) =>
     post<CodecksSummary>('/api/import/codecks', { csv, dryRun }),

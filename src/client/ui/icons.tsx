@@ -348,6 +348,14 @@ const tool = (children: React.ReactNode) => (
   </svg>
 );
 
+/** Was Claude erledigt: zwei Funken, das übliche Zeichen für KI. */
+export const AI_ICON = (
+  <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+    <path d="M6.5 2.2c.5 2.9 1.8 4.2 4.7 4.7-2.9.5-4.2 1.8-4.7 4.7-.5-2.9-1.8-4.2-4.7-4.7 2.9-.5 4.2-1.8 4.7-4.7z" />
+    <path d="M12.3 9.6c.25 1.4.9 2.05 2.3 2.3-1.4.25-2.05.9-2.3 2.3-.25-1.4-.9-2.05-2.3-2.3 1.4-.25 2.05-.9 2.3-2.3z" />
+  </svg>
+);
+
 export const TOOL_ICON = {
   /** Diktieren: ein Mikrofon. */
   mic: tool(

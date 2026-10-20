@@ -267,7 +267,7 @@ export function dataRoutes(
       | { project_id: string }
       | undefined;
     if (!task) return c.json({ error: 'Nicht gefunden.' }, 404);
-    const requestId = addons.refine(body.data.taskId, task.project_id, body.data.mode);
+    const requestId = addons.refine(body.data.taskId, task.project_id, body.data.mode, body.data.prompt);
     if (!requestId) return c.json({ error: 'Für dieses Projekt ist gerade kein Godot verbunden.' }, 409);
     return c.json({ requestId }, 202);
   });

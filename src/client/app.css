@@ -1692,20 +1692,95 @@ button.caret:hover {
 /* ---- Der Kopf: beschriftete Werte, ab genug Breite zweispaltig ---- */
 
 /* „In Godot verfeinern“ unter dem Kopf des Inspektors. */
+/* „In Godot verfeinern“: eine Leiste wie ein Eingabefeld, mit KI-Funken. Der
+   Rahmen bekommt einen Hauch Violett – das Zeichen, dass hier Claude arbeitet. */
 .d-godot {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  margin: -4px 0 12px;
+  --ai: #9b7bf0;
+  margin: 2px 0 14px;
   font-size: 12px;
   color: var(--muted);
 }
 
-.d-godot .btn {
+.d-godot-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--ai) 35%, var(--line));
+  border-radius: 10px;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--ai) 9%, var(--surface)),
+    color-mix(in srgb, var(--accent) 6%, var(--surface))
+  );
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.d-godot-bar:focus-within {
+  border-color: color-mix(in srgb, var(--ai) 70%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ai) 16%, transparent);
+}
+
+.d-godot-ai {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ai);
+}
+
+.d-godot-bar input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.d-godot-bar input::placeholder {
+  color: var(--faint);
+}
+
+.d-godot-go {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: none;
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(100deg, var(--ai), color-mix(in srgb, var(--ai) 55%, var(--accent)));
+  color: #fff;
+  font: 600 12px var(--body);
+  cursor: pointer;
+  transition: filter 0.15s, opacity 0.15s;
+}
+
+.d-godot-go:hover {
+  filter: brightness(1.1);
+}
+
+.d-godot-go:disabled {
+  cursor: default;
+  opacity: 0.75;
+  filter: none;
+}
+
+.d-godot .d-dictation {
+  margin: 6px 2px 0;
+}
+
+.d-godot-state {
+  margin: 6px 2px 0;
+}
+
+.d-godot.busy .d-godot-state {
+  color: var(--ai);
 }
 
 .d-godot.done .d-godot-state {

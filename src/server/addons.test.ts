@@ -138,6 +138,15 @@ describe('Editor-Addons', () => {
     assert.match(godot.text(), new RegExp(`event: godot-refine\\ndata: \\{"requestId":"${requestId}","taskId":"${t.id}","mode":"rewrite"\\}`));
     assert.doesNotMatch(browser.text(), /godot-refine/);
 
+    // Mit Auftrag des Nutzers geht der Wortlaut mit.
+    const asked = (await send('POST', '/godot/refine', { taskId: t.id, mode: 'rewrite', prompt: '  Hosen ergänzen ' })).body as {
+      requestId: string;
+    };
+    await wait(50);
+    assert.match(godot.text(), new RegExp(`"requestId":"${asked.requestId}","taskId":"${t.id}","mode":"rewrite","prompt":"Hosen ergänzen"`));
+    assert.equal((await send('POST', '/godot/status', { requestId: asked.requestId, state: 'failed' }, true)).status, 200);
+    seen = seen.filter((e) => !('requestId' in e.event) || e.event.requestId !== asked.requestId);
+
     for (const [state, message] of [['accepted', undefined], ['working', 'liest cell.tscn'], ['done', 'Beschreibung ergänzt']]) {
       const r = await send('POST', '/godot/status', { requestId, state, ...(message ? { message } : {}) }, true);
       assert.equal(r.status, 200, String(state));

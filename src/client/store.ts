@@ -336,7 +336,7 @@ type State = {
   addons: AddonPresence[];
   /** Je Aufgabe der letzte Auftrag „In Godot verfeinern“ und wie es darum steht. */
   refines: Record<string, { requestId: string; state: RefineState; message: string | null }>;
-  refineInGodot: (taskId: string) => Promise<void>;
+  refineInGodot: (taskId: string, prompt?: string) => Promise<void>;
   /** Steht die Verbindung zum Änderungs-Strom? */
   live: boolean;
   setLive: (live: boolean) => void;
@@ -1166,9 +1166,9 @@ export const useStore = create<State>((set, get) => ({
 
   addons: [],
   refines: {},
-  refineInGodot: async (taskId) => {
+  refineInGodot: async (taskId, prompt) => {
     try {
-      const { requestId } = await api.refineInGodot(taskId);
+      const { requestId } = await api.refineInGodot(taskId, prompt);
       // Die Meldungen des Addons kommen über den Strom; bis dahin gilt „verschickt“.
       const now = get().refines[taskId];
       if (now?.requestId !== requestId) {

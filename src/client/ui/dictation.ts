@@ -50,6 +50,8 @@ export function useDictation(onText: (text: string) => void): {
   active: boolean;
   /** Was gerade gehört, aber noch nicht sicher erkannt ist. */
   interim: string;
+  /** Hört auf, etwa wenn der Text abgeschickt wird. */
+  stop: () => void;
   /** An den Mikrofon-Knopf: Klick schaltet um, Halten nimmt bis zum Loslassen auf. */
   press: {
     onPointerDown: (e: PointerEvent<HTMLElement>) => void;
@@ -162,5 +164,5 @@ export function useDictation(onText: (text: string) => void): {
       if (e.detail === 0) toggle();
     },
   };
-  return { supported, active, interim, press };
+  return { supported, active, interim, press, stop };
 }
