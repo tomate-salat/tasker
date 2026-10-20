@@ -17,6 +17,7 @@ import {
   folderSort,
   graphLayout,
   intakeTask,
+  TOKEN_PATCH_FIELDS,
   refineBody,
   refineStatusBody,
   kindSchema,
@@ -610,10 +611,25 @@ export function dataRoutes(
   app.post('/intake/task', async (c) => {
     const body = intakeTask.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
-    const { aiCreated, ...fields } = body.data;
+    const { aiCreated, parentId, ...fields } = body.data;
+    // Eine Unteraufgabe nur unter einer aktiven Aufgabe desselben Projekts – wie
+    // „+ Unteraufgabe“ in der Web-App; den Ort bestimmt dann der Elternteil.
+    if (parentId) {
+      const parent = ctx.sqlite
+        .prepare('SELECT project_id, doc, archived_at, hidden_by FROM task WHERE id = ?')
+        .get(parentId) as
+        | { project_id: string; doc: number; archived_at: string | null; hidden_by: string | null }
+        | undefined;
+      if (!parent) return c.json({ error: 'parentId: Aufgabe nicht gefunden.' }, 404);
+      if (parent.project_id !== fields.projectId) {
+        return c.json({ error: 'parentId: gehört zu einem anderen Projekt.' }, 400);
+      }
+      if (parent.doc) return c.json({ error: 'parentId: ist eine Doku-Seite.' }, 400);
+      if (parent.archived_at || parent.hidden_by) return c.json({ error: 'parentId: liegt im Archiv.' }, 400);
+    }
     const input = {
       ...fields,
-      parentId: null,
+      parentId: parentId ?? null,
       milestoneId: null,
       groupId: null,
       doc: false,
@@ -621,9 +637,39 @@ export function dataRoutes(
       // Das Label nur, wenn Claude beteiligt war – ohne Angabe wie bisher.
       tags: aiCreated === false ? [] : [INTAKE_TAG],
     };
-    return run(c, bus, () => create(ctx, 'task', input), {
+    const make = ctx.sqlite.transaction(() => {
+      const task = create(ctx, 'task', input) as Task;
+      // Gemerkt fürs Rückgängig: nur so Angelegtes darf ein Token wieder löschen.
+      ctx.sqlite.prepare('INSERT INTO intake_task (task_id) VALUES (?)').run(task.id);
+      return task;
+    });
+    return run(c, bus, () => make(), {
       status: 201,
       event: (object) => ({ type: 'upsert', kind: 'task', object }),
+    });
+  });
+
+  /**
+   * „Rückgängig“ im Godot-Addon: eine über den Eingang angelegte Aufgabe wieder
+   * entfernen – nur solange sie niemand angefasst hat. Die Version muss passen,
+   * und es darf nichts an ihr hängen: keine Unteraufgaben, keine Aufgabe, die auf
+   * sie wartet. Sie geht wie jedes Löschen in den Papierkorb.
+   */
+  app.delete('/intake/task/:id', (c) => {
+    const id = c.req.param('id');
+    const version = Number(c.req.query('version'));
+    if (!Number.isInteger(version) || version < 1) return c.json({ error: 'version fehlt.' }, 400);
+    const row = ctx.sqlite
+      .prepare('SELECT t.version FROM intake_task i JOIN task t ON t.id = i.task_id WHERE i.task_id = ?')
+      .get(id) as { version: number } | undefined;
+    if (!row) return c.json({ error: 'Nicht über den Eingang angelegt.' }, 404);
+    if (row.version !== version) return c.json({ error: 'Inzwischen geändert.' }, 409);
+    const used =
+      ctx.sqlite.prepare('SELECT 1 FROM task WHERE parent_id = ?').get(id) ??
+      ctx.sqlite.prepare("SELECT 1 FROM dependency WHERE kind = 'task' AND to_id = ?").get(id);
+    if (used) return c.json({ error: 'Inzwischen verwendet.' }, 409);
+    return run(c, bus, () => remove(ctx, 'task', id), {
+      event: () => ({ type: 'reload', reason: 'Gelöscht' }),
     });
   });
 
@@ -647,6 +693,13 @@ export function dataRoutes(
 
     const body = patchBody.safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
+
+    // Per Token nur die freigegebenen Felder (index.ts lässt nur Aufgaben und Milestones durch).
+    if ((c.get as (key: string) => unknown)('viaToken') === true) {
+      const allowed = TOKEN_PATCH_FIELDS[kind] ?? [];
+      const denied = Object.keys(body.data.changes).filter((k) => !allowed.includes(k));
+      if (denied.length) return c.json({ error: `Per Token nicht änderbar: ${denied.join(', ')}.` }, 403);
+    }
 
     const changes = patchSchemas[kind].safeParse(body.data.changes);
     if (!changes.success) return fail(c, changes.error);

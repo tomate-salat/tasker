@@ -291,6 +291,17 @@ export const taskTags = sqliteTable(
 );
 
 /**
+ * Aufgaben, die über den Eingang (`/api/intake/task`) angelegt wurden. Nur sie
+ * darf ein Zugangs-Token wieder löschen – fürs „Rückgängig“ im Godot-Addon,
+ * und nur, solange sie seitdem niemand angefasst hat (die Version prüft das).
+ */
+export const intakeTasks = sqliteTable('intake_task', {
+  taskId: text('task_id')
+    .primaryKey()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+});
+
+/**
  * Abhängigkeiten für Tasks und Milestones in einer Tabelle. `kind` sagt, worauf
  * sich die IDs beziehen; deshalb gibt es hier bewusst keinen Fremdschlüssel.
  * „from hängt ab von to“, also wird `from` durch `to` blockiert.

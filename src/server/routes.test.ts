@@ -90,7 +90,8 @@ describe('Routen', () => {
     );
 
     // Ort, Status und Labels bestimmt der Server – wer sie mitschickt, wird abgewiesen.
-    for (const extra of [{ milestoneId: m.id }, { status: 'done' }, { tags: ['x'] }, { parentId: t['id'] }, { status: 'ready' }]) {
+    // Nur eine Unteraufgabe darf man bestellen (`parentId`, siehe addons.test.ts).
+    for (const extra of [{ milestoneId: m.id }, { status: 'done' }, { tags: ['x'] }, { groupId: m.id }, { status: 'ready' }]) {
       const res = await send('POST', '/intake/task', { projectId: p.id, title: 'X', ...extra });
       assert.equal(res.status, 400, JSON.stringify(extra));
     }

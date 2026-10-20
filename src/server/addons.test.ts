@@ -206,4 +206,73 @@ describe('Editor-Addons', () => {
     const old = (await send('POST', '/intake/task', { projectId: p.id, title: 'Wie bisher' }, true)).body as { tags: string[] };
     assert.deepEqual([plain.tags, ai.tags, old.tags], [[], ['ai-created'], ['ai-created']]);
   });
+
+  it('der Eingang legt Unteraufgaben nur unter aktiven Aufgaben desselben Projekts an', async () => {
+    const p = (await send('POST', '/kind/project', { name: 'Spiel' })).body as { id: string };
+    const q = (await send('POST', '/kind/project', { name: 'Anderes' })).body as { id: string };
+    const ms = (await send('POST', '/kind/milestone', { projectId: p.id, title: 'Gear' })).body as { id: string };
+    const parent = (await send('POST', '/kind/task', { projectId: p.id, title: 'Player View', milestoneId: ms.id }))
+      .body as { id: string };
+    const kid = await send('POST', '/intake/task', { projectId: p.id, title: 'Hose', parentId: parent.id }, true);
+    assert.equal(kid.status, 201);
+    // Wie „+ Unteraufgabe“: am Elternteil, nicht zusätzlich am Milestone, offen.
+    const k = kid.body as Record<string, unknown>;
+    assert.deepEqual([k['parentId'], k['milestoneId'], k['groupId'], k['status']], [parent.id, null, null, 'open']);
+
+    assert.equal((await send('POST', '/intake/task', { projectId: q.id, title: 'X', parentId: parent.id }, true)).status, 400);
+    assert.equal((await send('POST', '/intake/task', { projectId: p.id, title: 'X', parentId: 'gibtsnicht' }, true)).status, 404);
+    const doc = (await send('POST', '/kind/task', { projectId: p.id, title: 'Seite', doc: true })).body as { id: string };
+    assert.equal((await send('POST', '/intake/task', { projectId: p.id, title: 'X', parentId: doc.id }, true)).status, 400);
+    await send('POST', `/kind/task/${parent.id}/archive`);
+    assert.equal((await send('POST', '/intake/task', { projectId: p.id, title: 'X', parentId: parent.id }, true)).status, 400);
+  });
+
+  it('Rückgängig: nur über den Eingang Angelegtes, und nur unberührt', async () => {
+    const p = (await send('POST', '/kind/project', { name: 'Spiel' })).body as { id: string };
+    const own = (await send('POST', '/kind/task', { projectId: p.id, title: 'Von Hand' })).body as { id: string; version: number };
+    const made = (await send('POST', '/intake/task', { projectId: p.id, title: 'Von Claude' }, true)).body as {
+      id: string;
+      version: number;
+    };
+    const del = (id: string, version: number) => send('DELETE', `/intake/task/${id}?version=${version}`, undefined, true);
+
+    assert.equal((await del(own.id, own.version)).status, 404);
+    assert.equal((await del(made.id, made.version + 1)).status, 409);
+    // Hängt etwas daran, ist sie nicht mehr unberührt.
+    const kid = (await send('POST', '/kind/task', { projectId: p.id, title: 'Kind', parentId: made.id })).body as { id: string };
+    assert.equal((await del(made.id, made.version)).status, 409);
+    await send('DELETE', `/kind/task/${kid.id}`);
+    const waits = (await send('POST', '/kind/task', { projectId: p.id, title: 'Wartet', deps: [made.id] })).body as { id: string };
+    assert.equal((await del(made.id, made.version)).status, 409);
+    await send('DELETE', `/kind/task/${waits.id}`);
+
+    assert.equal((await del(made.id, made.version)).status, 200);
+    const boot = (await send('GET', '/bootstrap')).body as { tasks: { id: string }[] };
+    assert.ok(!boot.tasks.some((t) => t.id === made.id));
+    // Im Papierkorb, wie jedes Löschen.
+    const trash = (await send('GET', '/trash')).body as { entries: { title: string }[] };
+    assert.ok(trash.entries.some((e) => e.title === 'Von Claude'));
+  });
+
+  it('per Token nur die freigegebenen Felder an Aufgaben und Milestones', async () => {
+    const p = (await send('POST', '/kind/project', { name: 'Spiel' })).body as { id: string };
+    const t = (await send('POST', '/kind/task', { projectId: p.id, title: 'A' })).body as { id: string; version: number };
+    const ms = (await send('POST', '/kind/milestone', { projectId: p.id, title: 'M' })).body as { id: string; version: number };
+    const patch = (kind: string, id: string, version: number, changes: object, token = true) =>
+      send('PATCH', `/kind/${kind}/${id}`, { version, changes }, token);
+
+    const ok = await patch('task', t.id, t.version, { prio: 1, status: 'ready', tags: ['ui'], title: 'B' });
+    assert.equal(ok.status, 200);
+    const v = (ok.body as { version: number }).version;
+    const no = await patch('task', t.id, v, { prio: 2, coverImageId: null });
+    assert.equal(no.status, 403);
+    assert.match((no.body as { error: string }).error, /coverImageId/);
+    assert.equal((await patch('task', t.id, v, { doc: true })).status, 403);
+    // Mit Sitzung geht weiter alles.
+    assert.equal((await patch('task', t.id, v, { doc: true }, false)).status, 200);
+
+    assert.equal((await patch('milestone', ms.id, ms.version, { startDate: '2026-10-20', status: 'progress' })).status, 200);
+    assert.equal((await patch('milestone', ms.id, ms.version + 1, { releaseId: null })).status, 403);
+    assert.equal((await patch('project', p.id, 1, { name: 'X' })).status, 403);
+  });
 });

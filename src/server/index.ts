@@ -135,30 +135,30 @@ app.all('/mcp', async (c) => {
 
 /**
  * Clients ohne Browser (etwa das Godot-Addon) kommen statt mit der Sitzung mit
- * einem Zugangs-Token. Das gilt nur für die hier genannten Routen: eine neue
- * Route ist damit von selbst der Sitzung vorbehalten, bis sie jemand bewusst
- * freigibt – Konto, Passwort und Tokens gehören nie dazu.
+ * einem Zugangs-Token. Das gilt nur für die hier genannten Routen, je Methode:
+ * eine neue Route ist damit von selbst der Sitzung vorbehalten, bis sie jemand
+ * bewusst freigibt – Konto, Passwort und Tokens gehören nie dazu. Freigegeben
+ * ist, was das Addon tatsächlich braucht.
  *
- * `TOKEN_READ_ROUTES` gilt nur für GET: die Bytes eines Bildes (für die
- * Titelbilder der Karten), aber weder die Galerie noch Hochladen oder Löschen;
- * eine Zeichnung als fertiges Bild, aber nicht ihre Szene; und die
- * Einstellungen, von denen ein Token aber nur einen Ausschnitt sieht.
+ * - GET: Startpaket und Änderungs-Strom; die Einstellungen, von denen ein Token
+ *   nur einen Ausschnitt sieht; eine Zeichnung als fertiges Bild, aber nicht
+ *   ihre Szene; die Bytes eines Bildes, aber weder Galerie noch Hochladen.
+ * - POST: verschieben; eine Aufgabe hereinreichen (der Server legt sie ab);
+ *   melden, wie es um „In Godot verfeinern“ steht – den Auftrag gibt nur die
+ *   Web-App, mit Sitzung.
+ * - PATCH: nur Aufgaben und Milestones, und davon nur die Felder aus
+ *   `TOKEN_PATCH_FIELDS` (geprüft in routes.ts).
+ * - DELETE: nur über den Eingang Angelegtes, solange es unberührt ist.
  */
-const TOKEN_ROUTES = /^\/api\/(bootstrap|events|move|kind\/[^/]+(\/[^/]+){0,2})$/;
-const TOKEN_READ_ROUTES = /^\/api\/(settings|zeichnungsbild|bilder\/[^/]+)$/;
-/**
- * Nur POST: eine Aufgabe hereinreichen, die der Server selbst im Backlog ablegt,
- * und melden, wie es um einen Auftrag „In Godot verfeinern“ steht. Den Auftrag
- * selbst gibt nur die Web-App, mit Sitzung.
- */
-const TOKEN_POST_ROUTES = /^\/api\/(intake\/task|godot\/status)$/;
+const TOKEN_ROUTES: Record<string, RegExp> = {
+  GET: /^\/api\/(bootstrap|events|settings|zeichnungsbild|bilder\/[^/]+)$/,
+  POST: /^\/api\/(move|intake\/task|godot\/status)$/,
+  PATCH: /^\/api\/kind\/(task|milestone)\/[^/]+$/,
+  DELETE: /^\/api\/intake\/task\/[^/]+$/,
+};
 
 app.use('/api/*', async (c, next) => {
-  const path = c.req.path;
-  const forToken =
-    TOKEN_ROUTES.test(path) ||
-    (c.req.method === 'GET' && TOKEN_READ_ROUTES.test(path)) ||
-    (c.req.method === 'POST' && TOKEN_POST_ROUTES.test(path));
+  const forToken = TOKEN_ROUTES[c.req.method]?.test(c.req.path) ?? false;
   const session = sessionValid(getCookie(c, SESSION_COOKIE));
   const viaToken = !session && forToken && tokenValid(appDb, c.req.header('authorization'));
   if (!session && !viaToken) return c.json({ error: 'Nicht angemeldet.' }, 401);

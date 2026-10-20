@@ -40,10 +40,22 @@ export const intakeTask = z
     markId: id.optional(),
     categoryId: id.optional(),
     prio: prio.optional(),
+    /** Als Unteraufgabe dieser Aufgabe – nur eine aktive Aufgabe desselben Projekts, keine Doku-Seite. */
+    parentId: id.optional(),
     /** Mit Claude angelegt – dann bekommt die Aufgabe das Label `ai-created`. Vorgabe: ja. */
     aiCreated: z.boolean().optional(),
   })
   .strict();
+
+/**
+ * Was ein Zugangs-Token an Aufgaben und Milestones ändern darf (`PATCH
+ * /kind/…`) – einzeln aufgezählt, damit ein neues Feld nicht von selbst
+ * mitgeht. Das Godot-Addon setzt damit um, was man in der Web-App täte.
+ */
+export const TOKEN_PATCH_FIELDS: Partial<Record<Kind, readonly string[]>> = {
+  task: ['title', 'desc', 'status', 'prio', 'markId', 'categoryId', 'tags', 'deps'],
+  milestone: ['title', 'desc', 'status', 'startDate'],
+};
 
 /** Die Web-App bittet das verbundene Godot, eine Aufgabe zu verfeinern – nur Aufgabe und Modus. */
 export const refineBody = z

@@ -148,6 +148,13 @@
       "when": 1792238423958,
       "tag": "0020_status_bereit",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1792510068921,
+      "tag": "0021_eingang_merken",
+      "breakpoints": true
     }
   ]
 }
