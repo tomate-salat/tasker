@@ -1338,6 +1338,52 @@ button.caret:hover {
   background: var(--surface);
 }
 
+/* Mehrzeilig beim Anlegen: wächst mit dem Text, ohne Griff zum Ziehen. */
+textarea.title-edit {
+  display: block;
+  resize: none;
+  overflow: hidden;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.title-edit-wrap {
+  align-self: center;
+}
+
+/* In der Liste endet das Feld an der Titelspalte, wie der Titel selbst. */
+.list .task-row .title-edit-wrap,
+.list .task-row > .title-edit {
+  flex: 0 1 auto;
+  /* Der Titel beginnt 115px + 26px je Ebene nach dem Zeilenanfang; 8px Luft zur Spalte. */
+  width: calc(var(--tagcol) - 123px - var(--d, 0) * 26px);
+}
+
+.list .task-row.prio-left .title-edit-wrap,
+.list .task-row.prio-left > .title-edit {
+  width: calc(var(--tagcol) - 137px - var(--d, 0) * 26px);
+}
+
+@container (max-width: 620px) {
+  .list .task-row .title-edit-wrap,
+  .list .task-row > .title-edit,
+  .list .task-row.prio-left .title-edit-wrap,
+  .list .task-row.prio-left > .title-edit {
+    flex: 1;
+    width: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .list .task-row .title-edit-wrap,
+  .list .task-row > .title-edit,
+  .list .task-row.prio-left .title-edit-wrap,
+  .list .task-row.prio-left > .title-edit {
+    flex: 1;
+    width: auto;
+  }
+}
+
 .title-edit-ai {
   --ai: #9b7bf0;
   display: inline-flex;

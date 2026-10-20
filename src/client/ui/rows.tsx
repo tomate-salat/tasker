@@ -606,7 +606,26 @@ function TagCell({ ws, task, onClick }: { ws: Workspace; task: Task; onClick: Ce
  * an, die Aufgabe bleibt im Inspektor offen –, `⇧ Enter` legt eine
  * Unteraufgabe an, `Tab`/`⇧ Tab` rückt beim Tippen ein und aus, `Escape` verwirft.
  * Eine eben angelegte Zeile, die leer bleibt oder abgebrochen wird, verschwindet.
+ *
+ * Beim Anlegen eines Tasks ist das Feld mehrzeilig (Wunsch des Nutzers):
+ * `Strg+Enter` bricht die Zeile um, die erste Zeile wird der Titel, der Rest
+ * die Beschreibung.
  */
+
+/** Erste Zeile mit Text: der Titel; alles danach: die Beschreibung. */
+function splitTitle(value: string): { title: string; desc: string } {
+  const lines = value.split('\n');
+  const at = lines.findIndex((l) => l.trim());
+  if (at < 0) return { title: '', desc: '' };
+  return { title: lines[at]!.trim(), desc: lines.slice(at + 1).join('\n').trim() };
+}
+
+/** Ein mehrzeiliges Feld wächst mit seinem Text. */
+function fit(el: HTMLInputElement | HTMLTextAreaElement | null): void {
+  if (!(el instanceof HTMLTextAreaElement)) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
 export function TitleEdit({
   kind,
   id,
@@ -616,7 +635,7 @@ export function TitleEdit({
   id: string;
   title: string;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   // Nach Enter, Escape oder Tab kommt noch ein Blur hinterher – der darf nichts mehr tun.
   const closed = useRef(false);
   // Beim Anlegen eines Tasks gibt es Diktat und „In Godot verfeinern“ gleich mit
@@ -635,6 +654,7 @@ export function TitleEdit({
     const add = (before && !/s$/.test(before) ? ' ' : '') + heard;
     el.value = before + add + el.value.slice(el.selectionEnd ?? at);
     el.setSelectionRange(at + add.length, at + add.length);
+    fit(el);
   });
 
   useEffect(() => {
@@ -647,7 +667,7 @@ export function TitleEdit({
     if (closed.current) return '';
     closed.current = true;
     const store = useStore.getState();
-    const next = value.trim();
+    const { title: next, desc } = splitTitle(value);
     const isNew = store.editingNew;
     store.edit(null);
     if (isNew && (cancel || !next)) {
@@ -655,7 +675,9 @@ export function TitleEdit({
       return '';
     }
     // Ein geleertes Feld lässt den alten Titel stehen, wie im Prototyp.
-    if (!cancel && next && next !== title) await store.patch(kind, id, { title: next });
+    if (!cancel && next && (next !== title || desc)) {
+      await store.patch(kind, id, { title: next, ...(desc ? { desc } : {}) });
+    }
     return cancel || !next ? title : next;
   };
 
@@ -680,8 +702,8 @@ export function TitleEdit({
   const shift = async (out: boolean, value: string): Promise<void> => {
     closed.current = true;
     const store = useStore.getState();
-    const text = value.trim();
-    if (text && text !== title) await store.patch('task', id, { title: text });
+    const { title: text, desc } = splitTitle(value);
+    if (text && (text !== title || desc)) await store.patch('task', id, { title: text, ...(desc ? { desc } : {}) });
     const ws = useStore.getState().ws;
     const t = ws?.task(id);
     if (ws && t) await (out ? outdent(ws, t) : indent(ws, t));
@@ -691,33 +713,50 @@ export function TitleEdit({
     ref.current?.focus();
   };
 
-  const input = (
+  const props = {
+    className: 'title-edit',
+    defaultValue: title,
+    'aria-label': 'Name',
+    onClick: (e: React.MouseEvent) => e.stopPropagation(),
+    onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      dictation.stop();
+      void finish(e.target.value);
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const value = e.currentTarget.value;
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && fresh) {
+        // Zeilenumbruch: was nach der ersten Zeile kommt, wird die Beschreibung.
+        e.preventDefault();
+        const el = e.currentTarget;
+        el.setRangeText('\n', el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, 'end');
+        fit(el);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        void next(e.shiftKey, value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        void finish(value, true);
+      } else if (e.key === 'Tab' && kind === 'task') {
+        e.preventDefault();
+        void shift(e.shiftKey, value);
+      }
+    },
+  };
+  const input = fresh ? (
+    <textarea
+      ref={(el) => {
+        ref.current = el;
+      }}
+      rows={1}
+      onInput={(e) => fit(e.currentTarget)}
+      {...props}
+    />
+  ) : (
     <input
-      ref={ref}
-      className="title-edit"
-      defaultValue={title}
-      aria-label="Name"
-      onClick={(e) => e.stopPropagation()}
-      onBlur={(e) => {
-        dictation.stop();
-        void finish(e.target.value);
+      ref={(el) => {
+        ref.current = el;
       }}
-      onKeyDown={(e) => {
-        const value = e.currentTarget.value;
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && godot) {
-          e.preventDefault();
-          void refine(value);
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          void next(e.shiftKey, value);
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          void finish(value, true);
-        } else if (e.key === 'Tab' && kind === 'task') {
-          e.preventDefault();
-          void shift(e.shiftKey, value);
-        }
-      }}
+      {...props}
     />
   );
   if (!fresh || (!dictation.supported && !godot)) return input;
@@ -746,7 +785,7 @@ export function TitleEdit({
         <button
           type="button"
           className="title-edit-ai"
-          title={`Anlegen und an ${godot.name} schicken (Strg+Enter)`}
+          title={`Anlegen und an ${godot.name} schicken`}
           onClick={() => void refine(ref.current?.value ?? '')}
         >
           {AI_ICON}
