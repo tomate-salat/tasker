@@ -169,7 +169,10 @@ function Shell({
   // Platz – seine eigenen Ablagefelder bleiben so erreichbar (Wunsch des Nutzers).
   const dragged = useDraggedTask();
   const shift = useDrag((s) => s.shift);
-  const detail = useDetailMotion(selected, multi.size > 1);
+  // Solange ein neuer Task seinen Namen bekommt, bleibt der Inspektor zu – ein Klick
+  // hinein beendete sonst das Anlegen (Wunsch des Nutzers). Enter öffnet ihn dann.
+  const naming = state.editingNew && state.editing === selected;
+  const detail = useDetailMotion(naming ? null : selected, multi.size > 1);
   const listDrag = dragged && (view === 'plan' || view === 'backlog') ? dragged : null;
   const panel = listDrag && (!detail.open || shift) ? listDrag : null;
 

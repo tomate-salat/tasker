@@ -894,7 +894,18 @@ function Crumb({ ws, task }: { ws: Workspace; task: Task }) {
  * (Wunsch des Nutzers) – in der Karten- wie in der Listenansicht, ein
  * Inspektor für beide.
  */
-export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; menu: Menu }) {
+export function Hierarchy({
+  ws,
+  id,
+  menu,
+  after,
+}: {
+  ws: Workspace;
+  id: string | null;
+  menu: Menu;
+  /** Steht im Fuß noch unter dem Baum – die Godot-Leiste. */
+  after?: React.ReactNode;
+}) {
   const state = useStore();
   // Ohne Unteraufgaben steht der Abschnitt trotzdem da – nur mit dem Knopf zum
   // Anlegen, damit er nicht beim ersten Kind von „Unteraufgaben“ umspringt.
@@ -970,6 +981,7 @@ export function Hierarchy({ ws, id, menu }: { ws: Workspace; id: string | null; 
           )}
         </div>
       )}
+      {after}
     </section>
   );
 }

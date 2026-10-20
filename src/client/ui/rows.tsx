@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { inheritedBlock, ownBlockers } from '@shared/blocking.js';
 import { checklist } from '@shared/checklist.js';
 import { effectiveCategory, effectiveTags } from '@shared/inherit.js';
@@ -14,7 +14,22 @@ import { categoryHue, tagHue } from './colors.js';
 import { dragSource, dropTarget, useDragging, useZone } from './dnd.js';
 import { addChild, indent, outdent } from './actions.js';
 import { cellMenu, type CellKind } from './cellMenu.js';
-import { CHECK_ICON, CHEVRON_DOWN, CHEVRON_RIGHT, DEFAULT_MARK, DOC_ICON, DRAW_ICON, GRAPH_ICON, LOCK_ICON, PrioIcon, statusMark, STATUS_LABEL } from './icons.js';
+import { useDictation } from './dictation.js';
+import {
+  AI_ICON,
+  CHECK_ICON,
+  CHEVRON_DOWN,
+  CHEVRON_RIGHT,
+  DEFAULT_MARK,
+  DOC_ICON,
+  DRAW_ICON,
+  GRAPH_ICON,
+  LOCK_ICON,
+  PrioIcon,
+  statusMark,
+  STATUS_LABEL,
+  TOOL_ICON,
+} from './icons.js';
 import type { Menu } from './Menu.js';
 
 /**
@@ -604,6 +619,23 @@ export function TitleEdit({
   const ref = useRef<HTMLInputElement>(null);
   // Nach Enter, Escape oder Tab kommt noch ein Blur hinterher – der darf nichts mehr tun.
   const closed = useRef(false);
+  // Beim Anlegen eines Tasks gibt es Diktat und „In Godot verfeinern“ gleich mit
+  // (Wunsch des Nutzers) – beim Umbenennen nicht.
+  const [fresh] = useState(() => kind === 'task' && useStore.getState().editingNew);
+  const godot = useStore((s) => {
+    if (!fresh) return undefined;
+    const projectId = s.boot?.tasks.find((t) => t.id === id)?.projectId;
+    return s.addons.find((a) => a.projectId === projectId);
+  });
+  const dictation = useDictation((heard) => {
+    const el = ref.current;
+    if (!el) return;
+    const at = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, at);
+    const add = (before && !/s$/.test(before) ? ' ' : '') + heard;
+    el.value = before + add + el.value.slice(el.selectionEnd ?? at);
+    el.setSelectionRange(at + add.length, at + add.length);
+  });
 
   useEffect(() => {
     ref.current?.focus();
@@ -638,6 +670,13 @@ export function TitleEdit({
     await addChild(t);
   };
 
+  /** Anlegen und gleich an Godot schicken – wie Enter, nur mit Auftrag hinterher. */
+  const refine = async (value: string): Promise<void> => {
+    dictation.stop();
+    const kept = await finish(value);
+    if (kept && godot) await useStore.getState().refineInGodot(id);
+  };
+
   const shift = async (out: boolean, value: string): Promise<void> => {
     closed.current = true;
     const store = useStore.getState();
@@ -652,17 +691,23 @@ export function TitleEdit({
     ref.current?.focus();
   };
 
-  return (
+  const input = (
     <input
       ref={ref}
       className="title-edit"
       defaultValue={title}
       aria-label="Name"
       onClick={(e) => e.stopPropagation()}
-      onBlur={(e) => void finish(e.target.value)}
+      onBlur={(e) => {
+        dictation.stop();
+        void finish(e.target.value);
+      }}
       onKeyDown={(e) => {
         const value = e.currentTarget.value;
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && godot) {
+          e.preventDefault();
+          void refine(value);
+        } else if (e.key === 'Enter') {
           e.preventDefault();
           void next(e.shiftKey, value);
         } else if (e.key === 'Escape') {
@@ -674,6 +719,41 @@ export function TitleEdit({
         }
       }}
     />
+  );
+  if (!fresh || (!dictation.supported && !godot)) return input;
+
+  // Die Knöpfe nehmen dem Feld den Fokus nicht – sonst wäre die Bearbeitung vorbei.
+  return (
+    <span
+      className="title-edit-wrap"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.target !== ref.current && e.preventDefault()}
+    >
+      {input}
+      {dictation.supported && (
+        <button
+          type="button"
+          className={`d-tool ${dictation.active ? 'on' : ''}`}
+          title={dictation.active ? 'Diktieren beenden' : 'Diktieren – klicken oder gedrückt halten'}
+          aria-label={dictation.active ? 'Diktieren beenden' : 'Diktieren'}
+          aria-pressed={dictation.active}
+          {...dictation.press}
+        >
+          {TOOL_ICON.mic}
+        </button>
+      )}
+      {godot && (
+        <button
+          type="button"
+          className="title-edit-ai"
+          title={`Anlegen und an ${godot.name} schicken (Strg+Enter)`}
+          onClick={() => void refine(ref.current?.value ?? '')}
+        >
+          {AI_ICON}
+          In Godot verfeinern
+        </button>
+      )}
+    </span>
   );
 }
 

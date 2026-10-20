@@ -504,14 +504,10 @@
   margin-top: 0;
 }
 
-/* Steht die Godot-Leiste darüber, nimmt sie den freien Platz über sich. */
-.detail > .d-godot {
-  margin-top: auto;
-}
-
-.detail > .d-godot + .deps-sec,
-.detail > .d-godot + .hier-sec {
-  margin-top: 0;
+/* Die Godot-Leiste im Fuß, unter dem Baum. */
+.hier-sec > .d-godot {
+  margin: 10px 0 0;
+  padding-top: 0;
 }
 
 .hier-toggle {
@@ -531,7 +527,8 @@
   background: var(--hover);
 }
 
-.hier-sec.shut .h3row {
+.hier-sec.shut .h3row,
+.deps-sec.shut .h3row {
   margin-bottom: 0;
 }
 

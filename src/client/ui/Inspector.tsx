@@ -17,7 +17,7 @@ import { releaseLabel } from '@shared/release.js';
 import { schedule } from '@shared/schedule.js';
 import type { Workspace } from '@shared/workspace.js';
 import { imageMarkdown } from '../api.js';
-import { useStore } from '../store.js';
+import { collapsedOf, useStore } from '../store.js';
 import { Burnup } from './Burnup.js';
 import { cellMenu } from './cellMenu.js';
 import { CoverRow, Hierarchy, InspectorCover } from './Cards.js';
@@ -34,6 +34,8 @@ import {
   STATUS_LABEL,
   StatusIcon,
   AI_ICON,
+  CHEVRON_DOWN,
+  CHEVRON_RIGHT,
   TOOL_ICON,
   WINDOW_ICON,
 } from './icons.js';
@@ -135,16 +137,13 @@ export function Inspector({ ws, id }: { ws: Workspace; id: string }) {
       {milestone && <Burnup ws={ws} milestone={milestone} />}
       {milestone && <MilestoneChildren ws={ws} milestone={milestone} />}
 
-      {/* Unten über den Abhängigkeiten, damit es oben keinen Platz wegnimmt (Wunsch
-          des Nutzers) – tiefer geht nicht, der Baum klebt als Fuß am Rand. */}
-      {task && <GodotRefine task={task} />}
-
       {/* Doku-Seiten haben wie im Prototyp keine Abhängigkeiten. */}
       {!(task && ws.isDoc(task)) && <Deps ws={ws} kind={kind} item={item} />}
 
       {/* Der ganze Baum ab der Wurzel am Ende, auch bei einer Unteraufgabe –
           und ohne Unteraufgaben nur mit dem Knopf zum Anlegen. */}
-      {task && <Hierarchy ws={ws} id={id} menu={menu} />}
+      {/* Die Godot-Leiste steht ganz unten im Fuß, unter dem Baum (Wunsch des Nutzers). */}
+      {task && <Hierarchy ws={ws} id={id} menu={menu} after={<GodotRefine task={task} />} />}
 
       {menu.node}
     </aside>
@@ -1176,6 +1175,9 @@ function ChildList({ ws, tasks, doc }: { ws: Workspace; tasks: Task[]; doc: bool
  * darunter ein Suchfeld, das schon verknüpfte und zirkuläre Kandidaten
  * ausblendet.
  */
+/** Ob die Abhängigkeiten zugeklappt sind – wie beim Baum ein Schalter für alle. */
+const DEPS_KEY = 'inspector:deps';
+
 function Deps({
   ws,
   kind,
@@ -1202,6 +1204,9 @@ function Deps({
       ? 'Task oder Milestone'
       : 'Task';
   const [query, setQuery] = useState('');
+  // Zuklappen wie beim Baum (Wunsch des Nutzers) – gilt für alle Aufgaben.
+  const open = useStore((s) => !collapsedOf(s)[DEPS_KEY]);
+  const setCollapsed = useStore((s) => s.setCollapsed);
 
   useEffect(() => setQuery(''), [item.id]);
 
@@ -1230,6 +1235,8 @@ function Deps({
   };
 
   const candidates = depCandidates(ws, item, isMs, dir, query);
+  // Zugeklappt sagt die Überschrift, wie viele es sind.
+  const count = deps.length + inherited.deps.length + rev.length;
 
   const addDep = (other: Task | Milestone): void => {
     if (dir === 'blocks') void patch(kindOf(other), other.id, { deps: [...other.deps, item.id] });
@@ -1264,9 +1271,17 @@ function Deps({
   );
 
   return (
-    <section className="d-section deps-sec">
+    <section className={`d-section deps-sec ${open || dragging ? '' : 'shut'}`}>
       <div className="h3row">
-        <h3>Abhängigkeiten</h3>
+        <button
+          className="hier-toggle"
+          onClick={() => setCollapsed(DEPS_KEY, open)}
+          aria-expanded={open}
+          title={open ? 'Abhängigkeiten zuklappen' : 'Abhängigkeiten aufklappen'}
+        >
+          {open ? CHEVRON_DOWN : CHEVRON_RIGHT}
+          <h3>{count ? `Abhängigkeiten · ${count}` : 'Abhängigkeiten'}</h3>
+        </button>
         <button
           className="linkish"
           title="Abhängigkeiten des Projekts als Graph bearbeiten"
@@ -1276,7 +1291,8 @@ function Deps({
         </button>
       </div>
 
-      {(deps.length > 0 || inherited.deps.length > 0 || inherited.statusVia) && (
+      {/* Zugeklappt bleibt nur die Überschrift – beim Ziehen gehen die Ablagefelder trotzdem auf. */}
+      {open && (deps.length > 0 || inherited.deps.length > 0 || inherited.statusVia) && (
         <>
           <div className="sub">Benötigt</div>
           {deps.map((d) => row(d, () => removeDep(d.id)))}
@@ -1310,7 +1326,7 @@ function Deps({
         </>
       )}
 
-      {rev.length > 0 && (
+      {open && rev.length > 0 && (
         <>
           <div className="sub">Blockiert</div>
           {rev.map((d) => row(d, () => removeReverse(d)))}
@@ -1327,7 +1343,7 @@ function Deps({
           <DepDrop dir="by" item={item} />
           <DepDrop dir="blocks" item={item} />
         </div>
-      ) : (
+      ) : open ? (
         <div className="dep-add">
           <div className="seg small" role="radiogroup" aria-label="Richtung der neuen Abhängigkeit">
             <button
@@ -1366,9 +1382,9 @@ function Deps({
             }}
           />
         </div>
-      )}
+      ) : null}
 
-      {query.trim() && (
+      {open && query.trim() && (
         <div className="dep-results" role="listbox">
           {candidates.length ? (
             candidates.map((x, i) => (
