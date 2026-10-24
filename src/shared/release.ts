@@ -1,4 +1,4 @@
-import { isArchived, type Release } from './model.js';
+import { isArchived, type Release, type Task } from './model.js';
 import { milestoneDone } from './progress.js';
 import type { ScheduledMilestone } from './schedule.js';
 import type { Workspace } from './workspace.js';
@@ -30,6 +30,8 @@ export function releaseStatus(ws: Workspace, r: Release): ReleaseStatus {
   if (milestones.length + archivedMilestones && milestones.every((m) => milestoneDone(ws, m))) return 'ready';
   const begun =
     archivedMilestones > 0 ||
+    r.archivedBonus > 0 ||
+    ws.tasks.some((t) => t.releasedIn === r.id) ||
     stages.some((s) => s.doneAt) ||
     milestones.some((m) => m.status === 'progress' || milestoneDone(ws, m));
   return begun ? 'progress' : 'planned';
@@ -92,3 +94,74 @@ export const planRelease = (ws: Workspace, projectId: string): Release | null =>
   ws.releases
     .filter((r) => r.projectId === projectId && !isArchived(r))
     .sort((a, b) => b.order - a.order)[0] ?? null;
+
+/* ---------------------------------------------------------- Nebenquests */
+
+/** Was zum Bestimmen des aktiven Releases über ein Release bekannt sein muss. */
+export type ReleaseCandidate = {
+  id: string;
+  order: number;
+  archived: boolean;
+  /** Alle Kanäle abgehakt (und mindestens einer da) – wie `releaseStatus` 'released'. */
+  released: boolean;
+  /** Ein Milestone des Releases – auch über Abhängigkeiten mitgezählt – steht auf „In Progress“. */
+  running: boolean;
+};
+
+/**
+ * Das aktive Release eines Projekts: dafür stempelt der Server (Wunsch des
+ * Nutzers, Nebenquests). Server, Web-App und Godot-Addon wählen gleich: unter
+ * den nicht archivierten, nicht veröffentlichten Releases – nach `order`
+ * aufsteigend, bei Gleichstand nach ID – das erste mit laufendem Milestone,
+ * sonst das erste überhaupt, auch eines ganz ohne Milestones.
+ */
+export function pickActiveRelease(list: ReleaseCandidate[]): string | null {
+  const open = list
+    .filter((r) => !r.archived && !r.released)
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  return (open.find((r) => r.running) ?? open[0])?.id ?? null;
+}
+
+export function activeRelease(ws: Workspace, projectId: string): Release | null {
+  const list = ws.releases
+    .filter((r) => r.projectId === projectId)
+    .map((r) => {
+      const stages = ws.releaseStages(r.id);
+      return {
+        id: r.id,
+        order: r.order,
+        archived: isArchived(r),
+        released: stages.length > 0 && stages.every((s) => s.doneAt),
+        running: ws.releaseMilestones(r.id).some((m) => m.status === 'progress'),
+      };
+    });
+  return ws.release(pickActiveRelease(list));
+}
+
+/**
+ * Mit welchem Release eine Aufgabe rausgeht: liegt sie in einem Milestone mit
+ * Release, mit dessen; sonst mit dem, das sie gestempelt hat (`releasedIn`).
+ */
+export function taskRelease(ws: Workspace, t: Task): string | null {
+  const m = ws.milestoneOf(t);
+  return (m && ws.releaseOf(m)?.id) || t.releasedIn;
+}
+
+/** Bonus: gestempelt, aber in keinem Release-Milestone – zählt nicht für „bereit“. */
+export const isBonus = (ws: Workspace, t: Task): boolean => {
+  const m = ws.milestoneOf(t);
+  return !!t.releasedIn && !(m && ws.releaseOf(m));
+};
+
+/**
+ * Die Bonus-Aufgaben eines Releases im aktiven Bestand, gezählt wie der
+ * Fortschritt: nur Blätter, also Aufgaben ohne gestempelte Unteraufgaben.
+ * Archiviertes zählt hier nicht mit – das bringt das Release mit (`archivedBonus`).
+ */
+export function releaseBonus(ws: Workspace, r: Release): { done: number; open: number; tasks: Task[] } {
+  const tasks = ws.tasks.filter((t) => t.releasedIn === r.id && !isArchived(t) && isBonus(ws, t));
+  const stamped = new Set(tasks.map((t) => t.id));
+  const leaves = tasks.filter((t) => !ws.kids(t.id).some((k) => stamped.has(k.id)));
+  const done = leaves.filter((t) => t.status === 'done').length;
+  return { done, open: leaves.length - done, tasks };
+}

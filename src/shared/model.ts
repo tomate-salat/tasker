@@ -61,6 +61,8 @@ export type Group = {
   projectId: string;
   title: string;
   order: number;
+  /** `sidequest`: die Nebenquests des Projekts – je Projekt genau eine, nicht löschbar. */
+  kind: 'sidequest' | null;
 };
 
 /** Fasst Milestones zu einer Version zusammen – siehe PHASE-2.md, „Releases“. */
@@ -81,6 +83,11 @@ export type Release = {
    * zählen (siehe `archivedMembers` im Server). Ändern lässt es sich nicht.
    */
   archivedMilestones: ArchivedMember[];
+  /**
+   * Abgeleitet, nur zum Lesen: erledigte Bonus-Aufgaben des Releases (gestempelt,
+   * außerhalb von Release-Milestones), die nicht mehr im aktiven Bestand sind.
+   */
+  archivedBonus: number;
 };
 
 /** Ein archivierter Milestone eines Releases, so weit, wie ihn ein Client ohne Archiv braucht. */
@@ -183,6 +190,12 @@ export type Task = {
   changelogSkip: boolean;
   /** Platz in der Liste des Releases, gemeinsam mit den Überschriften. */
   changelogOrder: number;
+  /**
+   * Mit welchem Release die Aufgabe rausgeht – setzt nur der Server, sobald sie
+   * in Arbeit geht oder erledigt wird. Leer in Release-Milestones: dort gilt
+   * deren Release (siehe `taskRelease`).
+   */
+  releasedIn: string | null;
   archivedAt: string | null;
   tags: string[];
   /** IDs anderer Tasks, von denen dieser abhängt. */

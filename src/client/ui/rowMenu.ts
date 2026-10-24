@@ -15,6 +15,7 @@ import {
   doneInContainer,
   draftMilestones,
   groupsOf,
+  sidequestsOf,
   isCollapsed,
   isLooseRoot,
   plannedMilestones,
@@ -469,6 +470,7 @@ function moveSub(ws: Workspace, t: Task): MenuItem[] {
     { head: 'Dokumentation' },
     to({ ...loose, doc: true }, '📄 Dokumentation'),
     { head: 'Backlog' },
+    ...sidequestTarget(ws, projectId, (g) => to({ ...loose, groupId: g.id, doc: false }, `★ ${g.title || 'Nebenquests'}`)),
     to({ ...loose, doc: false }, 'Unsortiert'),
     ...groupsOf(ws, projectId).map((g) =>
       to({ ...loose, groupId: g.id, doc: false }, g.title || 'Neue Gruppe'),
@@ -562,4 +564,10 @@ async function newGroup(projectId: string): Promise<void> {
   const store = useStore.getState();
   const id = await store.addGroup('', projectId);
   if (id) store.edit(id, true);
+}
+
+/** Die Nebenquests als Ziel – gibt es sie (noch) nicht, fehlt der Eintrag. */
+function sidequestTarget(ws: Workspace, projectId: string, item: (g: Group) => MenuItem): MenuItem[] {
+  const g = sidequestsOf(ws, projectId);
+  return g ? [item(g)] : [];
 }

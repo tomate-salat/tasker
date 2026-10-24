@@ -67,6 +67,7 @@ import {
   create,
   duplicate,
   archivedSignature,
+  projectOf,
   inBootstrap,
   loadArchive,
   loadBootstrap,
@@ -81,6 +82,7 @@ import {
   TRASH_DAYS,
 } from './repo.js';
 import { getGraph, getSettings, putGraph, putSettings } from './settings.js';
+import { stampSignature } from './sidequests.js';
 
 /**
  * Alle Datenrouten. Die Anmeldung liegt davor, siehe index.ts.
@@ -679,11 +681,19 @@ export function dataRoutes(
 
     const body = createSchemas[kind].safeParse(await json(c));
     if (!body.success) return fail(c, body.error);
-    return run(c, bus, () => create(ctx, kind, body.data as Record<string, unknown>), {
+    // Eine neue Aufgabe in Arbeit stempelt auch ihre Vorfahren, ein laufender Milestone holt Vorgemerktes nach.
+    const input = body.data as Record<string, unknown>;
+    const stamped = (kind === 'task' || kind === 'milestone') && typeof input['projectId'] === 'string' ? input['projectId'] : null;
+    const stampsBefore = stamped ? stampSignature(ctx, stamped) : null;
+    return run(c, bus, () => create(ctx, kind, input), {
       status: 201,
       // Ein neues Release bringt die Kanäle des vorherigen mit – das ist kein Einzelstück.
       event: (object) =>
-        kind === 'release' ? { type: 'reload', reason: 'Release angelegt' } : { type: 'upsert', kind, object },
+        kind === 'release'
+          ? { type: 'reload', reason: 'Release angelegt' }
+          : stamped && stampSignature(ctx, stamped, (object as { id: string }).id) !== stampsBefore
+            ? { type: 'reload', reason: 'Release-Stempel geändert' }
+            : { type: 'upsert', kind, object },
     });
   });
 
@@ -706,6 +716,9 @@ export function dataRoutes(
     // Die archivierten Milestones am Release sind abgeleitet: ändert ein aktiver
     // Milestone sie mit, laden die anderen Fenster neu, statt nur ihn zu ersetzen.
     const archivedBefore = kind === 'milestone' ? archivedSignature(ctx, c.req.param('id')) : null;
+    // Die Release-Stempel anderer Aufgaben können mitgehen (Vorfahren, Nachstempeln, Veröffentlichen).
+    const stamped = ['task', 'milestone', 'release', 'stage'].includes(kind) ? projectOf(ctx, kind, c.req.param('id')) : null;
+    const stampsBefore = stamped ? stampSignature(ctx, stamped, c.req.param('id')) : null;
 
     return run(
       c,
@@ -719,6 +732,8 @@ export function dataRoutes(
             ? { type: 'reload', reason: 'Im Archiv geändert' }
             : archivedBefore !== null && archivedSignature(ctx, c.req.param('id')) !== archivedBefore
               ? { type: 'reload', reason: 'Archivierte Milestones eines Releases geändert' }
+              : stamped && stampSignature(ctx, stamped, c.req.param('id')) !== stampsBefore
+              ? { type: 'reload', reason: 'Release-Stempel geändert' }
               : kind === 'task' && 'status' in changes.data && (object as Task).parentId
               ? { type: 'reload', reason: 'Status geändert' }
               : { type: 'upsert', kind, object },

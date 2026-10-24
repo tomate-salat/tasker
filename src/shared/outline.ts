@@ -11,7 +11,8 @@ import type { Workspace } from './workspace.js';
  * Der Bereich kann ein Projekt sein oder alle; bei mehreren bekommt jedes eine
  * Überschrift, wie im Prototyp.
  *
- * Der Backlog zeigt die vorbereiteten Milestones und „Ideen & Tasks“
+ * Der Backlog zeigt die vorbereiteten Milestones, die Nebenquests (eine
+ * besondere Gruppe je Projekt, für ein Release optional) und „Ideen & Tasks“
  * (Unsortiert plus die eigenen Gruppen). Abweichung vom Prototyp, auf Wunsch:
  * smarte Gruppen gibt es nicht – Kategorie und Markierung schränkt die
  * Filterleiste ein, und ob eine Aufgabe fertig geplant ist, sagt ihr Status „Bereit“.
@@ -24,11 +25,19 @@ export type Placement = {
 };
 
 /** Was die Überschrift eines Abschnitts rechts anbietet. */
-export type SectionAction = 'add-draft-milestone' | 'add-group';
+export type SectionAction = 'add-draft-milestone' | 'add-group' | 'add-task';
 
 export type OutlineRow =
   | { type: 'project'; id: string; project: Project }
-  | { type: 'section'; id: string; title: string; action: SectionAction; projectId: string }
+  | {
+      type: 'section';
+      id: string;
+      title: string;
+      action: SectionAction;
+      projectId: string;
+      /** Bei 'add-task': wohin die neue Aufgabe kommt. */
+      place?: Placement;
+    }
   /** Hinweistext ohne eigene Funktion, etwa wenn es noch keine Entwürfe gibt. */
   | { type: 'hint'; id: string; text: string }
   | { type: 'milestone'; id: string; milestone: Milestone }
@@ -118,6 +127,7 @@ export function outline(
       for (const t of docRoots(ws, projectId)) walk(t, 0);
     } else {
       drafts(projectId);
+      sidequests(projectId);
       backlog(projectId);
     }
 
@@ -147,6 +157,27 @@ export function outline(
       });
     }
     for (const m of list) milestoneBlock(m);
+  }
+
+  /**
+   * Die Nebenquests: ein eigener Bereich, aber nur eine Gruppe – deshalb ohne
+   * Gruppenzeile, die Aufgaben stehen gleich unter der Überschrift.
+   */
+  function sidequests(projectId: string): void {
+    const g = sidequestsOf(ws, projectId);
+    if (!g) return;
+    const tasks = groupTasks(ws, g.id);
+    if (hidden(tasks)) return;
+    const place = { groupId: g.id };
+    rows.push({
+      type: 'section',
+      id: `sec:sidequests:${projectId}`,
+      title: g.title || 'Nebenquests',
+      action: 'add-task',
+      projectId,
+      place,
+    });
+    contents(tasks, g.id, projectId, place, false);
   }
 
   function backlog(projectId: string): void {
@@ -238,8 +269,13 @@ export const draftMilestones = (ws: Workspace, projectId: string): Milestone[] =
     .filter((m) => m.projectId === projectId && !m.planned && !isArchived(m))
     .sort((a, b) => a.order - b.order);
 
+/** Die eigenen Gruppen eines Projekts – die Nebenquests zählen nicht dazu. */
 export const groupsOf = (ws: Workspace, projectId: string): Group[] =>
-  ws.groups.filter((g) => g.projectId === projectId).sort((a, b) => a.order - b.order);
+  ws.groups.filter((g) => g.projectId === projectId && !g.kind).sort((a, b) => a.order - b.order);
+
+/** Die Nebenquests eines Projekts – der Server legt sie für jedes Projekt an. */
+export const sidequestsOf = (ws: Workspace, projectId: string): Group | null =>
+  ws.groups.find((g) => g.projectId === projectId && g.kind === 'sidequest') ?? null;
 
 export const groupTasks = (ws: Workspace, groupId: string): Task[] =>
   ws.tasks.filter((t) => t.groupId === groupId && !t.parentId).sort((a, b) => a.order - b.order);

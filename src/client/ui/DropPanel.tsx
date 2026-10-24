@@ -4,6 +4,7 @@ import {
   draftMilestones,
   groupsOf,
   groupTasks,
+  sidequestsOf,
   plannedMilestones,
   unsortedId,
   unsortedTasks,
@@ -63,9 +64,23 @@ function Targets({ ws, projectId, other }: { ws: Workspace; projectId: string; o
   );
   const drafts = draftMilestones(ws, projectId);
   const planned = plannedMilestones(ws, projectId);
+  const sq = sidequestsOf(ws, projectId);
 
   return (
     <div className="dp-body">
+      {sq && (
+        <Section title="Nebenquests">
+          {group({
+            type: 'group',
+            id: sq.id,
+            title: `★ ${sq.title || 'Nebenquests'}`,
+            group: sq,
+            projectId,
+            place: { groupId: sq.id },
+            tasks: groupTasks(ws, sq.id),
+          })}
+        </Section>
+      )}
       <Section title="Backlog">
         {group({
           type: 'group',

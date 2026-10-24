@@ -819,6 +819,10 @@ export const useStore = create<State>((set, get) => ({
       set(replace(get().boot ?? boot, kind, updated));
       // Der Status einer Unteraufgabe kann den der Eltern-Aufgaben mitziehen (Server).
       if (kind === 'task' && 'status' in changes && (updated as Task).parentId) await get().load();
+      // Release-Stempel anderer Aufgaben können mitgehen: Veröffentlichen, Nachstempeln (Server, Nebenquests).
+      else if (kind === 'stage' || kind === 'release' || (kind === 'milestone' && ('status' in changes || 'releaseId' in changes))) {
+        await get().load();
+      }
       // Die Gegen-Schritte kennt hier der Client selbst: die alten Werte plus
       // die Version, die dabei herauskam.
       pushUndo([

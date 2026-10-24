@@ -101,7 +101,8 @@ describe('Verweis-Nummern', () => {
     const after = (ctx.sqlite.prepare('SELECT * FROM task ORDER BY id').all() as Record<string, unknown>[]).map(
       // `cover_image_id`, `play_order` und die Changelog-Spalten kommen mit späteren Migrationen dazu
       // (`ready` kam und ging wieder).
-      ({ ref: _ref, ready: _ready, cover_image_id: _cover, play_order: _play, changelog: _cl, changelog_skip: _cs, changelog_order: _co, ...rest }) => rest,
+      ({ ref: _ref, ready: _ready, cover_image_id: _cover, play_order: _play, changelog: _cl, changelog_skip: _cs, changelog_order: _co,
+         released_in: _ri, release_pending: _rp, ...rest }) => rest,
     );
     assert.deepEqual(after, before);
 

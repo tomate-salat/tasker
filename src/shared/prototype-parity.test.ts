@@ -70,7 +70,7 @@ function toData(d: Dump['data']): Data {
     marks: d.projects.flatMap((p) =>
       d.marks.map((k, i) => ({ ...k, id: markIdIn(d, k.id, p.id), projectId: p.id, version: 1, order: i, coverImageId: null })),
     ),
-    groups: d.groups.map((g) => ({ id: g.id, version: 1, projectId: g.project, title: g.title, order: g.order })),
+    groups: d.groups.map((g) => ({ id: g.id, version: 1, projectId: g.project, title: g.title, order: g.order, kind: null })),
     milestones: d.milestones.map((m, i) => ({
       id: m['id'] as string,
       ref: i + 1,
@@ -94,6 +94,7 @@ function toData(d: Dump['data']): Data {
     releases: d.projects.map((p, i) => ({
       id: `plan:${p.id}`, version: 1, projectId: p.id, name: '', title: '', desc: '', order: i, archivedAt: null,
       archivedMilestones: [],
+      archivedBonus: 0,
     })),
     stages: [],
     headings: [],
@@ -121,6 +122,7 @@ function toData(d: Dump['data']): Data {
       changelog: '',
       changelogSkip: false,
       changelogOrder: 0,
+      releasedIn: null,
       archivedAt: (t['archived'] as string | null) ?? null,
       tags: t['tags'] as string[],
       deps: t['deps'] as string[],

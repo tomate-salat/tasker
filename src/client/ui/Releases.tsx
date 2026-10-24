@@ -5,7 +5,9 @@
  * wovon abhängt – wird im Abhängigkeitsgraphen; hier steht die Übersicht.
  *
  * Die archivierten Milestones eines Releases bringt das Release selbst mit
- * (`archivedMilestones`). Das Changelog kommt gesondert vom Server: ins
+ * (`archivedMilestones`), ebenso die Zahl der archivierten Bonus-Aufgaben
+ * (`archivedBonus`): Nebenquests und andere lose Aufgaben, die mit dem Release
+ * rausgehen, aber nicht für „bereit“ zählen. Das Changelog kommt gesondert vom Server: ins
  * Changelog gehören auch archivierte Aufgaben, und die fehlen im aktiven Bestand. Geändert wird es deshalb
  * über Schritte (`runSteps`), die auch archivierte Aufgaben erreichen.
  */
@@ -22,7 +24,7 @@ import {
 } from '@shared/changelog.js';
 import { isArchived, type Release } from '@shared/model.js';
 import { milestoneProgressPct } from '@shared/progress.js';
-import { RELEASE_STATUS_LABEL, releaseLabel, releaseStatus } from '@shared/release.js';
+import { RELEASE_STATUS_LABEL, releaseBonus, releaseLabel, releaseStatus } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { api } from '../api.js';
 import { currentProjectId, scopeProjectIds, useStore } from '../store.js';
@@ -179,6 +181,9 @@ function ReleaseCard({
       live: m,
     })),
   ];
+  const bonus = releaseBonus(ws, release);
+  // Je Bonus-Aufgabe nur die oberste gestempelte – die Unteraufgaben zählen in ihr.
+  const bonusRoots = bonus.tasks.filter((t) => !bonus.tasks.some((x) => x.id === t.parentId));
   const gone = isArchived(release);
   const [stage, setStage] = useState('');
   const target = { type: 'release', release } as const;
@@ -327,6 +332,25 @@ function ReleaseCard({
             + Milestone
           </button>
         </div>
+
+        {(bonusRoots.length > 0 || release.archivedBonus > 0) && (
+          <div className="rl-lane">
+            <span className="rl-lbl" title="Gehen mit dem Release raus, zählen aber nicht dafür, ob es bereit ist">
+              Bonus
+            </span>
+            {bonusRoots.map((t) => (
+              <span className={`rl-ms bonus ${t.status === 'done' ? 'done' : ''} ${t.status === 'progress' ? 'now' : ''}`} key={t.id}>
+                <button className="rl-ms-t" title="Details öffnen" onClick={() => select(t.id)}>
+                  <span className="ico">★</span> {t.title || 'Ohne Titel'}
+                </button>
+              </span>
+            ))}
+            <span className="rl-ms-sub">
+              {bonus.done} erledigt{bonus.open ? ` · ${bonus.open} offen` : ''}
+              {release.archivedBonus ? ` · ${release.archivedBonus} archiviert` : ''}
+            </span>
+          </div>
+        )}
 
         <div className="rl-lane">
           <span className="rl-lbl">Veröffentlichung</span>

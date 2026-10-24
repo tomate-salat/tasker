@@ -609,7 +609,7 @@ describe('Löschen', () => {
     const boot = loadBootstrap(ctx);
     assert.deepEqual(boot.projects.map((q) => q.id).sort(), [p.id, other.id].sort());
     assert.deepEqual(boot.categories.map((q) => q.id), [c.id]);
-    assert.deepEqual(boot.groups.map((q) => q.id), [g.id]);
+    assert.deepEqual(boot.groups.filter((q) => !q.kind).map((q) => q.id), [g.id]);
     assert.deepEqual(boot.milestones.map((q) => q.id).sort(), [m.id, m2.id].sort());
     assert.deepEqual(boot.milestones.find((q) => q.id === m2.id)?.deps, [m.id]);
     assert.equal(one(a.id).milestoneId, m.id);

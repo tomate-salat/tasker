@@ -155,6 +155,13 @@
       "when": 1792510068921,
       "tag": "0021_eingang_merken",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1792845014727,
+      "tag": "0022_nebenquests",
+      "breakpoints": true
     }
   ]
 }

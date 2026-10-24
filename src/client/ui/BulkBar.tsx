@@ -1,7 +1,7 @@
 import type { BulkAction } from '@shared/api.js';
 import { projectTags } from '@shared/inherit.js';
-import type { Status, Task } from '@shared/model.js';
-import { categoriesOf, draftMilestones, marksOf, groupsOf, plannedMilestones } from '@shared/outline.js';
+import type { Group, Status, Task } from '@shared/model.js';
+import { categoriesOf, draftMilestones, marksOf, groupsOf, plannedMilestones, sidequestsOf } from '@shared/outline.js';
 import type { Workspace } from '@shared/workspace.js';
 import { useStore } from '../store.js';
 import { PRIO_LABEL, STATUS_LABEL } from './icons.js';
@@ -303,6 +303,7 @@ function moveItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
     { head: 'Dokumentation' },
     to({ ...loose, doc: true }, '📄 Dokumentation'),
     { head: 'Backlog' },
+    ...sidequestTarget(ws, projectId, (g) => to({ ...loose, groupId: g.id, doc: false }, `★ ${g.title || 'Nebenquests'}`)),
     to({ ...loose, doc: false }, 'Unsortiert'),
     ...groupsOf(ws, projectId).map((g) =>
       to({ ...loose, groupId: g.id, doc: false }, g.title || 'Neue Gruppe'),
@@ -320,4 +321,10 @@ function moveItems(ws: Workspace, tasks: Task[], run: Run): MenuItem[] {
 
   items.push({ sep: true }, { label: 'In anderes Projekt', sub: toProject });
   return items;
+}
+
+/** Die Nebenquests als Ziel – gibt es sie (noch) nicht, fehlt der Eintrag. */
+function sidequestTarget(ws: Workspace, projectId: string, item: (g: Group) => MenuItem): MenuItem[] {
+  const g = sidequestsOf(ws, projectId);
+  return g ? [item(g)] : [];
 }

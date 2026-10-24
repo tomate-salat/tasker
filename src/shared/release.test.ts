@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { planRelease, releaseGroups, releaseLabel, releaseStatus } from './release.js';
+import { activeRelease, planRelease, releaseBonus, releaseGroups, releaseLabel, releaseStatus, taskRelease } from './release.js';
 import { schedule } from './schedule.js';
 import { Builder } from './testing.js';
 
@@ -121,5 +121,33 @@ describe('Release', () => {
     assert.equal(releaseLabel({ name: '0.4.0', title: 'Zirkus' }), '0.4.0 · Zirkus');
     assert.equal(releaseLabel({ name: '', title: 'Zirkus' }), 'Zirkus');
     assert.equal(releaseLabel({ name: '', title: '' }), 'Ohne Version');
+  });
+});
+
+describe('Nebenquests im Release', () => {
+  it('aktiv ist das erste offene Release mit laufendem Milestone, sonst das erste offene', () => {
+    const b = new Builder().project('p').release('a', 'p').release('b', 'p').release('c', 'p').stage('s', 'a', AT);
+    assert.equal(activeRelease(b.build(), 'p')?.id, 'b');
+    b.milestone('m', 'p', { releaseId: 'c', status: 'progress' });
+    assert.equal(activeRelease(b.build(), 'p')?.id, 'c');
+  });
+
+  it('Bonus: gestempelt außerhalb von Release-Milestones, gezählt nach Blättern; macht das Release begonnen', () => {
+    const ws = new Builder()
+      .project('p')
+      .release('r', 'p')
+      .milestone('m', 'p', { releaseId: 'r' })
+      .task('pflicht', 'p', { milestoneId: 'm', status: 'done' })
+      .task('stapel', 'p', { releasedIn: 'r', status: 'progress' })
+      .task('k1', 'p', { parentId: 'stapel', releasedIn: 'r', status: 'done' })
+      .task('k2', 'p', { parentId: 'stapel', releasedIn: 'r', status: 'progress' })
+      .task('bug', 'p', { releasedIn: 'r', status: 'done' })
+      .build();
+    const bonus = releaseBonus(ws, ws.release('r')!);
+    assert.deepEqual([bonus.done, bonus.open], [2, 1]);
+    assert.equal(taskRelease(ws, ws.task('pflicht')!), 'r');
+    assert.equal(taskRelease(ws, ws.task('k1')!), 'r');
+    // Nur der Milestone zählt für „bereit“ – der offene Bonus hält es nicht auf.
+    assert.equal(releaseStatus(ws, ws.release('r')!), 'ready');
   });
 });

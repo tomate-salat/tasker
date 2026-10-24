@@ -199,6 +199,11 @@ export const groups = sqliteTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     order: integer('sort_order').notNull().default(0),
+    /**
+     * `sidequest`: die Nebenquests des Projekts – je Projekt genau eine, vom
+     * Server angelegt und nicht löschbar (siehe `src/server/sidequests.ts`).
+     */
+    kind: text('kind', { enum: ['sidequest'] }),
     ...tracked,
   },
   (t) => [index('group_project_idx').on(t.projectId)],
@@ -265,6 +270,15 @@ export const tasks = sqliteTable(
      * Gepflegt beim Archivieren, Wiederherstellen und Verschieben.
      */
     hiddenBy: text('hidden_by'),
+    /**
+     * Mit welchem Release die Aufgabe rausgeht – gestempelt, sobald sie in
+     * Arbeit geht oder erledigt wird. Nur für Aufgaben außerhalb von
+     * Release-Milestones; dort gilt das Release des Milestones (siehe
+     * `src/server/sidequests.ts`).
+     */
+    releasedIn: text('released_in').references(() => releases.id, { onDelete: 'set null' }),
+    /** Begonnen oder erledigt, als es kein aktives Release gab – wird nachgestempelt. */
+    releasePending: integer('release_pending', { mode: 'boolean' }).notNull().default(false),
     ...tracked,
   },
   (t) => [

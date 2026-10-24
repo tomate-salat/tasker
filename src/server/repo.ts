@@ -29,6 +29,16 @@ import { refsIn, type RefStub } from '../shared/refs.js';
 import { effectiveReleases } from '../shared/releaseOf.js';
 import type { DbCtx } from './db.js';
 import { dropPreviews, loadDrawingMeta, type DrawingMeta } from './drawings.js';
+import {
+  archivedBonus,
+  ensureSidequestGroups,
+  isPublished,
+  publishRelease,
+  releasesBefore,
+  settlePending,
+  stampAfterMove,
+  stampOnStatus,
+} from './sidequests.js';
 import { purgeImagesFor, untrashImage } from './images.js';
 import { newId, type IdPrefix } from './ids.js';
 
@@ -128,6 +138,7 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
   }
 
   const archived = archivedMembers(ctx);
+  const bonus = archivedBonus(ctx);
   const tagsOf = groupValues(tagRows, (r) => r.task_id, (r) => r.tag);
   const depsOfTask = groupValues(taskDeps, (r) => r.from_id, (r) => r.to_id);
   const depsOfMs = groupValues(msDeps, (r) => r.from_id, (r) => r.to_id);
@@ -138,7 +149,11 @@ export function loadBootstrap(ctx: DbCtx): Bootstrap {
     marks: marks.map(toMark),
     groups: groups.map(toGroup),
     milestones: milestones.map((m) => toMilestone(m, depsOfMs.get(m.id) ?? [])),
-    releases: releases.map((r) => ({ ...toRelease(r), archivedMilestones: archived.get(r.id) ?? [] })),
+    releases: releases.map((r) => ({
+      ...toRelease(r),
+      archivedMilestones: archived.get(r.id) ?? [],
+      archivedBonus: bonus.get(r.id) ?? 0,
+    })),
     stages: stages.map(toStage),
     headings: headings.map(toHeading),
     tasks: tasks.map((t) => toTask(t, tagsOf.get(t.id) ?? [], depsOfTask.get(t.id) ?? [])),
@@ -225,6 +240,33 @@ export function loadChangelog(ctx: DbCtx, releaseId: string): ChangelogData {
        SELECT t.* FROM task t JOIN sub ON sub.id = t.id ORDER BY t.sort_order, t.id`,
     )
     .all(JSON.stringify(milestones.map((m) => m.id))) as TaskRow[];
+
+  // Dazu die Bonus-Aufgaben: gestempelt, aber in keinem Release-Milestone (siehe sidequests.ts).
+  const place = new Map(
+    (
+      ctx.sqlite.prepare('SELECT id, parent_id, milestone_id FROM task WHERE project_id = ?').all(projectId) as {
+        id: string; parent_id: string | null; milestone_id: string | null;
+      }[]
+    ).map((t) => [t.id, t]),
+  );
+  const rootMilestone = (id: string): string | null => {
+    const seen = new Set<string>();
+    let t = place.get(id);
+    while (t?.parent_id && !seen.has(t.id)) {
+      seen.add(t.id);
+      t = place.get(t.parent_id);
+    }
+    return t?.milestone_id ?? null;
+  };
+  const listed = new Set(tasks.map((t) => t.id));
+  const bonus = (
+    ctx.sqlite.prepare('SELECT * FROM task WHERE released_in = ? ORDER BY sort_order, id').all(releaseId) as TaskRow[]
+  ).filter((t) => {
+    const m = rootMilestone(t.id);
+    return !listed.has(t.id) && !(m && member.has(m));
+  });
+  tasks.push(...bonus);
+
   return {
     milestones: milestones.map((m) => ({
       id: m.id, ref: m.ref, title: m.title, status: m.status, archived: !!m.archived_at,
@@ -635,6 +677,8 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(nowIso(), id);
     }
     if (kind === 'task') adoptMarks(ctx, [id]);
+    if (kind === 'task' && (values['status'] === 'progress' || values['status'] === 'done')) stampOnStatus(ctx, id);
+    if (kind === 'project') ensureSidequestGroups(ctx);
     // Jedes Projekt ist für seine Markierungen selbst zuständig, fängt aber mit
     // denselben zwei an wie der Prototyp.
     if (kind === 'project') {
@@ -653,6 +697,9 @@ export function create(ctx: DbCtx, kind: Kind, input: Record<string, unknown>): 
       for (const { name } of names) create(ctx, 'stage', { releaseId: id, name });
     }
 
+    const project = projectOf(ctx, kind, id);
+    if (project && (kind === 'release' || kind === 'stage' || kind === 'milestone')) settlePending(ctx, project);
+
     return read(ctx, kind, id);
   })();
 }
@@ -670,6 +717,9 @@ export function patch(
     if (current['version'] !== version) throw new Conflict(read(ctx, kind, id));
 
     const { tags, deps, ...fields } = changes;
+    // Wird ein Release mit dieser Änderung veröffentlicht? Dann gilt `publishRelease`.
+    const stageRelease = kind === 'stage' ? String(current['release_id']) : null;
+    const wasPublished = stageRelease ? isPublished(ctx, stageRelease) : false;
 
     if (kind === 'milestone') {
       const projectId = (fields['projectId'] as string | undefined) ?? (current['project_id'] as string);
@@ -748,8 +798,14 @@ export function patch(
     if (kind === 'task' && typeof fields['status'] === 'string') {
       const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(doneAt, id);
-      if (fields['status'] !== current['status']) syncParentStatus(ctx, id);
+      if (fields['status'] !== current['status']) {
+        syncParentStatus(ctx, id);
+        stampOnStatus(ctx, id);
+      }
     }
+    if (stageRelease && !wasPublished && isPublished(ctx, stageRelease)) publishRelease(ctx, stageRelease);
+    const project = projectOf(ctx, kind, id);
+    if (project && kind !== 'project') settlePending(ctx, project);
 
     return read(ctx, kind, id);
   })();
@@ -787,7 +843,7 @@ const nextPlayOrder = (ctx: DbCtx, projectId: string): number =>
  * geändert hat – die Regel steht in `parentStatusAfter`. Ändert sich ein
  * Elternteil, gilt dasselbe für dessen Elternteil.
  */
-function syncParentStatus(ctx: DbCtx, childId: string): void {
+export function syncParentStatus(ctx: DbCtx, childId: string): void {
   let child = readRow(ctx, 'task', childId);
   while (child?.['parent_id']) {
     const parent = readRow(ctx, 'task', child['parent_id'] as string);
@@ -910,6 +966,7 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
     if (!current) throw new NotFound();
     if (current['version'] !== version) throw new Conflict(read(ctx, 'task', id));
 
+    const before = releasesBefore(ctx, [id, ...descendantIds(ctx, id)]);
     const parentId = target.parentId ?? null;
     const milestoneId = parentId ? null : (target.milestoneId ?? null);
     const groupId = parentId || milestoneId ? null : (target.groupId ?? null);
@@ -965,6 +1022,7 @@ export function move(ctx: DbCtx, id: string, version: number, target: MoveTarget
       );
     }
     refreshHidden(ctx, id);
+    stampAfterMove(ctx, [id, ...subtree], before);
     return read(ctx, 'task', id);
   })();
 }
@@ -1338,6 +1396,8 @@ const FRESH_ON_COPY = new Set([
   'id', 'ref', 'parent_id', 'title', 'created_at', 'updated_at', 'version',
   // Der Eintrag im Changelog gehört zum Original – in der Kopie stünde er doppelt.
   'changelog', 'changelog_skip', 'changelog_order',
+  // Die Kopie ist noch nicht rausgegangen.
+  'released_in', 'release_pending',
 ]);
 
 const milestoneRoots = (ctx: DbCtx, milestoneId: string): string[] =>
@@ -1609,6 +1669,7 @@ export function remove(ctx: DbCtx, kind: Kind, id: string): { trashId: string } 
   return ctx.sqlite.transaction(() => {
     const row = readRow(ctx, kind, id);
     if (!row) throw new NotFound();
+    if (kind === 'group' && row['kind'] === 'sidequest') throw new Error('Die Nebenquests lassen sich nicht löschen.');
 
     /**
      * Wie im Prototyp nehmen Milestone und Gruppe ihre Aufgaben nicht mit in den
@@ -2074,6 +2135,7 @@ function read(ctx: DbCtx, kind: Kind, id: string): unknown {
       return {
         ...toRelease(row as unknown as ReleaseRow),
         archivedMilestones: archivedMembers(ctx, String(row['project_id'])).get(id) ?? [],
+        archivedBonus: archivedBonus(ctx).get(id) ?? 0,
       };
     case 'stage':
       return toStage(row as unknown as StageRow);
@@ -2084,6 +2146,18 @@ function read(ctx: DbCtx, kind: Kind, id: string): unknown {
     case 'task':
       return toTask(row as unknown as TaskRow, tagsOf(ctx, id), depsOf(ctx, 'task', id));
   }
+}
+
+/** Das Projekt eines Eintrags – für Releases und ihre Kanäle über das Release. */
+export function projectOf(ctx: DbCtx, kind: Kind, id: string): string | null {
+  if (kind === 'project') return id;
+  const row =
+    kind === 'stage' || kind === 'heading'
+      ? ctx.sqlite
+          .prepare(`SELECT r.project_id FROM ${TABLE[kind]} x JOIN "release" r ON r.id = x.release_id WHERE x.id = ?`)
+          .get(id)
+      : ctx.sqlite.prepare(`SELECT project_id FROM ${TABLE[kind]} WHERE id = ?`).get(id);
+  return (row as { project_id: string } | undefined)?.project_id ?? null;
 }
 
 const readRow = (ctx: DbCtx, kind: Kind, id: string): Record<string, unknown> | undefined =>
@@ -2315,7 +2389,7 @@ type MarkRow = {
   id: string; version: number; project_id: string; emoji: string; name: string; sort_order: number;
   cover_image_id: string | null;
 };
-type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number };
+type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number; kind: 'sidequest' | null };
 type ReleaseRow = {
   id: string; version: number; project_id: string; name: string; title: string; desc: string;
   sort_order: number; archived_at: string | null;
@@ -2335,6 +2409,7 @@ type TaskRow = {
   done_at: string | null; sort_order: number; category_id: string | null; mark_id: string | null;
   archived_at: string | null; hidden_by: string | null; cover_image_id: string | null;
   play_order: number; changelog: string; changelog_skip: number; changelog_order: number;
+  released_in: string | null; release_pending: number;
 };
 
 const toProject = (r: ProjectRow): Project => ({
@@ -2354,10 +2429,11 @@ const toMark = (r: MarkRow): Mark => ({
 
 const toGroup = (r: GroupRow): Group => ({
   id: r.id, version: r.version, projectId: r.project_id, title: r.title, order: r.sort_order,
+  kind: r.kind ?? null,
 });
 
 /** Ohne die abgeleiteten archivierten Milestones – die setzen `loadBootstrap` und `read` dazu. */
-const toRelease = (r: ReleaseRow): Omit<Release, 'archivedMilestones'> => ({
+const toRelease = (r: ReleaseRow): Omit<Release, 'archivedMilestones' | 'archivedBonus'> => ({
   id: r.id, version: r.version, projectId: r.project_id, name: r.name, title: r.title, desc: r.desc,
   order: r.sort_order, archivedAt: r.archived_at,
 });
@@ -2413,6 +2489,7 @@ const toTask = (r: TaskRow, tags: string[], deps: string[]): Task => ({
   changelog: r.changelog ?? '',
   changelogSkip: !!r.changelog_skip,
   changelogOrder: r.changelog_order ?? 0,
+  releasedIn: r.released_in ?? null,
   archivedAt: r.archived_at,
   tags,
   deps,

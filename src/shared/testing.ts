@@ -36,7 +36,7 @@ export class Builder {
 
   group(id: string, projectId: string, title = id): this {
     this.data.groups.push({ id,
-      version: 1, projectId, title, order: this.data.groups.length });
+      version: 1, projectId, title, order: this.data.groups.length, kind: null });
     return this;
   }
 
@@ -75,7 +75,7 @@ export class Builder {
   release(id: string, projectId: string, name = id): this {
     this.data.releases.push({
       id, version: 1, projectId, name, title: '', desc: '', order: this.data.releases.length, archivedAt: null,
-      archivedMilestones: [] });
+      archivedMilestones: [], archivedBonus: 0 });
     return this;
   }
 
@@ -107,6 +107,7 @@ export class Builder {
       changelog: '',
       changelogSkip: false,
       changelogOrder: 0,
+      releasedIn: null,
       archivedAt: null,
       tags: [],
       deps: [],
@@ -139,6 +140,7 @@ export const groupOf = (g: Partial<Group>): Group => ({
   version: 1,
   projectId: 'p',
   title: 'g',
+  kind: null,
   order: 0,
   ...g,
 });

@@ -510,3 +510,8 @@
     flex-wrap: wrap;
   }
 }
+
+/* Bonus: Nebenquests und andere lose Aufgaben, die mit dem Release rausgehen. */
+.rl-ms.bonus .ico {
+  color: #d9a93b;
+}

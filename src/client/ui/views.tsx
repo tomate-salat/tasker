@@ -211,6 +211,13 @@ function SectionAction({ row }: { row: Extract<OutlineRow, { type: 'section' }> 
   // Wie im Prototyp (`addGroup`, `addMilestone`): sofort anlegen und den Namen in
   // der neuen Zeile bearbeiten – bleibt er leer, verschwindet die Zeile wieder.
   const store = useStore.getState;
+  if (row.action === 'add-task') {
+    return (
+      <button className="linkish" onClick={() => void addIn(row.projectId, row.place ?? {})}>
+        + Task
+      </button>
+    );
+  }
   if (row.action === 'add-group') {
     return (
       <button
