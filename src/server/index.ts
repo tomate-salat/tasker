@@ -10,7 +10,7 @@ import { DATABASE_PATH, HOST, PORT, PRODUCTION, warnIfNotPersistent } from './en
 import { appDb, recordBoot } from './db.js';
 import { dataRoutes } from './routes.js';
 import { packStoredDrawings } from './drawings.js';
-import { ensureSidequestGroups } from './sidequests.js';
+import { ensureSidequestGroups, repairStamps } from './sidequests.js';
 import { appEvents } from './events.js';
 import { handleMcp } from './mcp.js';
 import { createToken, listTokens, revokeToken, tokenValid } from './tokens.js';
@@ -43,6 +43,10 @@ purgeExpiredSessions();
 }
 // Jedes Projekt hat seine Nebenquests – auch die von vor dieser Version.
 ensureSidequestGroups(appDb);
+{
+  const repaired = repairStamps(appDb);
+  if (repaired) console.log(`Release-Stempel aufgeräumt: ${repaired}`);
+}
 const boot = recordBoot();
 
 const app = new Hono<{ Variables: { viaToken: boolean } }>();

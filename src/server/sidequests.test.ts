@@ -8,7 +8,7 @@ import { pickActiveRelease } from '../shared/release.js';
 import type { Milestone, Release, ReleaseStage, Task } from '../shared/model.js';
 import { createDbCtx, type DbCtx } from './db.js';
 import { archive, create, loadBootstrap, loadChangelog, move, patch, remove } from './repo.js';
-import { activeReleaseId, ensureSidequestGroups } from './sidequests.js';
+import { activeReleaseId, ensureSidequestGroups, repairStamps } from './sidequests.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tasker-sq-'));
 const opened: DbCtx[] = [];
@@ -105,6 +105,25 @@ describe('Nebenquests', () => {
     setStatus(b.id, 'ready');
     assert.equal(task(parent.id).status, 'ready');
     assert.equal(task(parent.id).releasedIn, null);
+  });
+
+  it('ein liegengebliebener Stempel geht beim Aufräumen und mit einem erneuten „Bereit“', () => {
+    const p = mkProject();
+    const r = mkRelease(p.id, '0.4');
+    const stack = mkTask({ projectId: p.id, title: 'Flugplatz', status: 'ready' });
+    const kid = mkTask({ projectId: p.id, parentId: stack.id, title: 'Kind', status: 'ready' });
+    const stale = () => ctx.sqlite.prepare('UPDATE task SET released_in = ? WHERE id = ?').run(r.id, stack.id);
+    stale();
+    assert.equal(repairStamps(ctx), 1);
+    assert.equal(task(stack.id).releasedIn, null);
+    stale();
+    setStatus(stack.id, 'ready');
+    assert.equal(task(stack.id).releasedIn, null);
+    // Läuft darunter etwas, bleibt der Stempel.
+    setStatus(kid.id, 'progress');
+    ctx.sqlite.prepare(`UPDATE task SET status = 'ready' WHERE id = ?`).run(stack.id);
+    assert.equal(repairStamps(ctx), 0);
+    assert.equal(task(stack.id).releasedIn, r.id);
   });
 
   it('wählt das erste unveröffentlichte Release mit laufendem Milestone, sonst das erste überhaupt', () => {

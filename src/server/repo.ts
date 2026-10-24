@@ -798,10 +798,9 @@ export function patch(
     if (kind === 'task' && typeof fields['status'] === 'string') {
       const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
       ctx.sqlite.prepare('UPDATE task SET done_at = ? WHERE id = ?').run(doneAt, id);
-      if (fields['status'] !== current['status']) {
-        syncParentStatus(ctx, id);
-        stampOnStatus(ctx, id);
-      }
+      if (fields['status'] !== current['status']) syncParentStatus(ctx, id);
+      // Auch ohne Wechsel: so rückt ein „Bereit“ einen Stempel zurecht, der nicht mehr stimmt.
+      stampOnStatus(ctx, id);
     }
     if (stageRelease && !wasPublished && isPublished(ctx, stageRelease)) publishRelease(ctx, stageRelease);
     const project = projectOf(ctx, kind, id);

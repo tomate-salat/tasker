@@ -199,9 +199,49 @@ export function stampOnStatus(ctx: DbCtx, taskId: string): void {
     stampWithParents(ctx, t, activeReleaseId(ctx, t.project_id));
     return;
   }
-  if (BACK.includes(t.status) && (t.release_pending || (t.released_in && !isPublished(ctx, t.released_in)))) {
+  if (
+    BACK.includes(t.status) &&
+    (t.release_pending || (t.released_in && !isPublished(ctx, t.released_in))) &&
+    !workedBelow(ctx, t.id)
+  ) {
     setStamp(ctx, t.id, null, false);
   }
+}
+
+/** Läuft unter der Aufgabe etwas oder ist erledigt? Dann behält sie ihren Stempel. */
+const workedBelow = (ctx: DbCtx, id: string): boolean =>
+  !!ctx.sqlite
+    .prepare(
+      `WITH RECURSIVE sub(id) AS (
+         SELECT id FROM task WHERE parent_id = ?
+         UNION ALL
+         SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id
+       )
+       SELECT 1 FROM task t JOIN sub ON sub.id = t.id
+        WHERE t.status IN ('progress', 'done') AND t.archived_at IS NULL LIMIT 1`,
+    )
+    .get(id);
+
+/**
+ * Räumt Stempel auf, die nicht mehr stimmen: offen oder bereit, im noch nicht
+ * veröffentlichten Release, und darunter läuft nichts. Das gab es, bevor der
+ * Stapel seinen Stempel mit dem Status zurückgab (739a3b7) – beim Start einmal.
+ */
+export function repairStamps(ctx: DbCtx): number {
+  if (!migrated(ctx)) return 0;
+  const rows = ctx.sqlite
+    .prepare(
+      `SELECT id FROM task WHERE status IN ('open', 'ready') AND (released_in IS NOT NULL OR release_pending = 1)`,
+    )
+    .all() as { id: string }[];
+  let n = 0;
+  for (const { id } of rows) {
+    const before = taskRow(ctx, id);
+    stampOnStatus(ctx, id);
+    const after = taskRow(ctx, id);
+    if (before?.released_in !== after?.released_in || before?.release_pending !== after?.release_pending) n++;
+  }
+  return n;
 }
 
 /**
