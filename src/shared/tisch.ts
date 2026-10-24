@@ -1,6 +1,7 @@
 import { isBlocked } from './blocking.js';
 import { checklist } from './checklist.js';
 import { isArchived, isDone, type Milestone, type Task } from './model.js';
+import { groupTasks, sidequestsOf } from './outline.js';
 import { implicitStatus } from './parentStatus.js';
 import type { Workspace } from './workspace.js';
 
@@ -46,7 +47,32 @@ export type TischLayout = {
   play: Task[];
   /** Erledigtes jeder Ebene, das zuletzt Erledigte zuerst. */
   pile: Task[];
+  /**
+   * Die Nebenquests als zweiter Stapel (Wunsch des Nutzers): ihre bereiten
+   * Wurzelaufgaben. Was noch nicht bereit ist, bleibt im Backlog.
+   */
+  side: Task[];
 };
+
+/**
+ * Die Wurzelaufgaben der Nebenquests eines Projekts – sie liegen auf dem Tisch
+ * neben den aktiven Milestones, gehören aber zu keinem.
+ */
+export function sidequestRoots(ws: Workspace, projectId: string): Task[] {
+  const g = sidequestsOf(ws, projectId);
+  return g ? groupTasks(ws, g.id).filter((t) => !t.doc && !isArchived(t)) : [];
+}
+
+/**
+ * Eine erledigte Nebenquest liegt nur auf dem Stapel, solange ihr Release noch
+ * nicht veröffentlicht ist – sonst wüchse er mit jeder Nebenquest, bis sie
+ * archiviert ist. Ungestempelt (von vor den Nebenquests) liegt sie nicht dort.
+ */
+function inCurrentRelease(ws: Workspace, t: Task): boolean {
+  if (!t.releasedIn) return false;
+  const stages = ws.releaseStages(t.releasedIn);
+  return !(stages.length && stages.every((x) => x.doneAt));
+}
 
 /**
  * Wohin jede Karte gehört:
@@ -62,8 +88,8 @@ export type TischLayout = {
  * Mehrere Milestones teilen sich die Zonen: in „Offen“ und „Gesperrt“ stehen
  * sie nacheinander, „Im Spiel“ und der Erledigt-Stapel mischen sich.
  */
-export function tischLayout(ws: Workspace, m: Milestone | Milestone[]): TischLayout {
-  const out: TischLayout = { locked: [], open: [], play: [], pile: [] };
+export function tischLayout(ws: Workspace, m: Milestone | Milestone[], side: Task[] = []): TischLayout {
+  const out: TischLayout = { locked: [], open: [], play: [], pile: [], side: [] };
   for (const root of listOf(m).flatMap((x) => ws.msRoots(x))) {
     if (ws.isDoc(root)) continue;
     const all = [root, ...ws.desc(root)];
@@ -74,6 +100,16 @@ export function tischLayout(ws: Workspace, m: Milestone | Milestone[]): TischLay
     }
     if (isDone(root) || (root.status === 'progress' && !ws.kids(root.id).length)) continue;
     (isLocked(ws, root) ? out.locked : out.open).push(root);
+  }
+  // Die Nebenquests: im Spiel und auf dem Stapel wie die übrigen, bereit im eigenen Stapel.
+  for (const root of side) {
+    const all = [root, ...ws.desc(root)];
+    for (const t of all) if (isDone(t) && inCurrentRelease(ws, t)) out.pile.push(t);
+    for (const t of all) {
+      if (t.status === 'progress' && !ws.kids(t.id).length && !doneAbove(ws, t, root)) out.play.push(t);
+    }
+    if (isDone(root) || (root.status === 'progress' && !ws.kids(root.id).length)) continue;
+    if (!isLocked(ws, root)) out.side.push(root);
   }
   // Im Spiel wird von Hand sortiert (`playOrder`); bei Gleichstand bleibt die Baumreihenfolge.
   out.play.sort((a, b) => a.playOrder - b.playOrder);
@@ -151,7 +187,8 @@ function weeksBefore(start: string, weeks: number): string {
   return day(new Date(y, m - 1, d - 7 * weeks));
 }
 
-export function doneShelf(ws: Workspace, m: Milestone | Milestone[], now: Date = new Date()): DoneShelf {
+/** `side`: die Nebenquests – ihr Erledigtes zählt voll mit, soweit es gestempelt ist. */
+export function doneShelf(ws: Workspace, m: Milestone | Milestone[], now: Date = new Date(), side: Task[] = []): DoneShelf {
   // Erledigt Archiviertes bleibt liegen – sonst schrumpften alte Wochen beim Aufräumen.
   const done: Task[] = [];
   const walk = (t: Task): void => {
@@ -159,6 +196,11 @@ export function doneShelf(ws: Workspace, m: Milestone | Milestone[], now: Date =
     for (const k of ws.countedKids(t.id)) walk(k);
   };
   for (const root of listOf(m).flatMap((x) => ws.msCounted(x))) if (!root.doc) walk(root);
+  const stamped = (t: Task): void => {
+    if (isDone(t) && t.releasedIn) done.push(t);
+    for (const k of ws.countedKids(t.id)) stamped(k);
+  };
+  for (const root of side) stamped(root);
 
   // Ohne Zeitpunkt ist es gerade eben erledigt worden – siehe `tischLayout`.
   const at = (t: Task): number => (t.doneAt ? new Date(t.doneAt).getTime() : now.getTime());

@@ -7,6 +7,7 @@ import {
   doneRefusal,
   doneShelf,
   playRefusal,
+  sidequestRoots,
   stackReady,
   tischLayout,
   weekStart,
@@ -15,6 +16,33 @@ import {
 const ids = (list: { id: string }[]): string[] => list.map((x) => x.id);
 
 describe('Tisch', () => {
+  it('die Nebenquests liegen als zweiter Stapel daneben: bereite Wurzeln, im Spiel und erledigt wie die übrigen', () => {
+    const ws = new Builder()
+      .project('p')
+      .milestone('m', 'p', { status: 'progress' })
+      .group('sq', 'p', 'Nebenquests', 'sidequest')
+      .release('r', 'p')
+      .release('alt', 'p')
+      .stage('s', 'alt', '2026-01-01T00:00:00Z')
+      .task('a', 'p', { milestoneId: 'm', status: 'ready' })
+      .task('bug', 'p', { groupId: 'sq', status: 'ready' })
+      .task('idee', 'p', { groupId: 'sq', status: 'open' })
+      .task('läuft', 'p', { groupId: 'sq', status: 'progress', releasedIn: 'r' })
+      .task('fertig', 'p', { groupId: 'sq', status: 'done', releasedIn: 'r', doneAt: '2026-01-02T10:00:00Z' })
+      .task('raus', 'p', { groupId: 'sq', status: 'done', releasedIn: 'alt', doneAt: '2026-01-01T10:00:00Z' })
+      .build();
+    const side = sidequestRoots(ws, 'p');
+    const l = tischLayout(ws, ws.milestone('m')!, side);
+    assert.deepEqual(ids(l.side), ['bug']);
+    assert.deepEqual(ids(l.open), ['a']);
+    assert.deepEqual(ids(l.play), ['läuft']);
+    assert.deepEqual(ids(l.pile), ['fertig']);
+    // Fürs Wochenziel zählt alles Gestempelte, auch aus veröffentlichten Releases.
+    const shelf = doneShelf(ws, ws.milestone('m')!, new Date('2026-01-03T12:00:00Z'), side);
+    assert.equal(shelf.weeks.flatMap((w) => w.cards).length, 2);
+  });
+
+
   it('aktiv sind alle Milestones auf In Progress, in der Reihenfolge des Plans', () => {
     const ws = new Builder()
       .project('p')

@@ -34,9 +34,9 @@ export class Builder {
     return this;
   }
 
-  group(id: string, projectId: string, title = id): this {
+  group(id: string, projectId: string, title = id, kind: Group['kind'] = null): this {
     this.data.groups.push({ id,
-      version: 1, projectId, title, order: this.data.groups.length, kind: null });
+      version: 1, projectId, title, order: this.data.groups.length, kind });
     return this;
   }
 

@@ -1278,6 +1278,14 @@ button.caret:hover {
   padding-top: 18px;
 }
 
+/* Umbenennen in der Überschrift (Nebenquests): das Feld bleibt so klein wie die Schrift. */
+.sec .title-edit {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  max-width: 260px;
+}
+
 .hint-row {
   padding: 2px 12px 8px;
   font-size: 13px;

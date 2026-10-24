@@ -13,7 +13,7 @@ import { useHideDone } from './hideDone.js';
 import { useKeys } from './keys.js';
 import { useMenu } from './Menu.js';
 import { listMenu, rowMenu } from './rowMenu.js';
-import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow } from './rows.js';
+import { EmptyDrop, GroupRow, MilestoneRow, SectionRow, TaskRow, TitleEdit } from './rows.js';
 import { cardArea, CardGrid, cardRows, cardsOn, chunkCards, useCardsOpen } from './Cards.js';
 
 /* ----------------------------------------------------- Plan, Backlog, Docs */
@@ -143,7 +143,11 @@ export function Outline({ ws, view }: { ws: Workspace; view: OutlineView }) {
           }
           if (row.type === 'section') {
             return (
-              <SectionRow key={row.id} title={row.title} action={<SectionAction row={row} />} />
+              <SectionRow
+                key={row.id}
+                title={row.place?.groupId ? <GroupTitle id={row.place.groupId} title={row.title} /> : row.title}
+                action={<SectionAction row={row} />}
+              />
             );
           }
           if (row.type === 'hint') {
@@ -203,6 +207,20 @@ function KbdHint() {
         <kbd>?</kbd> alle Kürzel
       </span>
     </div>
+  );
+}
+
+/**
+ * Die Überschrift der Nebenquests ist der Name ihrer Gruppe – ein Doppelklick
+ * benennt sie um, wie bei den übrigen Gruppen.
+ */
+function GroupTitle({ id, title }: { id: string; title: string }) {
+  const editing = useStore((s) => s.editing === id);
+  if (editing) return <TitleEdit kind="group" id={id} title={title} />;
+  return (
+    <span className="sec-title" title="Doppelklick: umbenennen" onDoubleClick={() => useStore.getState().edit(id)}>
+      {title}
+    </span>
   );
 }
 

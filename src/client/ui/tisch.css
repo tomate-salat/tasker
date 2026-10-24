@@ -177,6 +177,16 @@
   min-height: 200px;
 }
 
+/* Die Nebenquests: ein zweiter, kleinerer Stapel – golden wie der Bonus am Release. */
+.tzone-side {
+  background: color-mix(in srgb, #d9a93b 6%, var(--sunk));
+  border-color: color-mix(in srgb, #d9a93b 28%, var(--line));
+}
+
+.tzone-side .tzone-head {
+  color: color-mix(in srgb, #d9a93b 70%, var(--muted));
+}
+
 .tisch-bottom {
   display: flex;
   align-items: stretch;

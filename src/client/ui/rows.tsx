@@ -385,7 +385,7 @@ export function GroupRow({
 }
 
 /** Abschnittsüberschrift im Backlog, rechts daneben die passende Handlung. */
-export function SectionRow({ title, action }: { title: string; action?: React.ReactNode }) {
+export function SectionRow({ title, action }: { title: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="sec">
       {title}

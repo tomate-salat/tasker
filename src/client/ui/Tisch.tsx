@@ -14,6 +14,7 @@ import {
   isLocked,
   notReady,
   playRefusal,
+  sidequestRoots,
   stackReady,
   tischLayout,
 } from '@shared/tisch.js';
@@ -40,6 +41,9 @@ import './tisch.css';
  *   noch nicht bereit ist (Status Offen, Wunsch des Nutzers).
  * - **Bereit:** die große Fläche in der Mitte, dazu alle übrigen Stapel.
  * - **Im Spiel:** In Progress; sieben Plätze als Richtwert, begrenzt wird nicht.
+ * - **Nebenquests:** ein zweiter Stapel unter „Bereit“ – die bereiten Aufgaben
+ *   der Nebenquests, für das Release ein Bonus. Ausgespielt liegen sie im
+ *   Spiel und auf dem Erledigt-Stapel wie die übrigen.
  * - **Erledigt-Stapel** rechts daneben. Ein Klick deckt ihn auf: die Ablage
  *   zeigt dann je Woche, was erledigt wurde (`Shelf`).
  *
@@ -196,7 +200,8 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [all.map((x) => x.id).join(',')],
   );
-  const layout = tischLayout(ws, shown);
+  const side = sidequestRoots(ws, (all[0] as Milestone).projectId);
+  const layout = tischLayout(ws, shown, side);
   const [open, setOpen] = useState(readOpen);
   const root = useRef<HTMLDivElement>(null);
   const pileRef = useRef<HTMLDivElement>(null);
@@ -209,7 +214,7 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
   // Die Ablage: der aufgedeckte Erledigt-Stapel, je Woche. Das Wochenziel ist
   // das Tempo aus den Einstellungen (Aufgaben pro Woche).
   const goal = useStore((s) => s.settings.velocity);
-  const done = doneShelf(ws, shown);
+  const done = doneShelf(ws, shown, undefined, side);
   const [shelf, setShelf] = useState(false);
   const shelfOpen = shelf && done.weeks.length > 0;
   // Beim Schließen werden die Karten erst wieder eingesammelt (Wunsch des
@@ -291,7 +296,8 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
         <Drawer key={t.id} ws={ws} stack={t} path={[t]} open={open} toggle={toggle} menu={menu} />
       ));
 
-  const empty = !layout.locked.length && !layout.open.length && !layout.play.length && !layout.pile.length;
+  const empty =
+    !layout.locked.length && !layout.open.length && !layout.play.length && !layout.pile.length && !layout.side.length;
 
   return (
     <MsCtx.Provider value={hues}>
@@ -342,6 +348,20 @@ function Table({ ws, all, menu }: { ws: Workspace; all: Milestone[]; menu: Menu 
         </div>
         {drawersOf(layout.open)}
       </DropArea>
+      {layout.side.length > 0 && (
+        <section className="tzone tzone-side">
+          <h2 className="tzone-head" title="Für das Release ein Bonus – zählt nicht dafür, ob es bereit ist">
+            ★ {ws.groups.find((g) => g.id === layout.side[0]?.groupId)?.title || 'Nebenquests'}{' '}
+            <span className="tzone-n">{layout.side.length}</span>
+          </h2>
+          <div className="tzone-cards">
+            {layout.side.map((t) => (
+              <TischCard key={t.id} ws={ws} task={t} where="open" menu={menu} open={open} toggle={toggle} />
+            ))}
+          </div>
+          {drawersOf(layout.side)}
+        </section>
+      )}
       {shelfOpen && <Shelf ws={ws} shelf={done} goal={goal} leaving={collecting} onClose={closeShelf} />}
       </div>
 
@@ -1081,7 +1101,7 @@ type Sort = (() => Promise<void>) | 'same';
 
 function sortAt(ws: Workspace, ms: Milestone[], zone: DropZone, tasks: Task[], at: number): Sort | null {
   const store = useStore.getState();
-  const layout = tischLayout(ws, ms);
+  const layout = tischLayout(ws, ms, ms[0] ? sidequestRoots(ws, ms[0].projectId) : []);
   const dragged = new Set(tasks.map((t) => t.id));
   const sameOrder = (a: Task[], b: Task[]): boolean => a.length === b.length && a.every((t, i) => t.id === b[i]?.id);
 
