@@ -92,6 +92,21 @@ describe('Nebenquests', () => {
     assert.equal(task(parent.id).releasedIn, r.id);
   });
 
+  it('fällt ein Stapel mit seiner Unteraufgabe zurück, verliert er den Stempel; läuft noch eine, bleibt er', () => {
+    const p = mkProject();
+    const r = mkRelease(p.id, '0.4');
+    const parent = mkTask({ projectId: p.id, title: 'Flugplatz', status: 'ready' });
+    const a = mkTask({ projectId: p.id, parentId: parent.id, title: 'A', status: 'ready' });
+    const b = mkTask({ projectId: p.id, parentId: parent.id, title: 'B', status: 'ready' });
+    setStatus(a.id, 'progress');
+    setStatus(b.id, 'progress');
+    setStatus(a.id, 'ready');
+    assert.equal(task(parent.id).releasedIn, r.id);
+    setStatus(b.id, 'ready');
+    assert.equal(task(parent.id).status, 'ready');
+    assert.equal(task(parent.id).releasedIn, null);
+  });
+
   it('wählt das erste unveröffentlichte Release mit laufendem Milestone, sonst das erste überhaupt', () => {
     const p = mkProject();
     const a = mkRelease(p.id, '0.4');

@@ -862,6 +862,8 @@ export function syncParentStatus(ctx: DbCtx, childId: string): void {
     ctx.sqlite
       .prepare('UPDATE task SET status = ?, done_at = ?, updated_at = ? WHERE id = ?')
       .run(next, next === 'done' ? (parent['done_at'] ?? nowIso()) : null, nowIso(), parent['id']);
+    // Der Release-Stempel folgt dem Status – fällt der Stapel zurück, geht er aus dem Release.
+    stampOnStatus(ctx, parent['id'] as string);
     child = readRow(ctx, 'task', parent['id'] as string);
   }
 }
