@@ -10,6 +10,7 @@ import type {
   Release,
   ReleaseHeading,
   ReleaseStage,
+  EndChange,
   Status,
   Task,
 } from '../shared/model.js';
@@ -39,6 +40,7 @@ import {
   stampAfterMove,
   stampOnStatus,
 } from './sidequests.js';
+import { beginRelease, marchReady, recordEndChange } from './enddates.js';
 import { purgeImagesFor, untrashImage } from './images.js';
 import { newId, type IdPrefix } from './ids.js';
 
@@ -801,6 +803,16 @@ export function patch(
       if (fields['status'] !== current['status']) syncParentStatus(ctx, id);
       // Auch ohne Wechsel: so rückt ein „Bereit“ einen Stempel zurecht, der nicht mehr stimmt.
       stampOnStatus(ctx, id);
+    }
+    // Wie bei Aufgaben: „Erledigt“ führt den Zeitpunkt mit. Das Enddatum bleibt die letzte Zusage.
+    if (kind === 'milestone' && marchReady(ctx)) {
+      const after = readRow(ctx, 'milestone', id) as { status: string; end_date: string | null };
+      if (typeof fields['status'] === 'string') {
+        const doneAt = fields['status'] === 'done' ? (current['done_at'] ?? nowIso()) : null;
+        ctx.sqlite.prepare('UPDATE milestone SET done_at = ? WHERE id = ?').run(doneAt, id);
+      }
+      recordEndChange(ctx, id, current as typeof after, after, nowIso());
+      if (fields['status'] === 'progress' && current['status'] !== 'progress') beginRelease(ctx, id);
     }
     if (stageRelease && !wasPublished && isPublished(ctx, stageRelease)) publishRelease(ctx, stageRelease);
     const project = projectOf(ctx, kind, id);
@@ -2393,7 +2405,7 @@ type MarkRow = {
 type GroupRow = { id: string; version: number; project_id: string; title: string; sort_order: number; kind: 'sidequest' | null };
 type ReleaseRow = {
   id: string; version: number; project_id: string; name: string; title: string; desc: string;
-  sort_order: number; archived_at: string | null;
+  sort_order: number; ready_planned: string | null; archived_at: string | null;
 };
 type StageRow = {
   id: string; version: number; release_id: string; name: string; sort_order: number; done_at: string | null;
@@ -2402,7 +2414,7 @@ type HeadingRow = { id: string; version: number; release_id: string; title: stri
 type MilestoneRow = {
   id: string; ref: number; version: number; project_id: string; release_id: string | null; title: string; desc: string; status: string;
   sort_order: number; queue_order: number; start_date: string | null; end_date: string | null;
-  end_auto: number; archived_at: string | null;
+  end_auto: number; done_at: string | null; end_changes: string | null; archived_at: string | null;
 };
 type TaskRow = {
   id: string; ref: number; version: number; project_id: string; parent_id: string | null; milestone_id: string | null;
@@ -2436,7 +2448,7 @@ const toGroup = (r: GroupRow): Group => ({
 /** Ohne die abgeleiteten archivierten Milestones – die setzen `loadBootstrap` und `read` dazu. */
 const toRelease = (r: ReleaseRow): Omit<Release, 'archivedMilestones' | 'archivedBonus'> => ({
   id: r.id, version: r.version, projectId: r.project_id, name: r.name, title: r.title, desc: r.desc,
-  order: r.sort_order, archivedAt: r.archived_at,
+  order: r.sort_order, readyPlanned: r.ready_planned ?? null, archivedAt: r.archived_at,
 });
 
 const toStage = (r: StageRow): ReleaseStage => ({
@@ -2464,6 +2476,8 @@ const toMilestone = (r: MilestoneRow, deps: string[]): Milestone => ({
   startDate: r.start_date,
   endDate: r.end_date,
   endAuto: !!r.end_auto,
+  doneAt: r.done_at ?? null,
+  endChanges: r.end_changes ? (JSON.parse(r.end_changes) as EndChange[]) : [],
   archivedAt: r.archived_at,
   deps,
 });

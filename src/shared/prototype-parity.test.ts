@@ -87,12 +87,14 @@ function toData(d: Dump['data']): Data {
       startDate: (m['startDate'] as string | null) ?? null,
       endDate: (m['endDate'] as string | null) ?? null,
       endAuto: Boolean(m['endAuto']),
+      doneAt: null,
+      endChanges: [],
       archivedAt: (m['archived'] as string | null) ?? null,
       deps: m['deps'] as string[],
     })),
     // Releases kennt der Prototyp nicht – je Projekt eines für das Eingeplante.
     releases: d.projects.map((p, i) => ({
-      id: `plan:${p.id}`, version: 1, projectId: p.id, name: '', title: '', desc: '', order: i, archivedAt: null,
+      id: `plan:${p.id}`, version: 1, projectId: p.id, name: '', title: '', desc: '', order: i, readyPlanned: null, archivedAt: null,
       archivedMilestones: [],
       archivedBonus: 0,
     })),

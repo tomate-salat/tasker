@@ -668,12 +668,22 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
         <DateProp
           value={milestone.endDate}
           label="Ende"
-          title="Enddatum – wird beim Wechsel auf Done automatisch gesetzt"
+          title="Enddatum – beim Start des Releases aus der Prognose, sonst beim Wechsel auf Done gesetzt"
           onChange={(v) =>
             void patch('milestone', milestone.id, { endDate: v, ...(v ? {} : { endAuto: false }) })
           }
         />
       </MetaRow>
+
+      {milestone.endChanges.length > 0 && (
+        <MetaRow k="moved" label="Verschoben">
+          {milestone.endChanges.map((c) => (
+            <span key={c.at} className="m-sub" title={`am ${new Date(c.at).toLocaleDateString('de-DE')}`}>
+              {shortDay(c.from)} → {shortDay(c.to)}
+            </span>
+          ))}
+        </MetaRow>
+      )}
 
       <MetaRow k="release" label="Release">
         <PropButton
@@ -696,6 +706,9 @@ function MilestoneHead({ ws, milestone }: { ws: Workspace; milestone: Milestone 
     </>
   );
 }
+
+/** „12.10.“ aus YYYY-MM-DD; ohne Datum ein Strich. */
+const shortDay = (iso: string | null): string => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.` : '–');
 
 function DateProp({
   value,

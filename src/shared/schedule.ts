@@ -183,7 +183,15 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
 
     const m = pending.splice(i, 1)[0] as Milestone;
     const x = byId.get(m.id) as ScheduledMilestone;
-    const depEnd = Math.max(0, ...x.deps.map((d) => byId.get(d)?.end ?? 0));
+    // Ein offener Vorgänger ist erst fertig, wenn auch seine Prognose durch ist – ein
+    // festes Enddatum davor holt den Nachfolger nicht nach vorn.
+    const depEnd = Math.max(
+      0,
+      ...x.deps.map((d) => {
+        const dep = byId.get(d);
+        return !dep ? 0 : dep.isDone ? dep.end : Math.max(dep.end, dep.forecastEnd);
+      }),
+    );
     const share = shared.get(m.id);
     // Was noch nicht läuft, wartet auf die aktiven Milestones des Projekts.
     const cursor = cursors.get(m.projectId) ?? (share === undefined ? (busyUntil.get(m.projectId) ?? 0) : 0);

@@ -132,6 +132,22 @@ describe('Zeitplan', () => {
     assert.equal(s.byId.get('m1')!.start, 2);
   });
 
+  it('ein offener Vorgänger zählt bis zum Ende seiner Prognose, auch mit früherem Enddatum', () => {
+    const ws = new Builder()
+      .project('p1')
+      .project('p2')
+      .milestone('m2', 'p1', { planned: true, endDate: day(7) })
+      .milestone('m1', 'p2', { planned: true, deps: ['m2'] })
+      .task('t1', 'p1', { milestoneId: 'm2' })
+      .task('t2', 'p1', { milestoneId: 'm2' })
+      .task('t3', 'p2', { milestoneId: 'm1' })
+      .build();
+
+    const s = schedule(ws, { velocity: 1, today: TODAY });
+    assert.equal(s.byId.get('m2')!.end, 1);
+    assert.equal(s.byId.get('m1')!.start, 2);
+  });
+
   it('eine Aufgabe, die auf einen anderen Milestone wartet, verschiebt ihren eigenen', () => {
     const ws = new Builder()
       .project('p1')

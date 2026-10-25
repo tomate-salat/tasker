@@ -114,6 +114,11 @@ export const releases = sqliteTable(
     /** Die Einleitung fürs Changelog. */
     desc: text('desc').notNull().default(''),
     order: integer('sort_order').notNull().default(0),
+    /**
+     * Wann alle Milestones fertig sein sollten – die Prognose in dem Moment, in
+     * dem das Release begonnen wurde (YYYY-MM-DD). Leer: noch nie begonnen.
+     */
+    readyPlanned: text('ready_planned'),
     archivedAt: text('archived_at'),
     ...tracked,
   },
@@ -179,6 +184,9 @@ export const milestones = sqliteTable(
     endDate: text('end_date'),
     /** Enddatum stammt aus der Prognose, nicht von Hand gesetzt. */
     endAuto: integer('end_auto', { mode: 'boolean' }).notNull().default(false),
+    /** Verschiebungen des Enddatums, solange der Milestone lief: JSON `[{ at, from, to }]`. */
+    endChanges: text('end_changes', { mode: 'json' }).notNull().default('[]'),
+    doneAt: text('done_at'),
     archivedAt: text('archived_at'),
     ...tracked,
   },

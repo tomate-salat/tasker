@@ -2010,6 +2010,11 @@ textarea.title-edit {
   flex-wrap: nowrap;
 }
 
+.m-row[data-r='moved'] .m-val {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
 .m-dash {
   color: var(--faint);
 }

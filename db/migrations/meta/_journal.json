@@ -162,6 +162,13 @@
       "when": 1792845014727,
       "tag": "0022_nebenquests",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1792930207493,
+      "tag": "0023_marschplan",
+      "breakpoints": true
     }
   ]
 }

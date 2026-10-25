@@ -82,6 +82,7 @@ import {
   TRASH_DAYS,
 } from './repo.js';
 import { getGraph, getSettings, putGraph, putSettings } from './settings.js';
+import { endSignature } from './enddates.js';
 import { stampSignature } from './sidequests.js';
 
 /**
@@ -719,6 +720,8 @@ export function dataRoutes(
     // Die Release-Stempel anderer Aufgaben können mitgehen (Vorfahren, Nachstempeln, Veröffentlichen).
     const stamped = ['task', 'milestone', 'release', 'stage'].includes(kind) ? projectOf(ctx, kind, c.req.param('id')) : null;
     const stampsBefore = stamped ? stampSignature(ctx, stamped, c.req.param('id')) : null;
+    // Beginnt ein Release, bekommen auch die anderen Milestones ihr Enddatum.
+    const endsBefore = kind === 'milestone' && stamped ? endSignature(ctx, stamped, c.req.param('id')) : null;
 
     return run(
       c,
@@ -734,6 +737,8 @@ export function dataRoutes(
               ? { type: 'reload', reason: 'Archivierte Milestones eines Releases geändert' }
               : stamped && stampSignature(ctx, stamped, c.req.param('id')) !== stampsBefore
               ? { type: 'reload', reason: 'Release-Stempel geändert' }
+              : endsBefore !== null && endSignature(ctx, stamped as string, c.req.param('id')) !== endsBefore
+              ? { type: 'reload', reason: 'Release begonnen' }
               : kind === 'task' && 'status' in changes.data && (object as Task).parentId
               ? { type: 'reload', reason: 'Status geändert' }
               : { type: 'upsert', kind, object },

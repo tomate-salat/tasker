@@ -65,6 +65,8 @@ export class Builder {
       startDate: null,
       endDate: null,
       endAuto: false,
+      doneAt: null,
+      endChanges: [],
       archivedAt: null,
       deps: [],
       ...o,
@@ -74,7 +76,7 @@ export class Builder {
 
   release(id: string, projectId: string, name = id): this {
     this.data.releases.push({
-      id, version: 1, projectId, name, title: '', desc: '', order: this.data.releases.length, archivedAt: null,
+      id, version: 1, projectId, name, title: '', desc: '', order: this.data.releases.length, readyPlanned: null, archivedAt: null,
       archivedMilestones: [], archivedBonus: 0 });
     return this;
   }

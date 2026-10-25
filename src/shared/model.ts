@@ -77,6 +77,12 @@ export type Release = {
   /** Die Einleitung fürs Changelog. */
   desc: string;
   order: number;
+  /**
+   * Wann alle Milestones fertig sein sollten, nach der Prognose in dem Moment,
+   * in dem das Release begonnen wurde (YYYY-MM-DD) – setzt nur der Server.
+   * `null`: noch nie begonnen.
+   */
+  readyPlanned: string | null;
   archivedAt: string | null;
   /**
    * Abgeleitet, nur zum Lesen: die archivierten Milestones, die zum Release
@@ -156,10 +162,17 @@ export type Milestone = {
   startDate: string | null;
   endDate: string | null;
   endAuto: boolean;
+  /** Gesetzt beim Wechsel auf „Erledigt“; das Enddatum bleibt dabei die letzte Zusage. */
+  doneAt: string | null;
+  /** Wie das Enddatum verschoben wurde, solange der Milestone lief – setzt nur der Server. */
+  endChanges: EndChange[];
   archivedAt: string | null;
   /** IDs anderer Milestones, von denen dieser abhängt. */
   deps: string[];
 };
+
+/** Eine Verschiebung des Enddatums: `at` als Zeitpunkt, `from`/`to` als YYYY-MM-DD oder `null`. */
+export type EndChange = { at: string; from: string | null; to: string | null };
 
 export type Task = {
   id: string;

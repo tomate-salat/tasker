@@ -54,7 +54,7 @@ export const intakeTask = z
  */
 export const TOKEN_PATCH_FIELDS: Partial<Record<Kind, readonly string[]>> = {
   task: ['title', 'desc', 'status', 'prio', 'markId', 'categoryId', 'tags', 'deps'],
-  milestone: ['title', 'desc', 'status', 'startDate'],
+  milestone: ['title', 'desc', 'status', 'startDate', 'endDate', 'endAuto', 'qorder'],
 };
 
 /** Die Web-App bittet das verbundene Godot, eine Aufgabe zu verfeinern – nur Aufgabe und Modus. */
