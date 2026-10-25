@@ -203,6 +203,21 @@ describe('Zeitplan', () => {
     assert.equal(x.late, true);
   });
 
+  it('eine Prognose am selben Tag wie das Enddatum ist nicht verspätet', () => {
+    // 4 Aufgaben bei 3 pro Woche: 9⅓ Tage – angezeigt wird der 9. Tag, wie das Enddatum.
+    const ws = (end: number) =>
+      new Builder()
+        .project('p1')
+        .milestone('m1', 'p1', { planned: true, endDate: day(end) })
+        .task('t1', 'p1', { milestoneId: 'm1' })
+        .task('t2', 'p1', { milestoneId: 'm1' })
+        .task('t3', 'p1', { milestoneId: 'm1' })
+        .task('t4', 'p1', { milestoneId: 'm1' })
+        .build();
+    assert.equal(schedule(ws(9), { velocity: 3, today: TODAY }).list[0]!.late, false);
+    assert.equal(schedule(ws(8), { velocity: 3, today: TODAY }).list[0]!.late, true);
+  });
+
   it('ein erledigter Milestone ist nicht verspätet', () => {
     const ws = new Builder()
       .project('p1')

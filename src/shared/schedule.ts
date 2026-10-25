@@ -206,7 +206,9 @@ export function schedule(ws: Workspace, options: ScheduleOptions): Schedule {
     x.forecastEnd = Math.max(x.start, 0) + (share ?? x.open / velocity);
     x.end = m.endDate !== null ? weeksFromToday(m.endDate, today) : x.forecastEnd;
     if (x.fixedEnd && !x.fixed) x.start = Math.min(x.start, x.end);
-    x.late = !x.isDone && x.fixedEnd && x.forecastEnd > x.end + 1e-6;
+    // Verglichen wird in ganzen Tagen, wie beide angezeigt werden – sonst wäre ein
+    // Enddatum, das aus der Prognose stammt, um Stunden „verspätet“.
+    x.late = !x.isDone && x.fixedEnd && Math.round(x.forecastEnd * 7) > Math.round(x.end * 7);
 
     cursors.set(
       m.projectId,
