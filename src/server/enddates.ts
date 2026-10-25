@@ -44,7 +44,15 @@ export function recordEndChange(ctx: DbCtx, id: string, before: Row, after: Row,
     | { end_changes: string | null }
     | undefined;
   const list = row?.end_changes ? (JSON.parse(row.end_changes) as EndChange[]) : [];
-  list.push({ at, from: before.end_date, to: after.end_date });
+  // Am selben Tag (UTC) zählt nur, wohin es am Ende ging: der letzte Eintrag
+  // behält sein „von“; landet es wieder dort, war es keine Umplanung.
+  const last = list[list.length - 1];
+  if (last && last.at.slice(0, 10) === at.slice(0, 10)) {
+    list.pop();
+    if (last.from !== after.end_date) list.push({ at, from: last.from, to: after.end_date });
+  } else {
+    list.push({ at, from: before.end_date, to: after.end_date });
+  }
   ctx.sqlite.prepare('UPDATE milestone SET end_changes = ? WHERE id = ?').run(JSON.stringify(list), id);
 }
 

@@ -86,13 +86,31 @@ describe('Marschplan', () => {
 
     const before = ms(a).endDate;
     set(a, { endDate: '2027-02-01', endAuto: false });
-    set(a, { endDate: null });
     const list = ms(a).endChanges;
-    assert.deepEqual(list.map(({ from, to }) => ({ from, to })), [
-      { from: before, to: '2027-02-01' },
-      { from: '2027-02-01', to: null },
-    ]);
+    assert.deepEqual(list.map(({ from, to }) => ({ from, to })), [{ from: before, to: '2027-02-01' }]);
     assert.ok(!Number.isNaN(Date.parse(list[0]!.at)));
+  });
+
+  it('fasst Verschiebungen am selben Tag zusammen; zurück auf den Anfang heißt: keine', () => {
+    const { ids } = setup(['A', 8]);
+    const a = ids[0]!;
+    set(a, { status: 'progress' });
+    const before = ms(a).endDate;
+    set(a, { endDate: '2027-02-01' });
+    set(a, { endDate: null });
+    assert.deepEqual(ms(a).endChanges.map(({ from, to }) => ({ from, to })), [{ from: before, to: null }]);
+    set(a, { endDate: before });
+    assert.deepEqual(ms(a).endChanges, []);
+
+    // Ein Eintrag von gestern bleibt stehen.
+    ctx.sqlite
+      .prepare('UPDATE milestone SET end_changes = ? WHERE id = ?')
+      .run(JSON.stringify([{ at: '2020-01-01T10:00:00.000Z', from: null, to: before }]), a);
+    set(a, { endDate: '2027-03-01' });
+    assert.deepEqual(ms(a).endChanges.map(({ from, to }) => ({ from, to })), [
+      { from: null, to: before },
+      { from: before, to: '2027-03-01' },
+    ]);
   });
 
   it('„Erledigt“ führt den Zeitpunkt mit und lässt das Enddatum stehen', () => {
