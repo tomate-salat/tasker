@@ -34,6 +34,7 @@ import {
   archivedBonus,
   ensureSidequestGroups,
   isPublished,
+  memberships,
   publishRelease,
   releasesBefore,
   settlePending,
@@ -719,6 +720,13 @@ export function patch(
     if (current['version'] !== version) throw new Conflict(read(ctx, kind, id));
 
     const { tags, deps, ...fields } = changes;
+    // Ein Milestone, der das Release wechselt, soll nur sich selbst verschieben: was bisher nur über
+    // ihn (Abhängigkeiten) zum alten Release zählte, wird dort festgehalten statt mitzuziehen.
+    const movesRelease =
+      kind === 'milestone' &&
+      'releaseId' in fields &&
+      (fields['releaseId'] ?? null) !== (current['release_id'] ?? null);
+    const releaseBefore = movesRelease ? memberships(ctx, String(current['project_id'])) : null;
     // Wird ein Release mit dieser Änderung veröffentlicht? Dann gilt `publishRelease`.
     const stageRelease = kind === 'stage' ? String(current['release_id']) : null;
     const wasPublished = stageRelease ? isPublished(ctx, stageRelease) : false;
@@ -782,6 +790,14 @@ export function patch(
       setDeps(ctx, kind, id, deps as string[]);
     }
     if (kind === 'task' && typeof fields['markId'] === 'string') adoptMarks(ctx, [id]);
+
+    if (releaseBefore && fields['projectId'] === undefined) {
+      const after = memberships(ctx, String(current['project_id']));
+      const pin = ctx.sqlite.prepare('UPDATE milestone SET release_id = ?, version = version + 1, updated_at = ? WHERE id = ? AND release_id IS NULL');
+      for (const [mid, was] of releaseBefore) {
+        if (mid !== id && after.get(mid) !== was) pin.run(was, nowIso(), mid);
+      }
+    }
 
     // Ein Milestone nimmt beim Projektwechsel seine Wurzelaufgaben mit – sonst
     // hinge er in einem Projekt und seine Aufgaben in einem anderen.

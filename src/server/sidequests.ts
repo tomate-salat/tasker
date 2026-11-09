@@ -69,7 +69,7 @@ export function sidequestGroupId(ctx: DbCtx, projectId: string): string {
 }
 
 /** Je Milestone des Projekts das Release, zu dem er zählt – wie überall über `effectiveReleases`. */
-function memberships(ctx: DbCtx, projectId: string): Map<string, string> {
+export function memberships(ctx: DbCtx, projectId: string): Map<string, string> {
   const ms = ctx.sqlite
     .prepare('SELECT id, release_id FROM milestone WHERE project_id = ?')
     .all(projectId) as { id: string; release_id: string | null }[];

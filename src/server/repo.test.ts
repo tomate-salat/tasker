@@ -502,6 +502,18 @@ describe('Löschen', () => {
     assert.deepEqual(hiddenMismatches(ctx), []);
   });
 
+  it('ein Milestone, der das Release wechselt, zieht seine Abhängigkeiten nicht mit', () => {
+    const p = mkProject();
+    const r1 = create(ctx, 'release', { projectId: p.id }) as { id: string };
+    const r2 = create(ctx, 'release', { projectId: p.id }) as { id: string };
+    const dep = mkMilestone({ projectId: p.id, title: 'Dep' });
+    const m = mkMilestone({ projectId: p.id, title: 'M', releaseId: r1.id, deps: [dep.id] });
+    const ms = () => loadBootstrap(ctx).milestones;
+    patch(ctx, 'milestone', m.id, ms().find((x) => x.id === m.id)!.version, { releaseId: r2.id });
+    assert.equal(ms().find((x) => x.id === m.id)!.releaseId, r2.id);
+    assert.equal(ms().find((x) => x.id === dep.id)!.releaseId, r1.id);
+  });
+
   it('ein wiederhergestellter Milestone holt seine Aufgaben zurück und reiht sich hinten ein', () => {
     const p = mkProject();
     const rel = create(ctx, 'release', { projectId: p.id }) as { id: string };
