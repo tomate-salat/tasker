@@ -145,7 +145,10 @@ export function burnupData(
   const idx = (d: Date): number => Math.round((d.getTime() - start.getTime()) / DAY);
   const done = m.status === 'done';
   const todayI = Math.max(0, idx(today));
-  const endI = done && m.endDate ? Math.max(0, Math.min(todayI, idx(noon(m.endDate)))) : todayI;
+  // Erledigt: die Kurve läuft bis zum Tag des Abschlusses – nicht bis zum
+  // (womöglich früheren) Enddatum; ohne Abschlusszeitpunkt bis zum Enddatum.
+  const doneDay = m.doneAt ? noon(dayKey(new Date(m.doneAt))) : m.endDate ? noon(m.endDate) : null;
+  const endI = done && doneDay ? Math.max(0, Math.min(todayI, idx(doneDay))) : todayI;
 
   const scope: number[] = [];
   const doneS: number[] = [];

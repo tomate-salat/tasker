@@ -104,6 +104,22 @@ describe('burnupData', () => {
     assert.equal(d.endI, 2);
     assert.equal(d.fcI, null);
   });
+
+  it('läuft bei einem erledigten Milestone bis zum Tag des Abschlusses, auch nach dem Enddatum', () => {
+    const ws = new Builder()
+      .project('p')
+      .milestone('m', 'p', {
+        startDate: '2026-09-17',
+        endDate: '2026-09-19',
+        status: 'done',
+        doneAt: noonOf('2026-09-20'),
+      })
+      .build();
+    const d = burnupData(ws.milestone('m')!, [{ at: noonOf('2026-09-17'), s: 2, dn: 2 }], 2, NOW)!;
+    assert.equal(d.endI, 3);
+    assert.equal(d.deadI, 2);
+    assert.equal(d.maxI, 3);
+  });
 });
 
 describe('monotonePath', () => {
