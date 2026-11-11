@@ -23,7 +23,7 @@ import {
   type OutlineView,
 } from '@shared/outline.js';
 import { effectiveCategory } from '@shared/inherit.js';
-import { planRelease, releaseLabel } from '@shared/release.js';
+import { planRelease, releaseLabel, releaseStatus } from '@shared/release.js';
 import type { Workspace } from '@shared/workspace.js';
 import { collapsedOf, useStore } from '../store.js';
 import {
@@ -384,7 +384,7 @@ const statusSub = (t: Task): MenuItem[] =>
 export function releaseSub(ws: Workspace, m: Milestone): MenuItem[] {
   const store = useStore.getState();
   const releases = ws.releases
-    .filter((r) => r.projectId === m.projectId && (!isArchived(r) || r.id === m.releaseId))
+    .filter((r) => r.projectId === m.projectId && (r.id === m.releaseId || (!isArchived(r) && releaseStatus(ws, r) !== 'released')))
     .sort((a, b) => a.order - b.order);
   return [
     {
