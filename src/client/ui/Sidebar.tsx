@@ -166,6 +166,8 @@ export function Sidebar({
         />
       </div>
 
+      {/* Nur dieser Bereich scrollt; Kopf, Projekte, Konto und Fußzeile stehen fest. */}
+      <div className="side-scroll">
       {/* Nach dem eigenen Status filtern (Wunsch des Nutzers) – der geerbte zählt nicht. */}
       <div className="nav" aria-label="Status">
         <div className="nav-h">Status</div>
@@ -262,6 +264,7 @@ export function Sidebar({
           </button>
         ))}
         {!tags.length && <p className="side-hint">Noch keine Labels.</p>}
+      </div>
       </div>
 
       <button className="side-user" onClick={onProfile} title="Profil und Einstellungen">
